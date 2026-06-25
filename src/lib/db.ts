@@ -42,10 +42,11 @@ export interface PendingSyncItem {
   updatedAt: string;
 }
 
-interface PullMissingResponse {
+interface SyncDeltaResponse {
   success: boolean;
   children?: Child[];
   attendances?: Attendance[];
+  serverSyncedAt?: string;
   error?: string;
 }
 
@@ -249,47 +250,23 @@ async function getEffectivePendingItems(pendingItems: PendingSyncItem[], pending
   ];
 }
 
-async function pullMissingServerState() {
-  const [localChildren, localAttendances] = await Promise.all([
-    db.children.toArray(),
-    db.attendances.toArray(),
-  ]);
-  const response = await fetch('/api/sync', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      mode: 'pull-missing',
-      childIds: localChildren.map((child) => child.id),
-      attendanceKeys: localAttendances.map(getAttendanceKey),
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error('Impossible de récupérer les données du serveur');
-  }
-
-  const data = (await response.json()) as PullMissingResponse;
-
-  if (!data.success) {
-    throw new Error(data.error ?? 'Impossible de récupérer les données du serveur');
-  }
-
-  const missingChildren = (data.children ?? []).map(normalizeServerChild);
-  const missingAttendances = (data.attendances ?? []).map(normalizeServerAttendance);
+async function applyServerDelta(data: SyncDeltaResponse) {
+  const deltaChildren = (data.children ?? []).map(normalizeServerChild);
+  const deltaAttendances = (data.attendances ?? []).map(normalizeServerAttendance);
 
   await db.transaction('rw', db.children, db.attendances, async () => {
-    if (missingChildren.length > 0) {
-      await db.children.bulkPut(missingChildren);
+    if (deltaChildren.length > 0) {
+      await db.children.bulkPut(deltaChildren);
     }
 
-    if (missingAttendances.length > 0) {
-      await db.attendances.bulkPut(missingAttendances);
+    if (deltaAttendances.length > 0) {
+      await db.attendances.bulkPut(deltaAttendances);
     }
   });
 
   return {
-    pulledChildrenCount: missingChildren.length,
-    pulledAttendancesCount: missingAttendances.length,
+    pulledChildrenCount: deltaChildren.length,
+    pulledAttendancesCount: deltaAttendances.length,
   };
 }
 
@@ -298,8 +275,12 @@ export async function syncWithServer() {
   try {
     const pendingItems = await db.pendingSync.toArray();
     const pendingChanges = Number(await getStateValue(PENDING_CHANGES_KEY)) || 0;
+    const lastSyncAt = await getStateValue(LAST_SYNC_KEY);
+    const [localChildren, localAttendances] = await Promise.all([
+      db.children.toArray(),
+      db.attendances.toArray(),
+    ]);
     const effectivePendingItems = await getEffectivePendingItems(pendingItems, pendingChanges);
-    const pullResult = await pullMissingServerState();
     const childIds = effectivePendingItems.filter((item) => item.entity === 'child').map((item) => item.id);
     const attendanceIds = effectivePendingItems.filter((item) => item.entity === 'attendance').map((item) => item.id);
     const children = childIds.length > 0
@@ -322,13 +303,31 @@ export async function syncWithServer() {
     const response = await fetch('/api/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ children: changedChildren, attendances: changedAttendances }),
+      body: JSON.stringify({
+        mode: 'sync-delta',
+        lastSyncAt,
+        knownChildIds: localChildren.map((child) => child.id),
+        knownAttendanceKeys: localAttendances.map(getAttendanceKey),
+        children: changedChildren,
+        attendances: changedAttendances,
+      }),
     });
 
     if (response.ok) {
+      const data = (await response.json()) as SyncDeltaResponse;
+
+      if (!data.success) {
+        return {
+          success: false,
+          error: data.error ?? 'Échec de la synchronisation',
+        };
+      }
+
+      const pullResult = await applyServerDelta(data);
+
       await db.transaction('rw', db.syncState, db.pendingSync, async () => {
         await setStateValue(PENDING_CHANGES_KEY, '0');
-        await setStateValue(LAST_SYNC_KEY, new Date().toISOString());
+        await setStateValue(LAST_SYNC_KEY, data.serverSyncedAt ?? new Date().toISOString());
         await db.pendingSync.bulkDelete(pendingItems.map((item) => item.key));
       });
 

@@ -6,44 +6,16 @@ export async function POST(req: Request) {
     const data = await req.json();
     const { mode } = data;
 
-    if (mode === "pull-missing") {
-      const childIds = Array.isArray(data.childIds) ? data.childIds : [];
-      const attendanceKeys = new Set(Array.isArray(data.attendanceKeys) ? data.attendanceKeys : []);
-      const [children, attendances] = await Promise.all([
-        prisma.child.findMany({
-          where: childIds.length > 0 ? { id: { notIn: childIds } } : undefined,
-          orderBy: [
-            { lastName: "asc" },
-            { postName: "asc" },
-            { firstName: "asc" },
-          ],
-        }),
-        prisma.attendance.findMany({
-          orderBy: [
-            { date: "asc" },
-            { childId: "asc" },
-          ],
-        }),
-      ]);
-      const missingAttendances = attendances.filter(
-        (attendance) => !attendanceKeys.has(`${attendance.childId}:${attendance.date}`),
-      );
-
-      return NextResponse.json({
-        success: true,
-        children: children.map((child) => ({
-          ...child,
-          createdAt: child.createdAt.toISOString(),
-          updatedAt: child.updatedAt.toISOString(),
-        })),
-        attendances: missingAttendances.map((attendance) => ({
-          ...attendance,
-          markedAt: attendance.markedAt.toISOString(),
-        })),
-      });
-    }
-
     const { children = [], attendances = [] } = data;
+    const knownChildIds = Array.isArray(data.knownChildIds) ? data.knownChildIds : [];
+    const knownAttendanceKeys = new Set(Array.isArray(data.knownAttendanceKeys) ? data.knownAttendanceKeys : []);
+    const pushedChildIds = new Set(children.map((child: { id: string }) => child.id));
+    const pushedAttendanceKeys = new Set(
+      attendances.map((attendance: { childId: string; date: string }) => `${attendance.childId}:${attendance.date}`),
+    );
+    const lastSyncDate = typeof data.lastSyncAt === "string" ? new Date(data.lastSyncAt) : null;
+    const hasValidLastSyncDate = lastSyncDate instanceof Date && !Number.isNaN(lastSyncDate.getTime());
+    const serverSyncedAt = new Date();
 
     // 1. Synchronisation des enfants (Upsert : Création si nouveau, Mise à jour si existant)
     for (const child of children) {
@@ -112,7 +84,65 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, message: "Synchronisation réussie" });
+    if (mode === "sync-delta") {
+      const childWhere = hasValidLastSyncDate
+        ? knownChildIds.length > 0
+          ? {
+              OR: [
+                { id: { notIn: knownChildIds } },
+                { updatedAt: { gt: lastSyncDate } },
+              ],
+            }
+          : undefined
+        : knownChildIds.length > 0
+          ? { id: { notIn: knownChildIds } }
+          : undefined;
+      const [serverChildren, serverAttendances] = await Promise.all([
+        prisma.child.findMany({
+          where: childWhere,
+          orderBy: [
+            { lastName: "asc" },
+            { postName: "asc" },
+            { firstName: "asc" },
+          ],
+        }),
+        prisma.attendance.findMany({
+          orderBy: [
+            { date: "asc" },
+            { childId: "asc" },
+          ],
+        }),
+      ]);
+      const deltaChildren = serverChildren.filter((child) => !pushedChildIds.has(child.id));
+      const deltaAttendances = serverAttendances.filter((attendance) => {
+        const key = `${attendance.childId}:${attendance.date}`;
+        const isMissing = !knownAttendanceKeys.has(key);
+        const isUpdatedSinceLastSync = hasValidLastSyncDate && attendance.markedAt > lastSyncDate;
+
+        return !pushedAttendanceKeys.has(key) && (isMissing || isUpdatedSinceLastSync);
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: "Synchronisation réussie",
+        serverSyncedAt: serverSyncedAt.toISOString(),
+        children: deltaChildren.map((child) => ({
+          ...child,
+          createdAt: child.createdAt.toISOString(),
+          updatedAt: child.updatedAt.toISOString(),
+        })),
+        attendances: deltaAttendances.map((attendance) => ({
+          ...attendance,
+          markedAt: attendance.markedAt.toISOString(),
+        })),
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "Synchronisation réussie",
+      serverSyncedAt: serverSyncedAt.toISOString(),
+    });
   } catch (error) {
     console.error("Erreur de synchronisation:", error);
     return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 });

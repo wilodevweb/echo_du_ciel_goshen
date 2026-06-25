@@ -19,7 +19,6 @@ export function SyncPanel() {
 
   const pendingChanges = syncStatus?.pendingChanges ?? 0;
   const isLoading = syncStatus === undefined || childrenCount === undefined || attendancesCount === undefined;
-  const hasLocalData = Boolean((childrenCount ?? 0) + (attendancesCount ?? 0));
   const lastSyncLabel = syncStatus?.lastSyncAt
     ? new Intl.DateTimeFormat("fr-FR", {
         dateStyle: "short",
@@ -92,7 +91,7 @@ export function SyncPanel() {
       <Button
         type="button"
         fullWidth
-        disabled={isLoading || isSyncing || !hasLocalData || !isOnline}
+        disabled={isLoading || isSyncing || !isOnline}
         onClick={handleSync}
       >
         <RefreshCw className={`mr-2 h-5 w-5 ${isSyncing ? "animate-spin" : ""}`} />
