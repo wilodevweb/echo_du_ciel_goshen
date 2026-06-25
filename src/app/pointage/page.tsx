@@ -20,6 +20,7 @@ import db, {
   generateId,
   getAttendanceStatus,
   getClassLabel,
+  getClassNumber,
   getStatusLabel,
   markPendingChange,
 } from "@/lib/db";
@@ -34,6 +35,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 type NewChildForm = {
   firstName: string;
   lastName: string;
+  postName: string;
   classLevel: ClassLevel;
   parentPhone: string;
   address: string;
@@ -44,6 +46,7 @@ type NewChildForm = {
 const emptyNewChild: NewChildForm = {
   firstName: "",
   lastName: "",
+  postName: "",
   classLevel: "FIRST",
   parentPhone: "",
   address: "",
@@ -58,7 +61,7 @@ export default function PointagePage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
-  const [nameDraft, setNameDraft] = useState({ firstName: "", lastName: "" });
+  const [nameDraft, setNameDraft] = useState({ firstName: "", lastName: "", postName: "" });
   const [detailsChildId, setDetailsChildId] = useState<string | null>(null);
   const [newChild, setNewChild] = useState<NewChildForm>(emptyNewChild);
   const [isAdding, setIsAdding] = useState(false);
@@ -71,7 +74,7 @@ export default function PointagePage() {
 
   const sortedChildren = useMemo(() => {
     return [...(children ?? [])].sort((a, b) =>
-      `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`, "fr", {
+      `${a.lastName} ${a.postName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.postName} ${b.firstName}`, "fr", {
         sensitivity: "base",
       }),
     );
@@ -142,16 +145,17 @@ export default function PointagePage() {
 
   const startNameEdit = (child: Child) => {
     setEditingChildId(child.id);
-    setNameDraft({ firstName: child.firstName, lastName: child.lastName });
+    setNameDraft({ firstName: child.firstName, lastName: child.lastName, postName: child.postName });
   };
 
   const saveNameEdit = async (childId: string) => {
     const firstName = nameDraft.firstName.trim();
     const lastName = nameDraft.lastName.trim();
+    const postName = nameDraft.postName.trim();
 
-    if (!firstName || !lastName) return;
+    if (!firstName || !lastName || !postName) return;
 
-    await db.children.update(childId, { firstName, lastName });
+    await db.children.update(childId, { firstName, lastName, postName });
     await markPendingChange();
     setEditingChildId(null);
   };
@@ -165,6 +169,7 @@ export default function PointagePage() {
         id: generateId(),
         firstName: newChild.firstName.trim(),
         lastName: newChild.lastName.trim(),
+        postName: newChild.postName.trim(),
         classLevel: newChild.classLevel,
         parentPhone: newChild.parentPhone.trim(),
         address: newChild.address.trim(),
@@ -364,51 +369,71 @@ function ChildAttendanceCard({
   child: Child;
   status: AttendanceStatus | null;
   isEditingName: boolean;
-  nameDraft: { firstName: string; lastName: string };
+  nameDraft: { firstName: string; lastName: string; postName: string };
   showDetails: boolean;
   onNameClick: () => void;
-  onNameDraftChange: (value: { firstName: string; lastName: string }) => void;
+  onNameDraftChange: (value: { firstName: string; lastName: string; postName: string }) => void;
   onSaveName: () => void;
   onToggleDetails: () => void;
   onSetStatus: (status: AttendanceStatus) => void;
 }) {
   return (
-    <Card padding="none" className="w-full rounded-lg border-gray-200 shadow-md">
-      <CardContent className="p-5">
-        <div className="mb-5 flex items-start gap-4">
-          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100">
+    <Card padding="none" className="w-full rounded-lg border-0 bg-[#dedede] shadow-none">
+      <CardContent className="relative px-8 py-10">
+        <div className="absolute right-5 top-5 flex gap-2">
+          <span className={`h-3 w-3 rounded-full ${status === "ABSENT" ? "bg-red-600" : "bg-red-300"}`} />
+          <span className={`h-3 w-3 rounded-full ${status === "PRESENT" ? "bg-green-600" : "bg-green-300"}`} />
+          <span className={`h-3 w-3 rounded-full ${status === "SICK" ? "bg-yellow-500" : "bg-yellow-200"}`} />
+        </div>
+
+        <div className="mb-8 flex justify-center">
+          <div className="relative h-48 w-48">
+            <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#a9d6cb]">
             {child.photoUrl ? (
               <Image
                 src={child.photoUrl}
-                alt={`${child.firstName} ${child.lastName}`}
-                width={80}
-                height={80}
+                alt={`${child.lastName} ${child.postName} ${child.firstName}`}
+                width={192}
+                height={192}
                 className="h-full w-full object-cover"
                 unoptimized
               />
             ) : (
-              <User className="h-9 w-9 text-gray-400" />
+              <User className="h-20 w-20 text-gray-400" />
             )}
+            </div>
+            <div className="absolute -bottom-2 -right-1 flex h-16 w-16 items-center justify-center rounded-full bg-[#342ee8] text-3xl font-black text-black">
+              {getClassNumber(child.classLevel)}
+            </div>
           </div>
+        </div>
 
-          <div className="min-w-0 flex-1">
+        <div className="mb-16 text-center">
             {isEditingName ? (
               <div className="grid gap-2">
-                <input
-                  value={nameDraft.firstName}
-                  onChange={(event) =>
-                    onNameDraftChange({ ...nameDraft, firstName: event.target.value })
-                  }
-                  className="h-10 rounded-lg border border-gray-200 px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
-                  placeholder="Ajouter un prenom"
-                />
                 <input
                   value={nameDraft.lastName}
                   onChange={(event) =>
                     onNameDraftChange({ ...nameDraft, lastName: event.target.value })
                   }
-                  className="h-10 rounded-lg border border-gray-200 px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
+                  className="h-10 rounded-lg border border-gray-300 px-3 text-center text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
                   placeholder="Ajouter un nom"
+                />
+                <input
+                  value={nameDraft.postName}
+                  onChange={(event) =>
+                    onNameDraftChange({ ...nameDraft, postName: event.target.value })
+                  }
+                  className="h-10 rounded-lg border border-gray-300 px-3 text-center text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
+                  placeholder="Ajouter un post-nom"
+                />
+                <input
+                  value={nameDraft.firstName}
+                  onChange={(event) =>
+                    onNameDraftChange({ ...nameDraft, firstName: event.target.value })
+                  }
+                  className="h-10 rounded-lg border border-gray-300 px-3 text-center text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
+                  placeholder="Ajouter un prenom"
                 />
                 <button
                   type="button"
@@ -420,25 +445,17 @@ function ChildAttendanceCard({
                 </button>
               </div>
             ) : (
-              <button type="button" onClick={onNameClick} className="text-left">
-                <h2 className="text-2xl font-bold leading-tight text-gray-950">
-                  {child.firstName} {child.lastName}
+              <button type="button" onClick={onNameClick} className="text-center">
+                <h2 className="text-3xl leading-tight tracking-tight text-black">
+                  <span className="font-black uppercase">{child.lastName}</span>{" "}
+                  <span className="font-black uppercase">{child.postName}</span>{" "}
+                  <span className="font-normal uppercase">{child.firstName}</span>
                 </h2>
               </button>
             )}
-
-            <div className="mt-2 flex flex-wrap gap-2">
-              <span className="rounded-lg bg-[#00b22d]/10 px-2 py-1 text-xs font-bold text-[#00b22d]">
-                {getClassLabel(child.classLevel)}
-              </span>
-              <span className="rounded-lg bg-gray-100 px-2 py-1 text-xs font-bold text-gray-600">
-                {getStatusLabel(status)}
-              </span>
-            </div>
-          </div>
         </div>
 
-        <div className="mb-5 grid gap-2 text-sm text-gray-600">
+        <div className="sr-only">
           <a href={`tel:${child.parentPhone}`} className="flex items-center gap-2 font-semibold">
             <Phone className="h-4 w-4 text-[#00b22d]" />
             {child.parentPhone || "Telephone parent"}
@@ -446,22 +463,22 @@ function ChildAttendanceCard({
           {child.notes && <p className="line-clamp-2">{child.notes}</p>}
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-x-14 gap-y-9">
           <StatusButton
-            label="Absent"
+            label="Marquer absent"
             colorClass="bg-red-500 text-white"
             active={status === "ABSENT"}
             onClick={() => onSetStatus("ABSENT")}
           />
           <StatusButton
-            label="Present"
-            colorClass="bg-[#00b22d] text-white"
+            label="Marquer present"
+            colorClass="bg-green-700 text-white"
             active={status === "PRESENT"}
             onClick={() => onSetStatus("PRESENT")}
           />
           <StatusButton
-            label="Malade"
-            colorClass="bg-yellow-400 text-gray-950"
+            label="Marquer malade"
+            colorClass="bg-[#b6a400] text-white col-span-2 mx-auto w-48"
             active={status === "SICK"}
             onClick={() => onSetStatus("SICK")}
           />
@@ -470,7 +487,7 @@ function ChildAttendanceCard({
         <button
           type="button"
           onClick={onToggleDetails}
-          className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700"
+          className="mt-8 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white/40 text-sm font-semibold text-gray-700"
         >
           <Info className="h-4 w-4" />
           Details
@@ -478,6 +495,8 @@ function ChildAttendanceCard({
 
         {showDetails && (
           <div className="mt-4 rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
+            <p><span className="font-semibold text-gray-900">Classe:</span> {getClassLabel(child.classLevel)}</p>
+            <p><span className="font-semibold text-gray-900">Statut:</span> {getStatusLabel(status)}</p>
             <p><span className="font-semibold text-gray-900">Adresse:</span> {child.address || "Non renseignee"}</p>
             <p><span className="font-semibold text-gray-900">Naissance:</span> {child.birthDate || "Non renseignee"}</p>
             <p><span className="font-semibold text-gray-900">Notes:</span> {child.notes || "Aucune note"}</p>
@@ -502,13 +521,12 @@ function StatusButton({
   return (
     <button
       type="button"
+      aria-label={label}
       onClick={onClick}
-      className={`h-12 rounded-lg text-sm font-bold shadow-sm transition-transform ${colorClass} ${
+      className={`h-14 rounded-xl shadow-sm transition-transform ${colorClass} ${
         active ? "scale-[1.03] ring-2 ring-offset-2 ring-gray-900/20" : "opacity-90"
       }`}
-    >
-      {label}
-    </button>
+    />
   );
 }
 
@@ -544,16 +562,23 @@ function AddChildCard({
           <div className="grid grid-cols-2 gap-3">
             <input
               required
-              value={value.firstName}
-              onChange={(event) => update("firstName", event.target.value)}
-              placeholder="Ajouter un prenom"
+              value={value.lastName}
+              onChange={(event) => update("lastName", event.target.value)}
+              placeholder="Ajouter un nom"
               className="h-11 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
             />
             <input
               required
-              value={value.lastName}
-              onChange={(event) => update("lastName", event.target.value)}
-              placeholder="Ajouter un nom"
+              value={value.postName}
+              onChange={(event) => update("postName", event.target.value)}
+              placeholder="Ajouter un post-nom"
+              className="h-11 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
+            />
+            <input
+              required
+              value={value.firstName}
+              onChange={(event) => update("firstName", event.target.value)}
+              placeholder="Ajouter un prenom"
               className="h-11 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
             />
           </div>

@@ -96,7 +96,7 @@ export default function ChildrenList() {
                     {/* Infos */}
                     <div className="ml-4 flex-1">
                       <h3 className="font-semibold text-gray-900 text-lg leading-tight">
-                        {child.firstName} {child.lastName}
+                        {child.lastName} {child.postName} {child.firstName}
                       </h3>
                       <p className="text-xs font-semibold text-[#00b22d]">
                         {getClassLabel(child.classLevel)}

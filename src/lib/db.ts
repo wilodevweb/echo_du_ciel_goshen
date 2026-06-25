@@ -8,6 +8,7 @@ export interface Child {
   id: string; // Changed to string for UUID/CUID compatibility with Prisma
   firstName: string;
   lastName: string;
+  postName: string;
   classLevel: ClassLevel;
   photoUrl?: string;
   parentPhone: string;
@@ -52,6 +53,13 @@ export function normalizeClassLevel(value?: string | null): ClassLevel {
 export function getClassLabel(value?: string | null) {
   const normalizedValue = normalizeClassLevel(value);
   return CLASS_LEVELS.find((level) => level.value === normalizedValue)?.label ?? '1ere classe';
+}
+
+export function getClassNumber(value?: string | null) {
+  const normalizedValue = normalizeClassLevel(value);
+  if (normalizedValue === 'SECOND') return '2';
+  if (normalizedValue === 'THIRD') return '3';
+  return '1';
 }
 
 export function getAttendanceStatus(attendance?: Pick<Attendance, 'status' | 'present'> | null) {
@@ -101,6 +109,19 @@ db.version(4)
 
     await transaction.table('attendances').toCollection().modify((attendance) => {
       attendance.status = attendance.status ?? (attendance.present ? 'PRESENT' : 'ABSENT');
+    });
+  });
+
+db.version(5)
+  .stores({
+    children: 'id, firstName, lastName, postName, parentPhone, classLevel',
+    attendances: 'id, childId, date, status, [childId+date]',
+    syncState: 'key',
+  })
+  .upgrade(async (transaction) => {
+    await transaction.table('children').toCollection().modify((child) => {
+      child.postName = child.postName ?? '';
+      child.classLevel = normalizeClassLevel(child.classLevel);
     });
   });
 

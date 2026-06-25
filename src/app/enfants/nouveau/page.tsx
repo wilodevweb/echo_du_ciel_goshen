@@ -38,6 +38,7 @@ export default function AddChildPage() {
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
+    postName: '',
     parentPhone: '',
     address: '',
     classLevel: 'FIRST' as ClassLevel,
@@ -76,6 +77,7 @@ export default function AddChildPage() {
         id: generateId(),
         firstName: formData.firstName,
         lastName: formData.lastName,
+        postName: formData.postName,
         classLevel: formData.classLevel,
         parentPhone: formData.parentPhone,
         address: formData.address,
@@ -145,22 +147,30 @@ export default function AddChildPage() {
 
           <Card padding="md">
             <CardContent>
-              <div className="grid grid-cols-2 gap-4">
-                <Input 
-                  label="Prénom" 
-                  name="firstName" 
-                  required 
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <Input
+                  label="Nom"
+                  name="lastName"
+                  required
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  placeholder="Ex: Mbuyi"
+                />
+                <Input
+                  label="Post-nom"
+                  name="postName"
+                  required
+                  value={formData.postName}
+                  onChange={handleChange}
+                  placeholder="Ex: Ilunga"
+                />
+                <Input
+                  label="Prénom"
+                  name="firstName"
+                  required
                   value={formData.firstName}
                   onChange={handleChange}
                   placeholder="Ex: Jean"
-                />
-                <Input 
-                  label="Nom" 
-                  name="lastName" 
-                  required 
-                  value={formData.lastName}
-                  onChange={handleChange}
-                  placeholder="Ex: Dupont"
                 />
               </div>
 

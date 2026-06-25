@@ -13,6 +13,7 @@ export async function POST(req: Request) {
         update: {
           firstName: child.firstName,
           lastName: child.lastName,
+          postName: child.postName ?? "",
           classLevel: child.classLevel ?? "FIRST",
           parentPhone: child.parentPhone,
           address: child.address,
@@ -24,6 +25,7 @@ export async function POST(req: Request) {
           id: child.id,
           firstName: child.firstName,
           lastName: child.lastName,
+          postName: child.postName ?? "",
           classLevel: child.classLevel ?? "FIRST",
           parentPhone: child.parentPhone,
           address: child.address,

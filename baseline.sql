@@ -14,6 +14,7 @@ CREATE TABLE "Child" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "firstName" TEXT NOT NULL,
     "lastName" TEXT NOT NULL,
+    "postName" TEXT NOT NULL DEFAULT '',
     "classLevel" TEXT NOT NULL DEFAULT 'FIRST',
     "parentPhone" TEXT NOT NULL,
     "address" TEXT NOT NULL,

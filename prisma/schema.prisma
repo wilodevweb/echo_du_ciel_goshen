@@ -26,6 +26,7 @@ model Child {
   id          String   @id @default(cuid())
   firstName   String
   lastName    String
+  postName    String   @default("")
   classLevel  String   @default("FIRST")
   parentPhone String
   address     String
