@@ -7,6 +7,7 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
+    seed: "node ./prisma/seed.mjs",
   },
   datasource: {
     // On utilise l'URL de Turso (ou fallback SQLite en local) pour la CLI Prisma
