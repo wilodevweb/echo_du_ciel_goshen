@@ -362,44 +362,60 @@ function ChildAttendanceCard({
   onNameClick: () => void;
   onSetStatus: (status: AttendanceStatus) => void;
 }) {
+  const statusLabel =
+    status === "ABSENT" ? "Absent" : status === "PRESENT" ? "Présent" : status === "SICK" ? "Malade" : "Non marqué";
+
   return (
-    <Card padding="none" className="w-full rounded-lg border-gray-100 bg-white shadow-md">
-      <CardContent className="relative px-6 py-7">
-        <div className="absolute right-5 top-5 flex gap-2">
-          <span className={`h-3 w-3 rounded-full ${status === "ABSENT" ? "bg-red-600" : "bg-red-300"}`} />
-          <span className={`h-3 w-3 rounded-full ${status === "PRESENT" ? "bg-green-600" : "bg-green-300"}`} />
-          <span className={`h-3 w-3 rounded-full ${status === "SICK" ? "bg-yellow-500" : "bg-yellow-200"}`} />
+    <Card padding="none" className="w-full overflow-hidden rounded-[28px] border-0 bg-[#1b1b1b] shadow-2xl">
+      <CardContent className="relative px-5 pb-5 pt-3 text-white">
+        <div className="mx-auto mb-4 h-1.5 w-24 rounded-full bg-white/45" />
+
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-white/60">
+            {getClassLabel(child.classLevel)}
+          </div>
+          <div className="flex items-center gap-2 rounded-full bg-white/8 px-3 py-1">
+            <span className={`h-2.5 w-2.5 rounded-full ${status === "ABSENT" ? "bg-red-500" : "bg-red-500/35"}`} />
+            <span className={`h-2.5 w-2.5 rounded-full ${status === "PRESENT" ? "bg-green-500" : "bg-green-500/35"}`} />
+            <span className={`h-2.5 w-2.5 rounded-full ${status === "SICK" ? "bg-yellow-400" : "bg-yellow-400/35"}`} />
+            <span className="text-xs font-semibold text-white/60">{statusLabel}</span>
+          </div>
         </div>
 
-        <div className="mb-7 flex justify-center">
-          <div className="relative h-36 w-36">
-            <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#d7efe8]">
-            {child.photoUrl ? (
-              <Image
-                src={child.photoUrl}
-                alt={`${child.lastName} ${child.postName} ${child.firstName}`}
-                width={144}
-                height={144}
-                className="h-full w-full object-cover"
-                unoptimized
-              />
-            ) : (
-              <User className="h-14 w-14 text-gray-400" />
-            )}
+        <div className="mb-6 flex justify-center">
+          <div className="relative flex h-44 w-44 items-center justify-center rounded-full bg-[#d7efe8]/90 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+            <div className="h-36 w-36 overflow-hidden rounded-full bg-white/35">
+              {child.photoUrl ? (
+                <Image
+                  src={child.photoUrl}
+                  alt={`${child.lastName} ${child.postName} ${child.firstName}`}
+                  width={144}
+                  height={144}
+                  className="h-full w-full object-cover"
+                  unoptimized
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <User className="h-14 w-14 text-[#1b1b1b]/45" />
+                </div>
+              )}
             </div>
-            <div className="absolute -bottom-1 -right-1 flex h-12 w-12 items-center justify-center rounded-full bg-[#342ee8] text-2xl font-black text-white shadow-sm">
+            <div className="absolute bottom-2 right-2 flex h-12 w-12 items-center justify-center rounded-full bg-[#342ee8] text-2xl font-black text-white shadow-lg ring-4 ring-[#1b1b1b]">
               {getClassNumber(child.classLevel)}
             </div>
           </div>
         </div>
 
-        <div className="mb-9 text-center">
-          <button type="button" onClick={onNameClick} className="text-center">
-            <h2 className="text-2xl leading-tight tracking-tight text-black">
+        <div className="mb-7 text-center">
+          <button type="button" onClick={onNameClick} className="mx-auto block max-w-full text-center">
+            <h2 className="text-[1.75rem] leading-[1.05] tracking-tight text-white">
               <span className="font-black uppercase">{child.lastName}</span>{" "}
               <span className="font-black uppercase">{child.postName}</span>{" "}
               <span className="font-normal uppercase">{child.firstName}</span>
             </h2>
+            <p className="mt-2 text-sm font-semibold text-white/45">
+              Toucher le nom pour ouvrir la fiche
+            </p>
           </button>
         </div>
 
@@ -411,22 +427,22 @@ function ChildAttendanceCard({
           {child.notes && <p className="line-clamp-2">{child.notes}</p>}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 rounded-[22px] bg-white/7 p-2">
           <StatusButton
             label="Absent"
-            colorClass="border-red-200 bg-red-50 text-red-700"
+            colorClass="bg-red-500 text-white"
             active={status === "ABSENT"}
             onClick={() => onSetStatus("ABSENT")}
           />
           <StatusButton
             label="Présent"
-            colorClass="border-green-200 bg-green-50 text-green-700"
+            colorClass="bg-green-500 text-white"
             active={status === "PRESENT"}
             onClick={() => onSetStatus("PRESENT")}
           />
           <StatusButton
             label="Malade"
-            colorClass="border-yellow-200 bg-yellow-50 text-yellow-700 col-span-2"
+            colorClass="bg-yellow-400 text-[#1b1b1b] col-span-2"
             active={status === "SICK"}
             onClick={() => onSetStatus("SICK")}
           />
@@ -784,8 +800,8 @@ function StatusButton({
       type="button"
       aria-label={label}
       onClick={onClick}
-      className={`h-11 rounded-lg border px-3 text-sm font-bold shadow-sm transition-transform ${colorClass} ${
-        active ? "scale-[1.02] ring-2 ring-offset-2 ring-gray-900/15" : "opacity-95"
+      className={`h-12 rounded-2xl px-3 text-sm font-black shadow-sm transition-all ${colorClass} ${
+        active ? "scale-[1.02] opacity-100 ring-2 ring-white/80" : "opacity-55"
       }`}
     >
       {label}
