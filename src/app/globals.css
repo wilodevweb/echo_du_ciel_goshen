@@ -30,3 +30,18 @@ body {
   color: var(--foreground);
   font-family: "Jost", Arial, Helvetica, sans-serif;
 }
+
+@keyframes attendance-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.attendance-card-in {
+  animation: attendance-card-in 220ms ease-out both;
+}

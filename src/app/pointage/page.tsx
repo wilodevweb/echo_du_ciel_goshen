@@ -6,8 +6,6 @@ import Image from "next/image";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   ArrowLeft,
-  ChevronLeft,
-  ChevronRight,
   CirclePlus,
   Info,
   Phone,
@@ -51,10 +49,10 @@ const emptyNewChild: NewChildForm = {
 };
 
 export default function PointagePage() {
-  const getTodayStr = () => new Date().toISOString().split("T")[0];
-  const [selectedDate, setSelectedDate] = useState(getTodayStr());
-  const [classFilter, setClassFilter] = useState<ClassFilter>("ALL");
+  const selectedDate = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const [classFilter, setClassFilter] = useState<ClassFilter | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState({ firstName: "", lastName: "" });
   const [detailsChildId, setDetailsChildId] = useState<string | null>(null);
@@ -76,7 +74,7 @@ export default function PointagePage() {
   }, [children]);
 
   const filteredChildren = useMemo(() => {
-    if (classFilter === "ALL") return sortedChildren;
+    if (classFilter === null || classFilter === "ALL") return sortedChildren;
     return sortedChildren.filter((child) => child.classLevel === classFilter);
   }, [classFilter, sortedChildren]);
 
@@ -98,6 +96,15 @@ export default function PointagePage() {
   const presentCount = filteredChildren.filter(
     (child) => getAttendanceStatus(attendanceMap.get(child.id)) === "PRESENT",
   ).length;
+  const formattedDate = useMemo(() => {
+    const dateLabel = new Intl.DateTimeFormat("fr-FR", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    }).format(new Date(selectedDate));
+
+    return dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1);
+  }, [selectedDate]);
 
   const resetCarousel = () => {
     setCurrentIndex(0);
@@ -132,6 +139,7 @@ export default function PointagePage() {
     }
 
     await markPendingChange();
+    moveCard(1);
   };
 
   const startNameEdit = (child: Child) => {
@@ -174,55 +182,84 @@ export default function PointagePage() {
     }
   };
 
-  return (
-    <main className="flex min-h-screen flex-col bg-gray-50">
-      <header className="sticky top-0 z-10 bg-white px-4 py-4 shadow-sm">
-        <div className="mx-auto max-w-md">
-          <div className="mb-4 flex items-center">
-            <Link href="/" className="mr-4 rounded-lg p-2 text-gray-700 hover:bg-gray-100">
-              <ArrowLeft className="h-6 w-6" />
-            </Link>
-            <div>
-              <h1 className="text-xl font-bold text-gray-950">Appel</h1>
-              <p className="text-sm text-gray-500">{markedCount} appeles sur {filteredChildren.length}</p>
-            </div>
+  const chooseClass = (filter: ClassFilter) => {
+    setClassFilter(filter);
+    if (filter !== "ALL") {
+      setNewChild((child) => ({ ...child, classLevel: filter }));
+    }
+    resetCarousel();
+  };
+
+  const handleTouchEnd = (positionX: number) => {
+    if (touchStartX === null) return;
+
+    const deltaX = positionX - touchStartX;
+    setTouchStartX(null);
+
+    if (Math.abs(deltaX) < 48) return;
+    moveCard(deltaX > 0 ? -1 : 1);
+  };
+
+  if (classFilter === null) {
+    return (
+      <main className="flex min-h-screen flex-col bg-white px-5 py-5">
+        <header className="mx-auto flex w-full max-w-md items-center">
+          <Link href="/" className="rounded-lg p-2 text-gray-700 hover:bg-gray-100">
+            <ArrowLeft className="h-6 w-6" />
+          </Link>
+          <p className="flex-1 pr-10 text-center text-lg font-bold text-gray-950">
+            {formattedDate}
+          </p>
+        </header>
+
+        <section className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center">
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl font-bold text-gray-950">Choisir la classe</h1>
+            <p className="mt-2 text-base text-gray-500">Selectionne le groupe pour commencer l&apos;appel.</p>
           </div>
 
           <div className="grid gap-3">
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(event) => {
-                setSelectedDate(event.target.value);
-                resetCarousel();
-              }}
-              className="h-11 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
-            />
+            {CLASS_FILTERS.map((filter) => (
+              <button
+                key={filter.value}
+                type="button"
+                onClick={() => chooseClass(filter.value)}
+                className="flex h-16 items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-5 text-left text-lg font-bold text-gray-950 shadow-sm transition-colors hover:border-[#00b22d] hover:bg-[#00b22d]/5"
+              >
+                <span>{filter.label}</span>
+                <span className="text-sm font-semibold text-[#00b22d]">Commencer</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      </main>
+    );
+  }
 
-            <div className="grid grid-cols-4 gap-2">
-              {CLASS_FILTERS.map((filter) => (
-                <button
-                  key={filter.value}
-                  type="button"
-                  onClick={() => {
-                    setClassFilter(filter.value);
-                    resetCarousel();
-                  }}
-                  className={`h-10 rounded-lg text-xs font-semibold transition-colors ${
-                    classFilter === filter.value
-                      ? "bg-[#00b22d] text-white"
-                      : "bg-gray-100 text-gray-600"
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
-            </div>
+  return (
+    <main className="flex min-h-screen flex-col bg-gray-50 px-4 py-5">
+      <header className="mx-auto w-full max-w-md">
+        <div className="flex items-center">
+          <button
+            type="button"
+            onClick={() => {
+              setClassFilter(null);
+              resetCarousel();
+            }}
+            className="rounded-lg p-2 text-gray-700 hover:bg-gray-100"
+          >
+            <ArrowLeft className="h-6 w-6" />
+          </button>
+          <div className="flex-1 pr-10 text-center">
+            <p className="text-lg font-bold text-gray-950">{formattedDate}</p>
+            <p className="text-sm font-semibold text-gray-500">
+              {CLASS_FILTERS.find((filter) => filter.value === classFilter)?.label} · {markedCount}/{filteredChildren.length}
+            </p>
           </div>
         </div>
       </header>
 
-      <section className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 py-5">
+      <section className="mx-auto flex w-full max-w-md flex-1 flex-col py-5">
         <div className="mb-4 flex items-center justify-between rounded-lg bg-white px-4 py-3 text-sm shadow-sm">
           <span className="font-semibold text-gray-600">Presents</span>
           <span className="rounded-lg bg-[#00b22d]/10 px-3 py-1 font-bold text-[#00b22d]">
@@ -236,60 +273,48 @@ export default function PointagePage() {
           </div>
         ) : (
           <>
-            <div className="flex flex-1 items-center">
-              {isAddCard ? (
-                <AddChildCard
-                  value={newChild}
-                  isAdding={isAdding}
-                  onChange={setNewChild}
-                  onSubmit={addChild}
-                />
-              ) : currentChild ? (
-                <ChildAttendanceCard
-                  child={currentChild}
-                  status={getAttendanceStatus(attendanceMap.get(currentChild.id))}
-                  isEditingName={editingChildId === currentChild.id}
-                  nameDraft={nameDraft}
-                  showDetails={detailsChildId === currentChild.id}
-                  onNameClick={() => startNameEdit(currentChild)}
-                  onNameDraftChange={setNameDraft}
-                  onSaveName={() => saveNameEdit(currentChild.id)}
-                  onToggleDetails={() =>
-                    setDetailsChildId((id) => (id === currentChild.id ? null : currentChild.id))
-                  }
-                  onSetStatus={(status) => setAttendanceStatus(currentChild.id, status)}
-                />
-              ) : (
-                <AddChildCard
-                  value={newChild}
-                  isAdding={isAdding}
-                  onChange={setNewChild}
-                  onSubmit={addChild}
-                />
-              )}
+            <div
+              className="flex flex-1 items-center touch-pan-y"
+              onTouchStart={(event) => setTouchStartX(event.touches[0]?.clientX ?? null)}
+              onTouchEnd={(event) => handleTouchEnd(event.changedTouches[0]?.clientX ?? 0)}
+            >
+              <div key={isAddCard ? "add-child-card" : currentChild?.id} className="attendance-card-in w-full">
+                {isAddCard ? (
+                  <AddChildCard
+                    value={newChild}
+                    isAdding={isAdding}
+                    onChange={setNewChild}
+                    onSubmit={addChild}
+                  />
+                ) : currentChild ? (
+                  <ChildAttendanceCard
+                    child={currentChild}
+                    status={getAttendanceStatus(attendanceMap.get(currentChild.id))}
+                    isEditingName={editingChildId === currentChild.id}
+                    nameDraft={nameDraft}
+                    showDetails={detailsChildId === currentChild.id}
+                    onNameClick={() => startNameEdit(currentChild)}
+                    onNameDraftChange={setNameDraft}
+                    onSaveName={() => saveNameEdit(currentChild.id)}
+                    onToggleDetails={() =>
+                      setDetailsChildId((id) => (id === currentChild.id ? null : currentChild.id))
+                    }
+                    onSetStatus={(status) => setAttendanceStatus(currentChild.id, status)}
+                  />
+                ) : (
+                  <AddChildCard
+                    value={newChild}
+                    isAdding={isAdding}
+                    onChange={setNewChild}
+                    onSubmit={addChild}
+                  />
+                )}
+              </div>
             </div>
 
-            <div className="mt-5 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => moveCard(-1)}
-                disabled={currentIndex === 0}
-                className="flex h-11 w-11 items-center justify-center rounded-lg bg-white text-gray-700 shadow-sm disabled:opacity-40"
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <span className="text-sm font-semibold text-gray-500">
-                {visibleIndex + 1} / {totalCards}
-              </span>
-              <button
-                type="button"
-                onClick={() => moveCard(1)}
-                disabled={visibleIndex >= totalCards - 1}
-                className="flex h-11 w-11 items-center justify-center rounded-lg bg-white text-gray-700 shadow-sm disabled:opacity-40"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
-            </div>
+            <p className="mt-4 text-center text-sm font-semibold text-gray-400">
+              {visibleIndex + 1} / {totalCards} · Balaye pour revenir
+            </p>
           </>
         )}
       </section>
