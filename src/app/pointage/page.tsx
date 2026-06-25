@@ -6,7 +6,9 @@ import { useLiveQuery } from "dexie-react-hooks";
 import {
   ArrowLeft,
   Calendar,
+  Camera,
   CirclePlus,
+  Crown,
   GraduationCap,
   MapPin,
   NotebookText,
@@ -57,6 +59,63 @@ const emptyNewChild: NewChildForm = {
   birthDate: "",
   notes: "",
 };
+
+async function resizeImageFile(file: File) {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = document.createElement("img");
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+  const maxSize = 720;
+  const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(image.width * scale);
+  canvas.height = Math.round(image.height * scale);
+  const context = canvas.getContext("2d");
+
+  if (!context) return dataUrl;
+
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.82);
+}
+
+function parseDateString(value?: string | null) {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+
+  if (!year || !month || !day) return null;
+
+  return new Date(year, month - 1, day);
+}
+
+function addDays(date: Date, days: number) {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+}
+
+function isBirthdayInWeek(birthDate: string | undefined, weekStartDate: string) {
+  const birthday = parseDateString(birthDate);
+  const weekStart = parseDateString(weekStartDate);
+
+  if (!birthday || !weekStart) return false;
+
+  const weekEnd = addDays(weekStart, 6);
+  const candidateYears = new Set([weekStart.getFullYear(), weekEnd.getFullYear()]);
+
+  return [...candidateYears].some((year) => {
+    const birthdayThisYear = new Date(year, birthday.getMonth(), birthday.getDate());
+    return birthdayThisYear >= weekStart && birthdayThisYear <= weekEnd;
+  });
+}
 
 export default function PointagePage() {
   const [selectedDate, setSelectedDate] = useState(() => getMostRecentSundayDateString());
@@ -139,6 +198,12 @@ export default function PointagePage() {
 
     await markEntityForSync('attendance', attendanceId);
     moveCard(1);
+  };
+
+  const updateChildPhoto = async (childId: string, file: File) => {
+    const photoUrl = await resizeImageFile(file);
+    await db.children.update(childId, { photoUrl });
+    await markEntityForSync('child', childId);
   };
 
   const saveChildDetails = async (childId: string, draft: ChildDetailsDraft) => {
@@ -289,7 +354,9 @@ export default function PointagePage() {
                   <ChildAttendanceCard
                     child={currentChild}
                     status={getAttendanceStatus(attendanceMap.get(currentChild.id))}
+                    hasBirthdayThisWeek={isBirthdayInWeek(currentChild.birthDate, selectedDate)}
                     onNameClick={() => setDetailsChild(currentChild)}
+                    onPhotoChange={(file) => updateChildPhoto(currentChild.id, file)}
                     onSetStatus={(status) => setAttendanceStatus(currentChild.id, status)}
                   />
                 ) : (
@@ -354,12 +421,16 @@ function AttendanceSkeleton() {
 function ChildAttendanceCard({
   child,
   status,
+  hasBirthdayThisWeek,
   onNameClick,
+  onPhotoChange,
   onSetStatus,
 }: {
   child: Child;
   status: AttendanceStatus | null;
+  hasBirthdayThisWeek: boolean;
   onNameClick: () => void;
+  onPhotoChange: (file: File) => Promise<void>;
   onSetStatus: (status: AttendanceStatus) => void;
 }) {
   const statusLabel =
@@ -382,8 +453,24 @@ function ChildAttendanceCard({
           </div>
         </div>
 
-        <div className="mb-6 flex justify-center">
-          <div className="relative flex h-44 w-44 items-center justify-center rounded-full bg-[#d7efe8]/90 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+        <div className="mb-4 flex justify-center">
+          <label className="relative flex h-44 w-44 cursor-pointer items-center justify-center rounded-full bg-[#d7efe8]/90">
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void onPhotoChange(file);
+                event.currentTarget.value = "";
+              }}
+            />
+            {hasBirthdayThisWeek && (
+              <div className="absolute -top-7 left-1/2 z-10 flex -translate-x-1/2 rotate-[-8deg] items-center justify-center rounded-full bg-yellow-300 p-2 text-[#1b1b1b] shadow-lg ring-4 ring-[#1b1b1b]">
+                <Crown className="h-8 w-8 fill-yellow-300" />
+              </div>
+            )}
             <div className="h-36 w-36 overflow-hidden rounded-full bg-white/35">
               {child.photoUrl ? (
                 <Image
@@ -403,17 +490,24 @@ function ChildAttendanceCard({
             <div className="absolute bottom-2 right-2 flex h-12 w-12 items-center justify-center rounded-full bg-[#342ee8] text-2xl font-black text-white shadow-lg ring-4 ring-[#1b1b1b]">
               {getClassNumber(child.classLevel)}
             </div>
-          </div>
+            <div className="absolute left-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-[#1b1b1b] text-white ring-4 ring-[#d7efe8]">
+              <Camera className="h-5 w-5" />
+            </div>
+          </label>
         </div>
 
-        <div className="mb-7 text-center">
-          <button type="button" onClick={onNameClick} className="mx-auto block max-w-full text-center">
-            <h2 className="text-[1.75rem] leading-[1.05] tracking-tight text-white">
-              <span className="font-black uppercase">{child.lastName}</span>{" "}
-              <span className="font-black uppercase">{child.postName}</span>{" "}
-              <span className="font-normal uppercase">{child.firstName}</span>
+        <div className="mb-5 text-center">
+          <button
+            type="button"
+            onClick={onNameClick}
+            className="mx-auto block w-full max-w-full rounded-[22px] bg-white px-4 py-3 text-center shadow-sm"
+          >
+            <h2 className="grid gap-0.5 text-[1.35rem] leading-[1.02] tracking-tight text-[#111827]">
+              <span className="block font-black uppercase">{child.lastName}</span>
+              <span className="block font-black uppercase">{child.postName}</span>
+              <span className="block font-normal uppercase">{child.firstName}</span>
             </h2>
-            <p className="mt-2 text-sm font-semibold text-white/45">
+            <p className="mt-2 text-xs font-semibold text-gray-400">
               Toucher le nom pour ouvrir la fiche
             </p>
           </button>
@@ -429,6 +523,12 @@ function ChildAttendanceCard({
 
         <div className="grid grid-cols-2 gap-3 rounded-[22px] bg-white/7 p-2">
           <StatusButton
+            label="Malade"
+            colorClass="bg-yellow-400 text-[#1b1b1b]"
+            active={status === "SICK"}
+            onClick={() => onSetStatus("SICK")}
+          />
+          <StatusButton
             label="Absent"
             colorClass="bg-red-500 text-white"
             active={status === "ABSENT"}
@@ -436,15 +536,9 @@ function ChildAttendanceCard({
           />
           <StatusButton
             label="Présent"
-            colorClass="bg-green-500 text-white"
+            colorClass="bg-green-500 text-white col-span-2"
             active={status === "PRESENT"}
             onClick={() => onSetStatus("PRESENT")}
-          />
-          <StatusButton
-            label="Malade"
-            colorClass="bg-yellow-400 text-[#1b1b1b] col-span-2"
-            active={status === "SICK"}
-            onClick={() => onSetStatus("SICK")}
           />
         </div>
       </CardContent>
