@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Card, CardContent } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Lock } from "lucide-react";
@@ -33,7 +33,7 @@ export default function LoginPage() {
         router.push("/");
         router.refresh(); // Pour mettre à jour la session dans tout l'app
       }
-    } catch (err) {
+    } catch {
       setError("Une erreur est survenue.");
     } finally {
       setIsLoading(false);

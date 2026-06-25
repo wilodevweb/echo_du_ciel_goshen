@@ -1,16 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const viewport = {
   themeColor: "#00b22d",
@@ -21,11 +10,31 @@ export const viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Gestion Enfants - École du Dimanche",
+  title: {
+    default: "Goshen - Ecole du Dimanche",
+    template: "%s | Goshen",
+  },
   description: "Application de pointage et gestion des présences",
+  applicationName: "Goshen",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Goshen",
+  },
+  formatDetection: {
+    telephone: true,
+  },
+  icons: {
+    icon: [
+      { url: "/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 import AuthProvider from "@/components/AuthProvider";
+import { RegisterPWA } from "@/components/RegisterPWA";
 
 export default function RootLayout({
   children,
@@ -34,10 +43,11 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      lang="fr"
+      className="h-full antialiased"
     >
       <body className="min-h-full flex flex-col">
+        <RegisterPWA />
         <AuthProvider>
           {children}
         </AuthProvider>

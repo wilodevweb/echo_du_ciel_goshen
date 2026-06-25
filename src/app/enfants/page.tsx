@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Search, UserPlus, Phone, ArrowLeft, User } from 'lucide-react';
 import db from '@/lib/db';
@@ -80,7 +81,14 @@ export default function ChildrenList() {
                     {/* Photo/Avatar */}
                     <div className="w-14 h-14 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-300">
                       {child.photoUrl ? (
-                        <img src={child.photoUrl} alt={`${child.firstName} ${child.lastName}`} className="w-full h-full object-cover" />
+                        <Image
+                          src={child.photoUrl}
+                          alt={`${child.firstName} ${child.lastName}`}
+                          width={56}
+                          height={56}
+                          className="h-full w-full object-cover"
+                          unoptimized
+                        />
                       ) : (
                         <User className="w-6 h-6 text-gray-400" />
                       )}

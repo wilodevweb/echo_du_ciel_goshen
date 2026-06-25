@@ -2,6 +2,7 @@
 
 import React, { useState, FormEvent, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Camera, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
@@ -86,7 +87,14 @@ export default function AddChildPage() {
               onClick={() => fileInputRef.current?.click()}
             >
               {photoUrl ? (
-                <img src={photoUrl} alt="Aperçu" className="w-full h-full object-cover" />
+                <Image
+                  src={photoUrl}
+                  alt="Apercu"
+                  width={128}
+                  height={128}
+                  className="h-full w-full object-cover"
+                  unoptimized
+                />
               ) : (
                 <div className="text-gray-400 flex flex-col items-center">
                   <Camera className="w-8 h-8 mb-1" />
@@ -135,7 +143,7 @@ export default function AddChildPage() {
                 required 
                 value={formData.parentPhone}
                 onChange={handleChange}
-                placeholder="Ex: 06 12 34 56 78"
+                placeholder="Ex: 081 234 5678"
                 helperText="Pour contacter rapidement via l'application"
               />
 
@@ -166,7 +174,7 @@ export default function AddChildPage() {
                   rows={3}
                   value={formData.notes}
                   onChange={handleChange}
-                  placeholder="Remarques éventuelles..."
+                  placeholder="Remarques eventuelles..."
                 />
               </div>
             </CardContent>

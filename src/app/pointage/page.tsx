@@ -1,18 +1,17 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowLeft, CheckCircle2, Circle, User } from 'lucide-react';
-import db, { syncWithServer } from '@/lib/db';
+import db from '@/lib/db';
 import { Card, CardContent } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 
 export default function PointagePage() {
   // Format date to YYYY-MM-DD for input default
   const getTodayStr = () => new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(getTodayStr());
-  const [isSyncing, setIsSyncing] = useState(false);
 
   // Récupérer tous les enfants
   const children = useLiveQuery(() => db.children.orderBy('firstName').toArray());
@@ -24,10 +23,13 @@ export default function PointagePage() {
   );
 
   // Map des présences (childId -> boolean)
-  const attendanceMap = new Map<string, boolean>();
-  attendances?.forEach(att => {
-    attendanceMap.set(att.childId, att.present);
-  });
+  const attendanceMap = useMemo(() => {
+    const map = new Map<string, boolean>();
+    attendances?.forEach(att => {
+      map.set(att.childId, att.present);
+    });
+    return map;
+  }, [attendances]);
 
   const toggleAttendance = async (childId: string) => {
     const isPresent = attendanceMap.get(childId) || false;
@@ -51,17 +53,6 @@ export default function PointagePage() {
         markedAt: new Date().toISOString(),
       });
     }
-  };
-
-  const handleSync = async () => {
-    setIsSyncing(true);
-    const success = await syncWithServer();
-    if (success) {
-      alert("Données synchronisées avec succès !");
-    } else {
-      alert("Erreur lors de la synchronisation.");
-    }
-    setIsSyncing(false);
   };
 
   const totalPresents = attendances?.filter(a => a.present).length || 0;
@@ -107,7 +98,7 @@ export default function PointagePage() {
         ) : children.length === 0 ? (
           <div className="text-center mt-10 text-gray-500">
             Aucun enfant enregistré.<br/>
-            Allez dans l'annuaire pour en ajouter.
+            Allez dans l&apos;annuaire pour en ajouter.
           </div>
         ) : (
           <div className="space-y-3">
@@ -126,7 +117,14 @@ export default function PointagePage() {
                       {/* Avatar */}
                       <div className="w-12 h-12 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-300">
                         {child.photoUrl ? (
-                          <img src={child.photoUrl} alt={child.firstName} className="w-full h-full object-cover" />
+                          <Image
+                            src={child.photoUrl}
+                            alt={child.firstName}
+                            width={48}
+                            height={48}
+                            className="h-full w-full object-cover"
+                            unoptimized
+                          />
                         ) : (
                           <User className="w-5 h-5 text-gray-400" />
                         )}

@@ -17,7 +17,7 @@ export default function Home() {
             </div>
             <div>
               <h2 className="font-semibold text-gray-800">Pointage du Dimanche</h2>
-              <p className="text-sm text-gray-500">Faire l'appel d'aujourd'hui</p>
+              <p className="text-sm text-gray-500">Faire l&apos;appel d&apos;aujourd&apos;hui</p>
             </div>
           </Link>
 
@@ -27,7 +27,7 @@ export default function Home() {
             </div>
             <div>
               <h2 className="font-semibold text-gray-800">Liste des Enfants</h2>
-              <p className="text-sm text-gray-500">Gérer l'annuaire et contacts</p>
+              <p className="text-sm text-gray-500">Gérer l&apos;annuaire et contacts</p>
             </div>
           </Link>
 
