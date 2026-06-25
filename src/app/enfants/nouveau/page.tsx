@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardContent } from '@/components/ui/Card';
-import db, { CLASS_LEVELS, type ClassLevel, markPendingChange } from '@/lib/db';
+import db, { CLASS_LEVELS, type ClassLevel, generateId, markEntityForSync } from '@/lib/db';
 
 async function resizeImageFile(file: File) {
   const bitmap = await createImageBitmap(file);
@@ -72,9 +72,9 @@ export default function AddChildPage() {
     setIsSubmitting(true);
     
     try {
-      const { generateId } = await import('@/lib/db');
+      const childId = generateId();
       await db.children.add({
-        id: generateId(),
+        id: childId,
         firstName: formData.firstName,
         lastName: formData.lastName,
         postName: formData.postName,
@@ -86,7 +86,7 @@ export default function AddChildPage() {
         photoUrl: photoUrl,
         createdAt: new Date().toISOString(),
       });
-      await markPendingChange();
+      await markEntityForSync('child', childId);
       
       router.push('/enfants'); // Redirection vers la liste
     } catch (error) {

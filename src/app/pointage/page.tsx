@@ -22,7 +22,7 @@ import db, {
   getClassLabel,
   getClassNumber,
   getStatusLabel,
-  markPendingChange,
+  markEntityForSync,
 } from "@/lib/db";
 import {
   AttendanceDateSelector,
@@ -128,18 +128,21 @@ export default function PointagePage() {
       markedAt: new Date().toISOString(),
     };
 
-    if (existingRecord?.id) {
-      await db.attendances.update(existingRecord.id, payload);
+    let attendanceId = existingRecord?.id;
+
+    if (attendanceId) {
+      await db.attendances.update(attendanceId, payload);
     } else {
+      attendanceId = generateId();
       await db.attendances.add({
-        id: generateId(),
+        id: attendanceId,
         childId,
         date: selectedDate,
         ...payload,
       });
     }
 
-    await markPendingChange();
+    await markEntityForSync('attendance', attendanceId);
     moveCard(1);
   };
 
@@ -156,7 +159,7 @@ export default function PointagePage() {
     if (!firstName || !lastName || !postName) return;
 
     await db.children.update(childId, { firstName, lastName, postName });
-    await markPendingChange();
+    await markEntityForSync('child', childId);
     setEditingChildId(null);
   };
 
@@ -165,8 +168,9 @@ export default function PointagePage() {
     setIsAdding(true);
 
     try {
+      const childId = generateId();
       await db.children.add({
-        id: generateId(),
+        id: childId,
         firstName: newChild.firstName.trim(),
         lastName: newChild.lastName.trim(),
         postName: newChild.postName.trim(),
@@ -177,7 +181,7 @@ export default function PointagePage() {
         notes: newChild.notes.trim(),
         createdAt: new Date().toISOString(),
       });
-      await markPendingChange();
+      await markEntityForSync('child', childId);
       setNewChild(emptyNewChild);
       setCurrentIndex(filteredChildren.length);
     } finally {
