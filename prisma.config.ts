@@ -3,23 +3,13 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
-import { createClient } from "@libsql/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
-
-const libsql = createClient({
-  url: process.env.DATABASE_URL!,
-  authToken: process.env.DATABASE_AUTH_TOKEN!,
-});
-
-const adapter = new PrismaLibSql(libsql);
-
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    url: "file:./dev.db",
+    // On utilise l'URL de Turso (ou fallback SQLite en local) pour la CLI Prisma
+    url: process.env.DATABASE_URL || "file:./dev.db",
   },
-  adapter,
 });
