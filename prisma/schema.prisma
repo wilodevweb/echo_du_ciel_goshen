@@ -26,6 +26,7 @@ model Child {
   id          String   @id @default(cuid())
   firstName   String
   lastName    String
+  classLevel  String   @default("FIRST")
   parentPhone String
   address     String
   birthDate   String?
@@ -43,6 +44,7 @@ model Attendance {
   childId   String
   date      String   // Format YYYY-MM-DD
   present   Boolean  @default(false)
+  status    String   @default("ABSENT")
   markedAt  DateTime @default(now())
 
   child     Child    @relation(fields: [childId], references: [id], onDelete: Cascade)

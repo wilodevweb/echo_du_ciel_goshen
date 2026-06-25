@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Search, UserPlus, Phone, ArrowLeft, User } from 'lucide-react';
-import db from '@/lib/db';
+import db, { getClassLabel } from '@/lib/db';
 import { Card, CardContent } from '@/components/ui/Card';
 
 export default function ChildrenList() {
@@ -99,6 +99,9 @@ export default function ChildrenList() {
                       <h3 className="font-semibold text-gray-900 text-lg leading-tight">
                         {child.firstName} {child.lastName}
                       </h3>
+                      <p className="text-xs font-semibold text-[#00b22d]">
+                        {getClassLabel(child.classLevel)}
+                      </p>
                       <p className="text-sm text-gray-500 mt-0.5 truncate">
                         {child.parentPhone}
                       </p>

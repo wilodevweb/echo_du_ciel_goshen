@@ -1,12 +1,12 @@
-import middleware from "next-auth/middleware";
-import type { NextRequestWithAuth } from "next-auth/middleware";
-import type { NextFetchEvent } from "next/server";
+import { withAuth } from "next-auth/middleware";
 
-export default function proxy(req: NextRequestWithAuth, event: NextFetchEvent) {
-  return middleware(req, event);
-}
+export default withAuth({
+  pages: {
+    signIn: "/login",
+  },
+});
 
 export const config = {
   // Les routes protégées
-  matcher: ["/enfants/:path*", "/pointage/:path*", "/api/sync/:path*"],
+  matcher: ["/", "/enfants/:path*", "/pointage/:path*", "/api/sync/:path*"],
 };

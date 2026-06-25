@@ -1,9 +1,14 @@
 import Dexie, { type EntityTable } from 'dexie';
 
+export type ClassLevel = 'FIRST' | 'SECOND' | 'THIRD';
+export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'SICK';
+export type ClassFilter = ClassLevel | 'ALL';
+
 export interface Child {
   id: string; // Changed to string for UUID/CUID compatibility with Prisma
   firstName: string;
   lastName: string;
+  classLevel: ClassLevel;
   photoUrl?: string;
   parentPhone: string;
   address: string;
@@ -17,6 +22,7 @@ export interface Attendance {
   childId: string; // References Child.id
   date: string; // Format: YYYY-MM-DD
   present: boolean;
+  status?: AttendanceStatus;
   markedAt: string;
 }
 
@@ -27,6 +33,42 @@ export interface SyncState {
 
 // Générateur basique d'ID unique (fallback simple pour mode hors-ligne)
 export const generateId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+
+export const CLASS_LEVELS: Array<{ value: ClassLevel; label: string }> = [
+  { value: 'FIRST', label: '1ere classe' },
+  { value: 'SECOND', label: '2e classe' },
+  { value: 'THIRD', label: '3e classe' },
+];
+
+export const CLASS_FILTERS: Array<{ value: ClassFilter; label: string }> = [
+  { value: 'ALL', label: 'Tous' },
+  ...CLASS_LEVELS,
+];
+
+export function normalizeClassLevel(value?: string | null): ClassLevel {
+  return value === 'SECOND' || value === 'THIRD' ? value : 'FIRST';
+}
+
+export function getClassLabel(value?: string | null) {
+  const normalizedValue = normalizeClassLevel(value);
+  return CLASS_LEVELS.find((level) => level.value === normalizedValue)?.label ?? '1ere classe';
+}
+
+export function getAttendanceStatus(attendance?: Pick<Attendance, 'status' | 'present'> | null) {
+  if (!attendance) return null;
+  if (attendance.status === 'PRESENT' || attendance.status === 'ABSENT' || attendance.status === 'SICK') {
+    return attendance.status;
+  }
+
+  return attendance.present ? 'PRESENT' : 'ABSENT';
+}
+
+export function getStatusLabel(status: AttendanceStatus | null) {
+  if (status === 'PRESENT') return 'Present';
+  if (status === 'ABSENT') return 'Absent';
+  if (status === 'SICK') return 'Malade';
+  return 'Non marque';
+}
 
 const db = new Dexie('SundaySchoolDB') as Dexie & {
   children: EntityTable<Child, 'id'>;
@@ -45,6 +87,22 @@ db.version(3).stores({
   attendances: 'id, childId, date, [childId+date]',
   syncState: 'key',
 });
+
+db.version(4)
+  .stores({
+    children: 'id, firstName, lastName, parentPhone, classLevel',
+    attendances: 'id, childId, date, status, [childId+date]',
+    syncState: 'key',
+  })
+  .upgrade(async (transaction) => {
+    await transaction.table('children').toCollection().modify((child) => {
+      child.classLevel = normalizeClassLevel(child.classLevel);
+    });
+
+    await transaction.table('attendances').toCollection().modify((attendance) => {
+      attendance.status = attendance.status ?? (attendance.present ? 'PRESENT' : 'ABSENT');
+    });
+  });
 
 const PENDING_CHANGES_KEY = 'pendingChanges';
 const LAST_LOCAL_CHANGE_KEY = 'lastLocalChangeAt';
@@ -85,7 +143,15 @@ export async function getSyncStatus() {
 export async function syncWithServer() {
   try {
     const children = await db.children.toArray();
-    const attendances = await db.attendances.toArray();
+    const attendances = (await db.attendances.toArray()).map((attendance) => {
+      const status = getAttendanceStatus(attendance) ?? 'ABSENT';
+
+      return {
+        ...attendance,
+        status,
+        present: status === 'PRESENT',
+      };
+    });
 
     const response = await fetch('/api/sync', {
       method: 'POST',

@@ -14,6 +14,7 @@ CREATE TABLE "Child" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "firstName" TEXT NOT NULL,
     "lastName" TEXT NOT NULL,
+    "classLevel" TEXT NOT NULL DEFAULT 'FIRST',
     "parentPhone" TEXT NOT NULL,
     "address" TEXT NOT NULL,
     "birthDate" TEXT,
@@ -29,6 +30,7 @@ CREATE TABLE "Attendance" (
     "childId" TEXT NOT NULL,
     "date" TEXT NOT NULL,
     "present" BOOLEAN NOT NULL DEFAULT false,
+    "status" TEXT NOT NULL DEFAULT 'ABSENT',
     "markedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "Attendance_childId_fkey" FOREIGN KEY ("childId") REFERENCES "Child" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -38,4 +40,3 @@ CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Attendance_childId_date_key" ON "Attendance"("childId", "date");
-

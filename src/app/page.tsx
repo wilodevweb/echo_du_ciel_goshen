@@ -1,46 +1,43 @@
 import Link from "next/link";
-import { Users, CalendarCheck, UserPlus } from "lucide-react";
+import Image from "next/image";
+import { Bell, CalendarCheck } from "lucide-react";
 import { SyncPanel } from "@/components/SyncPanel";
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center p-6 bg-gray-50">
-      <div className="w-full max-w-md mt-10">
-        <h1 className="text-3xl font-bold text-center text-[#00b22d] mb-2">
-          École du Dimanche
-        </h1>
-        <p className="text-center text-gray-500 mb-10">Gestion des présences</p>
+    <main className="flex min-h-screen flex-col items-center bg-gray-50 px-5 py-6">
+      <div className="flex w-full max-w-md flex-1 flex-col">
+        <div className="flex flex-1 flex-col items-center justify-center py-8 text-center">
+          <Image
+            src="/logo eglise.png"
+            alt="Logo Eglise"
+            width={300}
+            height={154}
+            priority
+            className="mb-8 h-auto w-full max-w-[280px] object-contain"
+          />
 
-        <div className="grid gap-4">
-          <Link href="/pointage" className="flex items-center p-4 bg-white rounded-xl shadow-sm border border-gray-100 hover:border-[#00b22d] transition-colors">
-            <div className="bg-[#00b22d]/10 p-3 rounded-lg mr-4">
-              <CalendarCheck className="w-6 h-6 text-[#00b22d]" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-gray-800">Pointage du Dimanche</h2>
-              <p className="text-sm text-gray-500">Faire l&apos;appel d&apos;aujourd&apos;hui</p>
-            </div>
-          </Link>
+          <h1 className="text-3xl font-bold text-gray-950">Ecole du Dimanche</h1>
+          <p className="mt-2 text-base text-gray-500">Presence, enfants et suivi hors ligne.</p>
 
-          <Link href="/enfants" className="flex items-center p-4 bg-white rounded-xl shadow-sm border border-gray-100 hover:border-[#00b22d] transition-colors">
-            <div className="bg-[#00b22d]/10 p-3 rounded-lg mr-4">
-              <Users className="w-6 h-6 text-[#00b22d]" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-gray-800">Liste des Enfants</h2>
-              <p className="text-sm text-gray-500">Gérer l&apos;annuaire et contacts</p>
-            </div>
-          </Link>
+          <div className="mt-8 grid w-full gap-3">
+            <button
+              type="button"
+              disabled
+              className="flex h-12 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-400 shadow-sm"
+            >
+              <Bell className="h-5 w-5" />
+              Notifications
+            </button>
 
-          <Link href="/enfants/nouveau" className="flex items-center p-4 bg-white rounded-xl shadow-sm border border-gray-100 hover:border-[#00b22d] transition-colors">
-            <div className="bg-[#00b22d]/10 p-3 rounded-lg mr-4">
-              <UserPlus className="w-6 h-6 text-[#00b22d]" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-gray-800">Ajouter un Enfant</h2>
-              <p className="text-sm text-gray-500">Inscrire un nouveau profil</p>
-            </div>
-          </Link>
+            <Link
+              href="/pointage"
+              className="flex h-14 items-center justify-center gap-2 rounded-lg bg-[#00b22d] px-5 text-base font-semibold text-white shadow-sm transition-colors hover:bg-[#008f24]"
+            >
+              <CalendarCheck className="h-5 w-5" />
+              Proceder a l&apos;appel
+            </Link>
+          </div>
         </div>
 
         <SyncPanel />

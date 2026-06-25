@@ -13,6 +13,7 @@ const PRECACHE_URLS = [
   "/icon-192x192-maskable.png",
   "/icon-512x512-maskable.png",
   "/apple-touch-icon.png",
+  "/logo eglise.png",
 ];
 
 self.addEventListener("install", (event) => {

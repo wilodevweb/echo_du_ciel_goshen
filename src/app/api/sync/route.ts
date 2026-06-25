@@ -13,6 +13,7 @@ export async function POST(req: Request) {
         update: {
           firstName: child.firstName,
           lastName: child.lastName,
+          classLevel: child.classLevel ?? "FIRST",
           parentPhone: child.parentPhone,
           address: child.address,
           birthDate: child.birthDate,
@@ -23,6 +24,7 @@ export async function POST(req: Request) {
           id: child.id,
           firstName: child.firstName,
           lastName: child.lastName,
+          classLevel: child.classLevel ?? "FIRST",
           parentPhone: child.parentPhone,
           address: child.address,
           birthDate: child.birthDate,
@@ -34,6 +36,8 @@ export async function POST(req: Request) {
 
     // 2. Synchronisation des présences
     for (const att of attendances) {
+      const status = att.status ?? (att.present ? "PRESENT" : "ABSENT");
+
       // IndexedDB auto-increments don't easily map to CUIDs, so we use childId + date as unique identifier
       const existing = await prisma.attendance.findUnique({
         where: {
@@ -48,7 +52,8 @@ export async function POST(req: Request) {
         await prisma.attendance.update({
           where: { id: existing.id },
           data: {
-            present: att.present,
+            present: status === "PRESENT",
+            status,
             markedAt: new Date(att.markedAt)
           }
         });
@@ -57,7 +62,8 @@ export async function POST(req: Request) {
           data: {
             childId: att.childId,
             date: att.date,
-            present: att.present,
+            present: status === "PRESENT",
+            status,
             markedAt: new Date(att.markedAt)
           }
         });
