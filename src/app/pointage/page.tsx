@@ -11,7 +11,6 @@ import {
   MapPin,
   NotebookText,
   Phone,
-  Save,
   User,
   X,
 } from "lucide-react";
@@ -46,6 +45,8 @@ type NewChildForm = {
   notes: string;
 };
 
+type ChildDetailsDraft = NewChildForm;
+
 const emptyNewChild: NewChildForm = {
   firstName: "",
   lastName: "",
@@ -63,8 +64,6 @@ export default function PointagePage() {
   const [hasStarted, setHasStarted] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  const [editingChildId, setEditingChildId] = useState<string | null>(null);
-  const [nameDraft, setNameDraft] = useState({ firstName: "", lastName: "", postName: "" });
   const [detailsChild, setDetailsChild] = useState<Child | null>(null);
   const [newChild, setNewChild] = useState<NewChildForm>(emptyNewChild);
   const [isAdding, setIsAdding] = useState(false);
@@ -106,7 +105,6 @@ export default function PointagePage() {
 
   const resetCarousel = () => {
     setCurrentIndex(0);
-    setEditingChildId(null);
     setDetailsChild(null);
   };
 
@@ -143,21 +141,25 @@ export default function PointagePage() {
     moveCard(1);
   };
 
-  const startNameEdit = (child: Child) => {
-    setEditingChildId(child.id);
-    setNameDraft({ firstName: child.firstName, lastName: child.lastName, postName: child.postName });
-  };
-
-  const saveNameEdit = async (childId: string) => {
-    const firstName = nameDraft.firstName.trim();
-    const lastName = nameDraft.lastName.trim();
-    const postName = nameDraft.postName.trim();
+  const saveChildDetails = async (childId: string, draft: ChildDetailsDraft) => {
+    const firstName = draft.firstName.trim();
+    const lastName = draft.lastName.trim();
+    const postName = draft.postName.trim();
 
     if (!firstName || !lastName || !postName) return;
 
-    await db.children.update(childId, { firstName, lastName, postName });
+    await db.children.update(childId, {
+      firstName,
+      lastName,
+      postName,
+      classLevel: draft.classLevel,
+      parentPhone: draft.parentPhone.trim(),
+      address: draft.address.trim(),
+      birthDate: draft.birthDate,
+      notes: draft.notes.trim(),
+    });
     await markEntityForSync('child', childId);
-    setEditingChildId(null);
+    setDetailsChild(null);
   };
 
   const addChild = async (event: FormEvent<HTMLFormElement>) => {
@@ -287,11 +289,7 @@ export default function PointagePage() {
                   <ChildAttendanceCard
                     child={currentChild}
                     status={getAttendanceStatus(attendanceMap.get(currentChild.id))}
-                    isEditingName={editingChildId === currentChild.id}
-                    nameDraft={nameDraft}
                     onNameClick={() => setDetailsChild(currentChild)}
-                    onNameDraftChange={setNameDraft}
-                    onSaveName={() => saveNameEdit(currentChild.id)}
                     onSetStatus={(status) => setAttendanceStatus(currentChild.id, status)}
                   />
                 ) : (
@@ -317,10 +315,7 @@ export default function PointagePage() {
           child={detailsChild}
           status={getAttendanceStatus(attendanceMap.get(detailsChild.id))}
           onClose={() => setDetailsChild(null)}
-          onEdit={() => {
-            startNameEdit(detailsChild);
-            setDetailsChild(null);
-          }}
+          onSave={(draft) => saveChildDetails(detailsChild.id, draft)}
         />
       )}
     </main>
@@ -359,20 +354,12 @@ function AttendanceSkeleton() {
 function ChildAttendanceCard({
   child,
   status,
-  isEditingName,
-  nameDraft,
   onNameClick,
-  onNameDraftChange,
-  onSaveName,
   onSetStatus,
 }: {
   child: Child;
   status: AttendanceStatus | null;
-  isEditingName: boolean;
-  nameDraft: { firstName: string; lastName: string; postName: string };
   onNameClick: () => void;
-  onNameDraftChange: (value: { firstName: string; lastName: string; postName: string }) => void;
-  onSaveName: () => void;
   onSetStatus: (status: AttendanceStatus) => void;
 }) {
   return (
@@ -407,50 +394,13 @@ function ChildAttendanceCard({
         </div>
 
         <div className="mb-9 text-center">
-            {isEditingName ? (
-              <div className="grid gap-2">
-                <input
-                  value={nameDraft.lastName}
-                  onChange={(event) =>
-                    onNameDraftChange({ ...nameDraft, lastName: event.target.value })
-                  }
-                  className="h-10 rounded-lg border border-gray-300 px-3 text-center text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
-                  placeholder="Ajouter un nom"
-                />
-                <input
-                  value={nameDraft.postName}
-                  onChange={(event) =>
-                    onNameDraftChange({ ...nameDraft, postName: event.target.value })
-                  }
-                  className="h-10 rounded-lg border border-gray-300 px-3 text-center text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
-                  placeholder="Ajouter un post-nom"
-                />
-                <input
-                  value={nameDraft.firstName}
-                  onChange={(event) =>
-                    onNameDraftChange({ ...nameDraft, firstName: event.target.value })
-                  }
-                  className="h-10 rounded-lg border border-gray-300 px-3 text-center text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
-                  placeholder="Ajouter un prenom"
-                />
-                <button
-                  type="button"
-                  onClick={onSaveName}
-                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#00b22d] px-3 text-sm font-semibold text-white"
-                >
-                  <Save className="h-4 w-4" />
-                  Enregistrer
-                </button>
-              </div>
-            ) : (
-              <button type="button" onClick={onNameClick} className="text-center">
-                <h2 className="text-2xl leading-tight tracking-tight text-black">
-                  <span className="font-black uppercase">{child.lastName}</span>{" "}
-                  <span className="font-black uppercase">{child.postName}</span>{" "}
-                  <span className="font-normal uppercase">{child.firstName}</span>
-                </h2>
-              </button>
-            )}
+          <button type="button" onClick={onNameClick} className="text-center">
+            <h2 className="text-2xl leading-tight tracking-tight text-black">
+              <span className="font-black uppercase">{child.lastName}</span>{" "}
+              <span className="font-black uppercase">{child.postName}</span>{" "}
+              <span className="font-normal uppercase">{child.firstName}</span>
+            </h2>
+          </button>
         </div>
 
         <div className="sr-only">
@@ -490,26 +440,87 @@ function ChildDetailsModal({
   child,
   status,
   onClose,
-  onEdit,
+  onSave,
 }: {
   child: Child;
   status: AttendanceStatus | null;
   onClose: () => void;
-  onEdit: () => void;
+  onSave: (draft: ChildDetailsDraft) => Promise<void>;
 }) {
+  const [draft, setDraft] = useState<ChildDetailsDraft>(() => ({
+    firstName: child.firstName,
+    lastName: child.lastName,
+    postName: child.postName,
+    classLevel: child.classLevel,
+    parentPhone: child.parentPhone,
+    address: child.address,
+    birthDate: child.birthDate ?? "",
+    notes: child.notes ?? "",
+  }));
+  const [activeField, setActiveField] = useState<keyof ChildDetailsDraft | "name" | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const canSave = Boolean(draft.firstName.trim() && draft.lastName.trim() && draft.postName.trim());
+
+  const updateDraft = (field: keyof ChildDetailsDraft, value: string) => {
+    setDraft((currentDraft) => ({ ...currentDraft, [field]: value }));
+  };
+
+  const handleSave = async () => {
+    if (!canSave || isSaving) return;
+
+    setIsSaving(true);
+    try {
+      await onSave(draft);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/45 px-0" role="dialog" aria-modal="true">
       <button type="button" className="absolute inset-0 cursor-default" aria-label="Fermer" onClick={onClose} />
-      <div className="attendance-sheet-in relative w-full rounded-t-[32px] bg-[#1b1b1b] px-6 pb-8 pt-3 text-white shadow-2xl">
+      <div className="attendance-sheet-in relative max-h-[88vh] w-full overflow-y-auto rounded-t-[32px] bg-[#1b1b1b] px-6 pb-8 pt-3 text-white shadow-2xl">
         <div className="mx-auto mb-5 h-1.5 w-28 rounded-full bg-white/55" />
         <div className="mb-5 flex items-start justify-between gap-4">
-          <div>
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setActiveField("name")}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") setActiveField("name");
+            }}
+            className="min-w-0 flex-1 text-left"
+          >
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
               Fiche enfant
             </p>
-            <h2 className="mt-2 text-2xl font-semibold leading-tight">
-              {child.lastName} {child.postName} {child.firstName}
-            </h2>
+            {activeField === "name" ? (
+              <div className="mt-2 grid gap-1">
+                <InlineTextEditor
+                  value={draft.lastName}
+                  onChange={(value) => updateDraft("lastName", value)}
+                  placeholder="Nom"
+                  autoFocus
+                  className="text-2xl font-semibold"
+                />
+                <InlineTextEditor
+                  value={draft.postName}
+                  onChange={(value) => updateDraft("postName", value)}
+                  placeholder="Post-nom"
+                  className="text-2xl font-semibold"
+                />
+                <InlineTextEditor
+                  value={draft.firstName}
+                  onChange={(value) => updateDraft("firstName", value)}
+                  placeholder="Prénom"
+                  className="text-2xl font-semibold"
+                />
+              </div>
+            ) : (
+              <h2 className="mt-2 text-2xl font-semibold leading-tight">
+                {draft.lastName || "Nom"} {draft.postName || "Post-nom"} {draft.firstName || "Prénom"}
+              </h2>
+            )}
           </div>
           <button
             type="button"
@@ -528,42 +539,89 @@ function ChildDetailsModal({
         </div>
 
         <div className="space-y-5">
-          <DetailRow
+          <EditableClassRow
             icon={<GraduationCap className="h-6 w-6" />}
             title="Classe"
-            value={getClassLabel(child.classLevel)}
+            value={draft.classLevel}
+            isEditing={activeField === "classLevel"}
+            onEdit={() => setActiveField("classLevel")}
+            onChange={(value) => updateDraft("classLevel", value)}
           />
-          <DetailRow
+          <EditableDetailRow
             icon={<Calendar className="h-6 w-6" />}
             title="Naissance"
-            value={child.birthDate || "Non renseignée"}
+            value={draft.birthDate}
+            placeholder="Non renseignée"
+            inputType="date"
+            isEditing={activeField === "birthDate"}
+            onEdit={() => setActiveField("birthDate")}
+            onChange={(value) => updateDraft("birthDate", value)}
           />
-          <DetailRow
+          <EditableDetailRow
             icon={<Phone className="h-6 w-6" />}
             title="Téléphone parent"
-            value={child.parentPhone || "Non renseigné"}
+            value={draft.parentPhone}
+            placeholder="Non renseigné"
+            inputType="tel"
+            isEditing={activeField === "parentPhone"}
+            onEdit={() => setActiveField("parentPhone")}
+            onChange={(value) => updateDraft("parentPhone", value)}
           />
-          <DetailRow
+          <EditableDetailRow
             icon={<MapPin className="h-6 w-6" />}
             title="Adresse"
-            value={child.address || "Non renseignée"}
+            value={draft.address}
+            placeholder="Non renseignée"
+            isEditing={activeField === "address"}
+            onEdit={() => setActiveField("address")}
+            onChange={(value) => updateDraft("address", value)}
           />
-          <DetailRow
+          <EditableDetailRow
             icon={<NotebookText className="h-6 w-6" />}
             title="Notes"
-            value={child.notes || "Aucune note"}
+            value={draft.notes}
+            placeholder="Aucune note"
+            multiline
+            isEditing={activeField === "notes"}
+            onEdit={() => setActiveField("notes")}
+            onChange={(value) => updateDraft("notes", value)}
           />
         </div>
 
         <button
           type="button"
-          onClick={onEdit}
-          className="mt-7 flex h-12 w-full items-center justify-center rounded-xl bg-white text-sm font-bold text-[#1b1b1b]"
+          onClick={handleSave}
+          disabled={!canSave || isSaving}
+          className="mt-7 flex h-12 w-full items-center justify-center rounded-xl bg-white text-sm font-bold text-[#1b1b1b] disabled:opacity-45"
         >
-          Modifier le nom
+          {isSaving ? "Enregistrement..." : "Enregistrer"}
         </button>
       </div>
     </div>
+  );
+}
+
+function InlineTextEditor({
+  value,
+  onChange,
+  placeholder,
+  className = "",
+  autoFocus = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  className?: string;
+  autoFocus?: boolean;
+}) {
+  return (
+    <input
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={placeholder}
+      autoFocus={autoFocus}
+      className={`w-full border-0 bg-transparent p-0 leading-tight text-white placeholder:text-white/30 outline-none ${className}`}
+    />
   );
 }
 
@@ -586,23 +644,125 @@ function DetailPill({
   );
 }
 
-function DetailRow({
+function EditableDetailRow({
   icon,
   title,
   value,
+  placeholder,
+  isEditing,
+  onEdit,
+  onChange,
+  inputType = "text",
+  multiline = false,
 }: {
   icon: React.ReactNode;
   title: string;
   value: string;
+  placeholder: string;
+  isEditing: boolean;
+  onEdit: () => void;
+  onChange: (value: string) => void;
+  inputType?: "text" | "tel" | "date";
+  multiline?: boolean;
 }) {
   return (
-    <div className="flex gap-4">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onEdit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") onEdit();
+      }}
+      className="flex w-full gap-4 text-left"
+    >
       <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/8 text-white/85">
         {icon}
       </div>
       <div className="min-w-0">
         <p className="text-lg font-semibold leading-tight text-white">{title}</p>
-        <p className="mt-1 line-clamp-2 text-base leading-snug text-white/55">{value}</p>
+        {isEditing ? (
+          multiline ? (
+            <textarea
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              placeholder={placeholder}
+              autoFocus
+              rows={2}
+              className="mt-1 w-full resize-none border-0 bg-transparent p-0 text-base leading-snug text-white placeholder:text-white/30 outline-none"
+              onClick={(event) => event.stopPropagation()}
+            />
+          ) : (
+            <input
+              type={inputType}
+              value={value}
+              onChange={(event) => onChange(event.target.value)}
+              placeholder={placeholder}
+              autoFocus
+              className="mt-1 w-full border-0 bg-transparent p-0 text-base leading-snug text-white placeholder:text-white/30 outline-none"
+              onClick={(event) => event.stopPropagation()}
+            />
+          )
+        ) : (
+          <p className="mt-1 line-clamp-2 text-base leading-snug text-white/55">
+            {value || placeholder}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EditableClassRow({
+  icon,
+  title,
+  value,
+  isEditing,
+  onEdit,
+  onChange,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  value: ClassLevel;
+  isEditing: boolean;
+  onEdit: () => void;
+  onChange: (value: ClassLevel) => void;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onEdit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") onEdit();
+      }}
+      className="flex w-full gap-4 text-left"
+    >
+      <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/8 text-white/85">
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-lg font-semibold leading-tight text-white">{title}</p>
+        {isEditing ? (
+          <div className="mt-2 grid grid-cols-3 gap-2">
+            {CLASS_LEVELS.map((level) => (
+              <button
+                key={level.value}
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onChange(level.value);
+                }}
+                className={`h-9 rounded-full px-2 text-sm font-semibold ${
+                  value === level.value ? "bg-white text-[#1b1b1b]" : "bg-white/8 text-white/65"
+                }`}
+              >
+                {getClassNumber(level.value)}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-1 text-base leading-snug text-white/55">{getClassLabel(value)}</p>
+        )}
       </div>
     </div>
   );
