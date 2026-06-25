@@ -378,37 +378,37 @@ function ChildAttendanceCard({
   onSetStatus: (status: AttendanceStatus) => void;
 }) {
   return (
-    <Card padding="none" className="w-full rounded-lg border-0 bg-[#dedede] shadow-none">
-      <CardContent className="relative px-8 py-10">
+    <Card padding="none" className="w-full rounded-lg border-gray-100 bg-white shadow-md">
+      <CardContent className="relative px-6 py-7">
         <div className="absolute right-5 top-5 flex gap-2">
           <span className={`h-3 w-3 rounded-full ${status === "ABSENT" ? "bg-red-600" : "bg-red-300"}`} />
           <span className={`h-3 w-3 rounded-full ${status === "PRESENT" ? "bg-green-600" : "bg-green-300"}`} />
           <span className={`h-3 w-3 rounded-full ${status === "SICK" ? "bg-yellow-500" : "bg-yellow-200"}`} />
         </div>
 
-        <div className="mb-8 flex justify-center">
-          <div className="relative h-48 w-48">
-            <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#a9d6cb]">
+        <div className="mb-7 flex justify-center">
+          <div className="relative h-36 w-36">
+            <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#d7efe8]">
             {child.photoUrl ? (
               <Image
                 src={child.photoUrl}
                 alt={`${child.lastName} ${child.postName} ${child.firstName}`}
-                width={192}
-                height={192}
+                width={144}
+                height={144}
                 className="h-full w-full object-cover"
                 unoptimized
               />
             ) : (
-              <User className="h-20 w-20 text-gray-400" />
+              <User className="h-14 w-14 text-gray-400" />
             )}
             </div>
-            <div className="absolute -bottom-2 -right-1 flex h-16 w-16 items-center justify-center rounded-full bg-[#342ee8] text-3xl font-black text-black">
+            <div className="absolute -bottom-1 -right-1 flex h-12 w-12 items-center justify-center rounded-full bg-[#342ee8] text-2xl font-black text-white shadow-sm">
               {getClassNumber(child.classLevel)}
             </div>
           </div>
         </div>
 
-        <div className="mb-16 text-center">
+        <div className="mb-9 text-center">
             {isEditingName ? (
               <div className="grid gap-2">
                 <input
@@ -446,7 +446,7 @@ function ChildAttendanceCard({
               </div>
             ) : (
               <button type="button" onClick={onNameClick} className="text-center">
-                <h2 className="text-3xl leading-tight tracking-tight text-black">
+                <h2 className="text-2xl leading-tight tracking-tight text-black">
                   <span className="font-black uppercase">{child.lastName}</span>{" "}
                   <span className="font-black uppercase">{child.postName}</span>{" "}
                   <span className="font-normal uppercase">{child.firstName}</span>
@@ -463,22 +463,22 @@ function ChildAttendanceCard({
           {child.notes && <p className="line-clamp-2">{child.notes}</p>}
         </div>
 
-        <div className="grid grid-cols-2 gap-x-14 gap-y-9">
+        <div className="grid grid-cols-2 gap-3">
           <StatusButton
             label="Marquer absent"
-            colorClass="bg-red-500 text-white"
+            colorClass="border-red-200 bg-red-50 text-red-700"
             active={status === "ABSENT"}
             onClick={() => onSetStatus("ABSENT")}
           />
           <StatusButton
             label="Marquer present"
-            colorClass="bg-green-700 text-white"
+            colorClass="border-green-200 bg-green-50 text-green-700"
             active={status === "PRESENT"}
             onClick={() => onSetStatus("PRESENT")}
           />
           <StatusButton
             label="Marquer malade"
-            colorClass="bg-[#b6a400] text-white col-span-2 mx-auto w-48"
+            colorClass="border-yellow-200 bg-yellow-50 text-yellow-700 col-span-2"
             active={status === "SICK"}
             onClick={() => onSetStatus("SICK")}
           />
@@ -487,7 +487,7 @@ function ChildAttendanceCard({
         <button
           type="button"
           onClick={onToggleDetails}
-          className="mt-8 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white/40 text-sm font-semibold text-gray-700"
+          className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700"
         >
           <Info className="h-4 w-4" />
           Details
@@ -523,10 +523,12 @@ function StatusButton({
       type="button"
       aria-label={label}
       onClick={onClick}
-      className={`h-14 rounded-xl shadow-sm transition-transform ${colorClass} ${
-        active ? "scale-[1.03] ring-2 ring-offset-2 ring-gray-900/20" : "opacity-90"
+      className={`h-11 rounded-lg border text-sm font-semibold shadow-sm transition-transform ${colorClass} ${
+        active ? "scale-[1.02] ring-2 ring-offset-2 ring-gray-900/15" : "opacity-95"
       }`}
-    />
+    >
+      <span className="sr-only">{label}</span>
+    </button>
   );
 }
 
