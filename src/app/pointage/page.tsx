@@ -1,7 +1,6 @@
 "use client";
 
 import React, { FormEvent, useMemo, useState } from "react";
-import Link from "next/link";
 import Image from "next/image";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
@@ -13,12 +12,10 @@ import {
   User,
 } from "lucide-react";
 import db, {
-  CLASS_FILTERS,
   CLASS_LEVELS,
   type Attendance,
   type AttendanceStatus,
   type Child,
-  type ClassFilter,
   type ClassLevel,
   generateId,
   getAttendanceStatus,
@@ -26,6 +23,11 @@ import db, {
   getStatusLabel,
   markPendingChange,
 } from "@/lib/db";
+import {
+  AttendanceDateSelector,
+  getMostRecentSundayDateString,
+} from "@/components/attendance/AttendanceDateSelector";
+import { ClassSelectionScreen } from "@/components/attendance/ClassSelectionScreen";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 
@@ -50,8 +52,9 @@ const emptyNewChild: NewChildForm = {
 };
 
 export default function PointagePage() {
-  const selectedDate = useMemo(() => new Date().toISOString().split("T")[0], []);
-  const [classFilter, setClassFilter] = useState<ClassFilter | null>(null);
+  const [selectedDate, setSelectedDate] = useState(() => getMostRecentSundayDateString());
+  const [selectedClasses, setSelectedClasses] = useState<ClassLevel[]>([]);
+  const [hasStarted, setHasStarted] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
@@ -75,9 +78,9 @@ export default function PointagePage() {
   }, [children]);
 
   const filteredChildren = useMemo(() => {
-    if (classFilter === null || classFilter === "ALL") return sortedChildren;
-    return sortedChildren.filter((child) => child.classLevel === classFilter);
-  }, [classFilter, sortedChildren]);
+    if (selectedClasses.length === 0) return [];
+    return sortedChildren.filter((child) => selectedClasses.includes(child.classLevel));
+  }, [selectedClasses, sortedChildren]);
 
   const attendanceMap = useMemo(() => {
     const map = new Map<string, Attendance>();
@@ -97,15 +100,9 @@ export default function PointagePage() {
   const presentCount = filteredChildren.filter(
     (child) => getAttendanceStatus(attendanceMap.get(child.id)) === "PRESENT",
   ).length;
-  const formattedDate = useMemo(() => {
-    const dateLabel = new Intl.DateTimeFormat("fr-FR", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-    }).format(new Date(selectedDate));
-
-    return dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1);
-  }, [selectedDate]);
+  const selectedClassLabel = selectedClasses.length === CLASS_LEVELS.length
+    ? "Toutes les classes"
+    : selectedClasses.map(getClassLabel).join(" + ");
 
   const resetCarousel = () => {
     setCurrentIndex(0);
@@ -183,11 +180,26 @@ export default function PointagePage() {
     }
   };
 
-  const chooseClass = (filter: ClassFilter) => {
-    setClassFilter(filter);
-    if (filter !== "ALL") {
-      setNewChild((child) => ({ ...child, classLevel: filter }));
-    }
+  const toggleClass = (classLevel: ClassLevel) => {
+    setSelectedClasses((classes) => {
+      if (classes.includes(classLevel)) {
+        return classes.filter((value) => value !== classLevel);
+      }
+
+      return [...classes, classLevel];
+    });
+  };
+
+  const toggleAllClasses = () => {
+    setSelectedClasses((classes) =>
+      classes.length === CLASS_LEVELS.length ? [] : CLASS_LEVELS.map((level) => level.value),
+    );
+  };
+
+  const startAttendance = () => {
+    const firstClass = selectedClasses[0] ?? "FIRST";
+    setNewChild((child) => ({ ...child, classLevel: firstClass }));
+    setHasStarted(true);
     resetCarousel();
   };
 
@@ -201,39 +213,20 @@ export default function PointagePage() {
     moveCard(deltaX > 0 ? -1 : 1);
   };
 
-  if (classFilter === null) {
+  if (!hasStarted) {
     return (
-      <main className="flex min-h-screen flex-col bg-white px-5 py-5">
-        <header className="mx-auto flex w-full max-w-md items-center">
-          <Link href="/" className="rounded-lg p-2 text-gray-700 hover:bg-gray-100">
-            <ArrowLeft className="h-6 w-6" />
-          </Link>
-          <p className="flex-1 pr-10 text-center text-lg font-bold text-gray-950">
-            {formattedDate}
-          </p>
-        </header>
-
-        <section className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center">
-          <div className="mb-8 text-center">
-            <h1 className="text-3xl font-bold text-gray-950">Choisir la classe</h1>
-            <p className="mt-2 text-base text-gray-500">Selectionne le groupe pour commencer l&apos;appel.</p>
-          </div>
-
-          <div className="grid gap-3">
-            {CLASS_FILTERS.map((filter) => (
-              <button
-                key={filter.value}
-                type="button"
-                onClick={() => chooseClass(filter.value)}
-                className="flex h-16 items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-5 text-left text-lg font-bold text-gray-950 shadow-sm transition-colors hover:border-[#00b22d] hover:bg-[#00b22d]/5"
-              >
-                <span>{filter.label}</span>
-                <span className="text-sm font-semibold text-[#00b22d]">Commencer</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      </main>
+      <ClassSelectionScreen
+        selectedDate={selectedDate}
+        childList={children}
+        selectedClasses={selectedClasses}
+        onDateChange={(value) => {
+          setSelectedDate(value);
+          resetCarousel();
+        }}
+        onToggleClass={toggleClass}
+        onSelectAll={toggleAllClasses}
+        onStart={startAttendance}
+      />
     );
   }
 
@@ -244,7 +237,7 @@ export default function PointagePage() {
           <button
             type="button"
             onClick={() => {
-              setClassFilter(null);
+              setHasStarted(false);
               resetCarousel();
             }}
             className="rounded-lg p-2 text-gray-700 hover:bg-gray-100"
@@ -252,9 +245,15 @@ export default function PointagePage() {
             <ArrowLeft className="h-6 w-6" />
           </button>
           <div className="flex-1 pr-10 text-center">
-            <p className="text-lg font-bold text-gray-950">{formattedDate}</p>
+            <AttendanceDateSelector
+              value={selectedDate}
+              onChange={(value) => {
+                setSelectedDate(value);
+                resetCarousel();
+              }}
+            />
             <p className="text-sm font-semibold text-gray-500">
-              {CLASS_FILTERS.find((filter) => filter.value === classFilter)?.label} · {markedCount}/{filteredChildren.length}
+              {selectedClassLabel} · {markedCount}/{filteredChildren.length}
             </p>
           </div>
         </div>
