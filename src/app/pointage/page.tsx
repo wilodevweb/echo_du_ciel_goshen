@@ -6,7 +6,6 @@ import { useLiveQuery } from "dexie-react-hooks";
 import {
   ArrowLeft,
   Calendar,
-  Camera,
   CirclePlus,
   Crown,
   GraduationCap,
@@ -117,6 +116,13 @@ function isBirthdayInWeek(birthDate: string | undefined, weekStartDate: string) 
   });
 }
 
+function getHistoryDotClass(status?: AttendanceStatus) {
+  if (status === "PRESENT") return "bg-green-500";
+  if (status === "ABSENT") return "bg-red-500";
+  if (status === "SICK") return "bg-yellow-400";
+  return "bg-white/25";
+}
+
 export default function PointagePage() {
   const [selectedDate, setSelectedDate] = useState(() => getMostRecentSundayDateString());
   const [selectedClasses, setSelectedClasses] = useState<ClassLevel[]>([]);
@@ -132,6 +138,7 @@ export default function PointagePage() {
     () => db.attendances.where("date").equals(selectedDate).toArray(),
     [selectedDate],
   );
+  const allAttendances = useLiveQuery(() => db.attendances.toArray());
 
   const sortedChildren = useMemo(() => {
     return [...(children ?? [])].sort((a, b) =>
@@ -153,6 +160,23 @@ export default function PointagePage() {
     });
     return map;
   }, [attendances]);
+  const attendanceHistoryMap = useMemo(() => {
+    const map = new Map<string, AttendanceStatus[]>();
+    const sortedAttendances = [...(allAttendances ?? [])].sort((a, b) => b.date.localeCompare(a.date));
+
+    sortedAttendances.forEach((attendance) => {
+      const status = getAttendanceStatus(attendance);
+      if (!status) return;
+
+      const history = map.get(attendance.childId) ?? [];
+      if (history.length >= 3) return;
+
+      history.push(status);
+      map.set(attendance.childId, history);
+    });
+
+    return map;
+  }, [allAttendances]);
 
   const totalCards = filteredChildren.length + 1;
   const visibleIndex = Math.min(currentIndex, totalCards - 1);
@@ -203,17 +227,18 @@ export default function PointagePage() {
   const updateChildPhoto = async (childId: string, file: File) => {
     const photoUrl = await resizeImageFile(file);
     await db.children.update(childId, { photoUrl });
-    await markEntityForSync('child', childId);
+    await markEntityForSync('child', childId, ['photoUrl']);
   };
 
   const saveChildDetails = async (childId: string, draft: ChildDetailsDraft) => {
+    const existingChild = await db.children.get(childId);
     const firstName = draft.firstName.trim();
     const lastName = draft.lastName.trim();
     const postName = draft.postName.trim();
 
     if (!firstName || !lastName || !postName) return;
 
-    await db.children.update(childId, {
+    const nextChild = {
       firstName,
       lastName,
       postName,
@@ -222,8 +247,15 @@ export default function PointagePage() {
       address: draft.address.trim(),
       birthDate: draft.birthDate,
       notes: draft.notes.trim(),
+    };
+    const changedFields = (Object.keys(nextChild) as Array<keyof typeof nextChild>).filter((field) => {
+      return existingChild?.[field] !== nextChild[field];
     });
-    await markEntityForSync('child', childId);
+
+    await db.children.update(childId, nextChild);
+    if (changedFields.length > 0) {
+      await markEntityForSync('child', childId, changedFields);
+    }
     setDetailsChild(null);
   };
 
@@ -333,7 +365,7 @@ export default function PointagePage() {
       </header>
 
       <section className="mx-auto flex w-full max-w-md flex-1 flex-col py-5">
-        {children === undefined || attendances === undefined ? (
+        {children === undefined || attendances === undefined || allAttendances === undefined ? (
           <AttendanceSkeleton />
         ) : (
           <>
@@ -354,6 +386,7 @@ export default function PointagePage() {
                   <ChildAttendanceCard
                     child={currentChild}
                     status={getAttendanceStatus(attendanceMap.get(currentChild.id))}
+                    recentStatuses={attendanceHistoryMap.get(currentChild.id) ?? []}
                     hasBirthdayThisWeek={isBirthdayInWeek(currentChild.birthDate, selectedDate)}
                     onNameClick={() => setDetailsChild(currentChild)}
                     onPhotoChange={(file) => updateChildPhoto(currentChild.id, file)}
@@ -371,7 +404,7 @@ export default function PointagePage() {
             </div>
 
             <p className="mt-4 text-center text-sm font-semibold text-gray-400">
-              {visibleIndex + 1} / {totalCards} · Balaye pour revenir
+              {visibleIndex + 1} / {totalCards}
             </p>
           </>
         )}
@@ -421,6 +454,7 @@ function AttendanceSkeleton() {
 function ChildAttendanceCard({
   child,
   status,
+  recentStatuses,
   hasBirthdayThisWeek,
   onNameClick,
   onPhotoChange,
@@ -428,14 +462,12 @@ function ChildAttendanceCard({
 }: {
   child: Child;
   status: AttendanceStatus | null;
+  recentStatuses: AttendanceStatus[];
   hasBirthdayThisWeek: boolean;
   onNameClick: () => void;
   onPhotoChange: (file: File) => Promise<void>;
   onSetStatus: (status: AttendanceStatus) => void;
 }) {
-  const statusLabel =
-    status === "ABSENT" ? "Absent" : status === "PRESENT" ? "Présent" : status === "SICK" ? "Malade" : "Non marqué";
-
   return (
     <Card padding="none" className="w-full overflow-hidden rounded-[28px] border-0 bg-[#1b1b1b] shadow-2xl">
       <CardContent className="relative px-5 pb-5 pt-3 text-white">
@@ -446,10 +478,12 @@ function ChildAttendanceCard({
             {getClassLabel(child.classLevel)}
           </div>
           <div className="flex items-center gap-2 rounded-full bg-white/8 px-3 py-1">
-            <span className={`h-2.5 w-2.5 rounded-full ${status === "ABSENT" ? "bg-red-500" : "bg-red-500/35"}`} />
-            <span className={`h-2.5 w-2.5 rounded-full ${status === "PRESENT" ? "bg-green-500" : "bg-green-500/35"}`} />
-            <span className={`h-2.5 w-2.5 rounded-full ${status === "SICK" ? "bg-yellow-400" : "bg-yellow-400/35"}`} />
-            <span className="text-xs font-semibold text-white/60">{statusLabel}</span>
+            {[0, 1, 2].map((index) => (
+              <span
+                key={index}
+                className={`h-2.5 w-2.5 rounded-full ${getHistoryDotClass(recentStatuses[index])}`}
+              />
+            ))}
           </div>
         </div>
 
@@ -490,27 +524,29 @@ function ChildAttendanceCard({
             <div className="absolute bottom-2 right-2 flex h-12 w-12 items-center justify-center rounded-full bg-[#342ee8] text-2xl font-black text-white shadow-lg ring-4 ring-[#1b1b1b]">
               {getClassNumber(child.classLevel)}
             </div>
-            <div className="absolute left-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-[#1b1b1b] text-white ring-4 ring-[#d7efe8]">
+            {/* <div className="absolute left-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-[#1b1b1b] text-white ring-4 ring-[#d7efe8]">
               <Camera className="h-5 w-5" />
-            </div>
+            </div> */}
           </label>
         </div>
 
         <div className="mb-5 text-center">
           <button
-            type="button"
-            onClick={onNameClick}
-            className="mx-auto block w-full max-w-full rounded-[22px] bg-white px-4 py-3 text-center shadow-sm"
-          >
-            <h2 className="grid gap-0.5 text-[1.35rem] leading-[1.02] tracking-tight text-[#111827]">
-              <span className="block font-black uppercase">{child.lastName}</span>
-              <span className="block font-black uppercase">{child.postName}</span>
-              <span className="block font-normal uppercase">{child.firstName}</span>
-            </h2>
-            <p className="mt-2 text-xs font-semibold text-gray-400">
-              Toucher le nom pour ouvrir la fiche
-            </p>
-          </button>
+          type="button"
+          onClick={onNameClick}
+          className="mx-auto w-full rounded-[22px] bg-white px-4 py-3"
+        >
+          <h2 className="flex flex-col items-center gap-0.5 text-[1.35rem] leading-[1.02] tracking-tight text-[#111827]">
+            {/* Conteneur flex pour aligner lastName et postName en ligne */}
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
+              <span className="font-black uppercase">{child.lastName}</span>
+              <span className="font-black uppercase">{child.postName}</span>
+            </div>
+
+            {/* Le firstName est placé après la div, il sera donc toujours sur une nouvelle ligne */}
+            <span className="font-normal capitalize">{child.firstName}</span>
+          </h2>
+        </button>
         </div>
 
         <div className="sr-only">

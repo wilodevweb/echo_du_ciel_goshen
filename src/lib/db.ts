@@ -34,21 +34,66 @@ export interface SyncState {
 }
 
 export type SyncEntity = 'child' | 'attendance';
+type ChildSyncField = 'firstName' | 'lastName' | 'postName' | 'classLevel' | 'parentPhone' | 'address' | 'birthDate' | 'notes' | 'photoUrl';
 
 export interface PendingSyncItem {
   key: string;
   entity: SyncEntity;
   id: string;
   updatedAt: string;
+  fields?: ChildSyncField[];
 }
 
 interface SyncDeltaResponse {
   success: boolean;
   children?: Child[];
   attendances?: Attendance[];
+  c?: CompactServerChild[];
+  a?: CompactServerAttendance[];
   serverSyncedAt?: string;
   error?: string;
 }
+
+type CompactChildPatch = [string, string, ...string[]];
+type CompactAttendancePatch = [string, string, string];
+type CompactServerChild = [
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+];
+type CompactServerAttendance = [string, string, string, string, string];
+
+const CHILD_SYNC_FIELDS: ChildSyncField[] = [
+  'firstName',
+  'lastName',
+  'postName',
+  'classLevel',
+  'parentPhone',
+  'address',
+  'birthDate',
+  'notes',
+  'photoUrl',
+];
+const CHILD_FIELD_CODES: Record<ChildSyncField, string> = {
+  firstName: 'f',
+  lastName: 'l',
+  postName: 'o',
+  classLevel: 'c',
+  parentPhone: 't',
+  address: 'a',
+  birthDate: 'b',
+  notes: 'n',
+  photoUrl: 'h',
+};
 
 // Générateur basique d'ID unique (fallback simple pour mode hors-ligne)
 export const generateId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -94,6 +139,41 @@ export function getStatusLabel(status: AttendanceStatus | null) {
   if (status === 'ABSENT') return 'Absent';
   if (status === 'SICK') return 'Malade';
   return 'Non marque';
+}
+
+function encodeClassLevel(value?: string | null) {
+  const classLevel = normalizeClassLevel(value);
+  if (classLevel === 'SECOND') return '2';
+  if (classLevel === 'THIRD') return '3';
+  return '1';
+}
+
+function decodeClassLevel(value?: string | null): ClassLevel {
+  if (value === '2') return 'SECOND';
+  if (value === '3') return 'THIRD';
+  return 'FIRST';
+}
+
+function encodeStatus(status: AttendanceStatus | null) {
+  if (status === 'PRESENT') return 'p';
+  if (status === 'SICK') return 'm';
+  return 'a';
+}
+
+function decodeStatus(code?: string | null): AttendanceStatus {
+  if (code === 'p') return 'PRESENT';
+  if (code === 'm') return 'SICK';
+  return 'ABSENT';
+}
+
+function encodeDate(value?: string | null) {
+  return value ? value.replaceAll('-', '') : '';
+}
+
+function decodeDate(value?: string | null) {
+  if (!value) return '';
+  if (value.includes('-')) return value;
+  return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
 }
 
 const db = new Dexie('SundaySchoolDB') as Dexie & {
@@ -173,12 +253,19 @@ export async function markPendingChange() {
   });
 }
 
-export async function markEntityForSync(entity: SyncEntity, id: string) {
+export async function markEntityForSync(entity: SyncEntity, id: string, fields?: ChildSyncField[]) {
+  const key = `${entity}:${id}`;
+  const existingItem = await db.pendingSync.get(key);
+  const nextFields = entity === 'child' && fields?.length
+    ? Array.from(new Set([...(existingItem?.fields ?? []), ...fields]))
+    : existingItem?.fields;
+
   await db.pendingSync.put({
     key: `${entity}:${id}`,
     entity,
     id,
     updatedAt: new Date().toISOString(),
+    fields: nextFields,
   });
   await markPendingChange();
 }
@@ -197,8 +284,8 @@ export async function getSyncStatus() {
   };
 }
 
-function getAttendanceKey(attendance: Pick<Attendance, 'childId' | 'date'>) {
-  return `${attendance.childId}:${attendance.date}`;
+function getCompactAttendanceKey(attendance: Pick<Attendance, 'childId' | 'date'>) {
+  return `${attendance.childId}:${encodeDate(attendance.date)}`;
 }
 
 function normalizeServerChild(child: Child): Child {
@@ -212,6 +299,23 @@ function normalizeServerChild(child: Child): Child {
   };
 }
 
+function decodeCompactServerChild(child: CompactServerChild): Child {
+  return normalizeServerChild({
+    id: child[0],
+    firstName: child[1],
+    lastName: child[2],
+    postName: child[3],
+    classLevel: decodeClassLevel(child[4]),
+    parentPhone: child[5],
+    address: child[6],
+    birthDate: decodeDate(child[7]),
+    notes: child[8],
+    photoUrl: child[9] || undefined,
+    createdAt: child[10],
+    updatedAt: child[11],
+  });
+}
+
 function normalizeServerAttendance(attendance: Attendance): Attendance {
   const status = getAttendanceStatus(attendance) ?? 'ABSENT';
 
@@ -221,6 +325,35 @@ function normalizeServerAttendance(attendance: Attendance): Attendance {
     present: status === 'PRESENT',
     markedAt: attendance.markedAt,
   };
+}
+
+function decodeCompactServerAttendance(attendance: CompactServerAttendance): Attendance {
+  const status = decodeStatus(attendance[3]);
+
+  return {
+    id: attendance[0],
+    childId: attendance[1],
+    date: decodeDate(attendance[2]),
+    present: status === 'PRESENT',
+    status,
+    markedAt: attendance[4],
+  };
+}
+
+function encodeChildPatch(child: Child, pendingItem?: PendingSyncItem): CompactChildPatch {
+  const fields = pendingItem?.fields?.length ? pendingItem.fields : CHILD_SYNC_FIELDS;
+  const codes = fields.map((field) => CHILD_FIELD_CODES[field]).join('');
+  const values = fields.map((field) => {
+    if (field === 'classLevel') return encodeClassLevel(child.classLevel);
+    return String(child[field] ?? '');
+  });
+
+  return [child.id, codes, ...values];
+}
+
+function encodeAttendancePatch(attendance: Attendance): CompactAttendancePatch {
+  const status = getAttendanceStatus(attendance) ?? 'ABSENT';
+  return [attendance.childId, encodeDate(attendance.date), encodeStatus(status)];
 }
 
 async function getEffectivePendingItems(pendingItems: PendingSyncItem[], pendingChanges: number) {
@@ -251,8 +384,12 @@ async function getEffectivePendingItems(pendingItems: PendingSyncItem[], pending
 }
 
 async function applyServerDelta(data: SyncDeltaResponse) {
-  const deltaChildren = (data.children ?? []).map(normalizeServerChild);
-  const deltaAttendances = (data.attendances ?? []).map(normalizeServerAttendance);
+  const deltaChildren = data.c
+    ? data.c.map(decodeCompactServerChild)
+    : (data.children ?? []).map(normalizeServerChild);
+  const deltaAttendances = data.a
+    ? data.a.map(decodeCompactServerAttendance)
+    : (data.attendances ?? []).map(normalizeServerAttendance);
 
   await db.transaction('rw', db.children, db.attendances, async () => {
     if (deltaChildren.length > 0) {
@@ -283,6 +420,7 @@ export async function syncWithServer() {
     const effectivePendingItems = await getEffectivePendingItems(pendingItems, pendingChanges);
     const childIds = effectivePendingItems.filter((item) => item.entity === 'child').map((item) => item.id);
     const attendanceIds = effectivePendingItems.filter((item) => item.entity === 'attendance').map((item) => item.id);
+    const pendingItemByKey = new Map(effectivePendingItems.map((item) => [item.key, item]));
     const children = childIds.length > 0
       ? await db.children.bulkGet(childIds)
       : [];
@@ -299,17 +437,21 @@ export async function syncWithServer() {
         present: status === 'PRESENT',
       };
     });
+    const compactChildren = changedChildren.map((child) =>
+      encodeChildPatch(child, pendingItemByKey.get(`child:${child.id}`)),
+    );
+    const compactAttendances = changedAttendances.map(encodeAttendancePatch);
 
     const response = await fetch('/api/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        mode: 'sync-delta',
-        lastSyncAt,
-        knownChildIds: localChildren.map((child) => child.id),
-        knownAttendanceKeys: localAttendances.map(getAttendanceKey),
-        children: changedChildren,
-        attendances: changedAttendances,
+        mode: 'sync-v2',
+        l: lastSyncAt,
+        kc: localChildren.map((child) => child.id),
+        ka: localAttendances.map(getCompactAttendanceKey),
+        c: compactChildren,
+        a: compactAttendances,
       }),
     });
 
