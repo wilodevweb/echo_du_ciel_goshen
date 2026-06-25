@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Users, CalendarCheck, UserPlus } from "lucide-react";
+import { SyncPanel } from "@/components/SyncPanel";
 
 export default function Home() {
   return (
@@ -41,6 +42,8 @@ export default function Home() {
             </div>
           </Link>
         </div>
+
+        <SyncPanel />
       </div>
     </main>
   );

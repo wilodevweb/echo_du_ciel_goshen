@@ -8,7 +8,28 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardContent } from '@/components/ui/Card';
-import db from '@/lib/db';
+import db, { markPendingChange } from '@/lib/db';
+
+async function resizeImageFile(file: File) {
+  const bitmap = await createImageBitmap(file);
+  const maxSize = 768;
+  const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
+  const width = Math.round(bitmap.width * scale);
+  const height = Math.round(bitmap.height * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Impossible de préparer la photo.');
+  }
+
+  context.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+
+  return canvas.toDataURL('image/jpeg', 0.75);
+}
 
 export default function AddChildPage() {
   const router = useRouter();
@@ -32,11 +53,15 @@ export default function AddChildPage() {
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      resizeImageFile(file)
+        .then(setPhotoUrl)
+        .catch(() => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            setPhotoUrl(reader.result as string);
+          };
+          reader.readAsDataURL(file);
+        });
     }
   };
 
@@ -57,6 +82,7 @@ export default function AddChildPage() {
         photoUrl: photoUrl,
         createdAt: new Date().toISOString(),
       });
+      await markPendingChange();
       
       router.push('/enfants'); // Redirection vers la liste
     } catch (error) {

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowLeft, CheckCircle2, Circle, User } from 'lucide-react';
-import db from '@/lib/db';
+import db, { markPendingChange } from '@/lib/db';
 import { Card, CardContent } from '@/components/ui/Card';
 
 export default function PointagePage() {
@@ -53,6 +53,8 @@ export default function PointagePage() {
         markedAt: new Date().toISOString(),
       });
     }
+
+    await markPendingChange();
   };
 
   const totalPresents = attendances?.filter(a => a.present).length || 0;
