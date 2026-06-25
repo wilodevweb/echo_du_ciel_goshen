@@ -16,6 +16,7 @@ export interface Child {
   birthDate?: string;
   notes?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Attendance {
@@ -39,6 +40,13 @@ export interface PendingSyncItem {
   entity: SyncEntity;
   id: string;
   updatedAt: string;
+}
+
+interface PullMissingResponse {
+  success: boolean;
+  children?: Child[];
+  attendances?: Attendance[];
+  error?: string;
 }
 
 // Générateur basique d'ID unique (fallback simple pour mode hors-ligne)
@@ -188,24 +196,118 @@ export async function getSyncStatus() {
   };
 }
 
+function getAttendanceKey(attendance: Pick<Attendance, 'childId' | 'date'>) {
+  return `${attendance.childId}:${attendance.date}`;
+}
+
+function normalizeServerChild(child: Child): Child {
+  return {
+    ...child,
+    postName: child.postName ?? '',
+    classLevel: normalizeClassLevel(child.classLevel),
+    parentPhone: child.parentPhone ?? '',
+    address: child.address ?? '',
+    createdAt: child.createdAt,
+  };
+}
+
+function normalizeServerAttendance(attendance: Attendance): Attendance {
+  const status = getAttendanceStatus(attendance) ?? 'ABSENT';
+
+  return {
+    ...attendance,
+    status,
+    present: status === 'PRESENT',
+    markedAt: attendance.markedAt,
+  };
+}
+
+async function getEffectivePendingItems(pendingItems: PendingSyncItem[], pendingChanges: number) {
+  if (pendingItems.length > 0 || pendingChanges === 0) {
+    return pendingItems;
+  }
+
+  const [children, attendances] = await Promise.all([
+    db.children.toArray(),
+    db.attendances.toArray(),
+  ]);
+  const now = new Date().toISOString();
+
+  return [
+    ...children.map((child) => ({
+      key: `child:${child.id}`,
+      entity: 'child' as const,
+      id: child.id,
+      updatedAt: now,
+    })),
+    ...attendances.map((attendance) => ({
+      key: `attendance:${attendance.id}`,
+      entity: 'attendance' as const,
+      id: attendance.id,
+      updatedAt: now,
+    })),
+  ];
+}
+
+async function pullMissingServerState() {
+  const [localChildren, localAttendances] = await Promise.all([
+    db.children.toArray(),
+    db.attendances.toArray(),
+  ]);
+  const response = await fetch('/api/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      mode: 'pull-missing',
+      childIds: localChildren.map((child) => child.id),
+      attendanceKeys: localAttendances.map(getAttendanceKey),
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Impossible de récupérer les données du serveur');
+  }
+
+  const data = (await response.json()) as PullMissingResponse;
+
+  if (!data.success) {
+    throw new Error(data.error ?? 'Impossible de récupérer les données du serveur');
+  }
+
+  const missingChildren = (data.children ?? []).map(normalizeServerChild);
+  const missingAttendances = (data.attendances ?? []).map(normalizeServerAttendance);
+
+  await db.transaction('rw', db.children, db.attendances, async () => {
+    if (missingChildren.length > 0) {
+      await db.children.bulkPut(missingChildren);
+    }
+
+    if (missingAttendances.length > 0) {
+      await db.attendances.bulkPut(missingAttendances);
+    }
+  });
+
+  return {
+    pulledChildrenCount: missingChildren.length,
+    pulledAttendancesCount: missingAttendances.length,
+  };
+}
+
 // Fonction de synchronisation avec le serveur
 export async function syncWithServer() {
   try {
     const pendingItems = await db.pendingSync.toArray();
     const pendingChanges = Number(await getStateValue(PENDING_CHANGES_KEY)) || 0;
-    const shouldSyncAllLocalData = pendingItems.length === 0 && pendingChanges > 0;
-    const childIds = pendingItems.filter((item) => item.entity === 'child').map((item) => item.id);
-    const attendanceIds = pendingItems.filter((item) => item.entity === 'attendance').map((item) => item.id);
-    const children = shouldSyncAllLocalData
-      ? await db.children.toArray()
-      : childIds.length > 0
-        ? await db.children.bulkGet(childIds)
-        : [];
-    const attendances = shouldSyncAllLocalData
-      ? await db.attendances.toArray()
-      : attendanceIds.length > 0
-        ? await db.attendances.bulkGet(attendanceIds)
-        : [];
+    const effectivePendingItems = await getEffectivePendingItems(pendingItems, pendingChanges);
+    const pullResult = await pullMissingServerState();
+    const childIds = effectivePendingItems.filter((item) => item.entity === 'child').map((item) => item.id);
+    const attendanceIds = effectivePendingItems.filter((item) => item.entity === 'attendance').map((item) => item.id);
+    const children = childIds.length > 0
+      ? await db.children.bulkGet(childIds)
+      : [];
+    const attendances = attendanceIds.length > 0
+      ? await db.attendances.bulkGet(attendanceIds)
+      : [];
     const changedChildren = children.filter((child): child is Child => Boolean(child));
     const changedAttendances = attendances.filter((attendance): attendance is Attendance => Boolean(attendance)).map((attendance) => {
       const status = getAttendanceStatus(attendance) ?? 'ABSENT';
@@ -234,6 +336,8 @@ export async function syncWithServer() {
         success: true,
         childrenCount: changedChildren.length,
         attendancesCount: changedAttendances.length,
+        pulledChildrenCount: pullResult.pulledChildrenCount,
+        pulledAttendancesCount: pullResult.pulledAttendancesCount,
       };
     }
 

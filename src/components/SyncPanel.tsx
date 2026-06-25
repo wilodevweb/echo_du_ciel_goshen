@@ -49,7 +49,7 @@ export function SyncPanel() {
 
       if (result.success) {
         setMessage(
-          `${result.childrenCount} enfants et ${result.attendancesCount} pointages envoyés.`,
+          `${result.pulledChildrenCount} enfants / ${result.pulledAttendancesCount} pointages récupérés, ${result.childrenCount} enfants / ${result.attendancesCount} pointages envoyés.`,
         );
       } else {
         setMessage(result.error ?? "Impossible d'envoyer les données.");
@@ -96,7 +96,7 @@ export function SyncPanel() {
         onClick={handleSync}
       >
         <RefreshCw className={`mr-2 h-5 w-5 ${isSyncing ? "animate-spin" : ""}`} />
-        {isSyncing ? "Envoi en cours..." : isOnline ? "Envoyer les données" : "Hors ligne"}
+        {isSyncing ? "Synchronisation..." : isOnline ? "Synchroniser les données" : "Hors ligne"}
       </Button>
 
       {message && (
