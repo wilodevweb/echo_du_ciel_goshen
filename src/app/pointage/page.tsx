@@ -5,11 +5,15 @@ import Image from "next/image";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   ArrowLeft,
+  Calendar,
   CirclePlus,
-  Info,
+  GraduationCap,
+  MapPin,
+  NotebookText,
   Phone,
   Save,
   User,
+  X,
 } from "lucide-react";
 import db, {
   CLASS_LEVELS,
@@ -21,7 +25,6 @@ import db, {
   getAttendanceStatus,
   getClassLabel,
   getClassNumber,
-  getStatusLabel,
   markEntityForSync,
 } from "@/lib/db";
 import {
@@ -62,7 +65,7 @@ export default function PointagePage() {
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState({ firstName: "", lastName: "", postName: "" });
-  const [detailsChildId, setDetailsChildId] = useState<string | null>(null);
+  const [detailsChild, setDetailsChild] = useState<Child | null>(null);
   const [newChild, setNewChild] = useState<NewChildForm>(emptyNewChild);
   const [isAdding, setIsAdding] = useState(false);
 
@@ -97,12 +100,6 @@ export default function PointagePage() {
   const visibleIndex = Math.min(currentIndex, totalCards - 1);
   const currentChild = filteredChildren[visibleIndex];
   const isAddCard = visibleIndex >= filteredChildren.length;
-  const markedCount = filteredChildren.filter((child) =>
-    getAttendanceStatus(attendanceMap.get(child.id)),
-  ).length;
-  const presentCount = filteredChildren.filter(
-    (child) => getAttendanceStatus(attendanceMap.get(child.id)) === "PRESENT",
-  ).length;
   const selectedClassLabel = selectedClasses.length === CLASS_LEVELS.length
     ? "Toutes les classes"
     : selectedClasses.map(getClassLabel).join(" + ");
@@ -110,7 +107,7 @@ export default function PointagePage() {
   const resetCarousel = () => {
     setCurrentIndex(0);
     setEditingChildId(null);
-    setDetailsChildId(null);
+    setDetailsChild(null);
   };
 
   const moveCard = (direction: -1 | 1) => {
@@ -262,20 +259,13 @@ export default function PointagePage() {
               }}
             />
             <p className="text-sm font-semibold text-gray-500">
-              {selectedClassLabel} · {markedCount}/{filteredChildren.length}
+              {selectedClassLabel}
             </p>
           </div>
         </div>
       </header>
 
       <section className="mx-auto flex w-full max-w-md flex-1 flex-col py-5">
-        <div className="mb-4 flex items-center justify-between rounded-lg bg-white px-4 py-3 text-sm shadow-sm">
-          <span className="font-semibold text-gray-600">Presents</span>
-          <span className="rounded-lg bg-[#00b22d]/10 px-3 py-1 font-bold text-[#00b22d]">
-            {presentCount} / {filteredChildren.length}
-          </span>
-        </div>
-
         {children === undefined || attendances === undefined ? (
           <AttendanceSkeleton />
         ) : (
@@ -299,13 +289,9 @@ export default function PointagePage() {
                     status={getAttendanceStatus(attendanceMap.get(currentChild.id))}
                     isEditingName={editingChildId === currentChild.id}
                     nameDraft={nameDraft}
-                    showDetails={detailsChildId === currentChild.id}
-                    onNameClick={() => startNameEdit(currentChild)}
+                    onNameClick={() => setDetailsChild(currentChild)}
                     onNameDraftChange={setNameDraft}
                     onSaveName={() => saveNameEdit(currentChild.id)}
-                    onToggleDetails={() =>
-                      setDetailsChildId((id) => (id === currentChild.id ? null : currentChild.id))
-                    }
                     onSetStatus={(status) => setAttendanceStatus(currentChild.id, status)}
                   />
                 ) : (
@@ -325,6 +311,18 @@ export default function PointagePage() {
           </>
         )}
       </section>
+
+      {detailsChild && (
+        <ChildDetailsModal
+          child={detailsChild}
+          status={getAttendanceStatus(attendanceMap.get(detailsChild.id))}
+          onClose={() => setDetailsChild(null)}
+          onEdit={() => {
+            startNameEdit(detailsChild);
+            setDetailsChild(null);
+          }}
+        />
+      )}
     </main>
   );
 }
@@ -363,22 +361,18 @@ function ChildAttendanceCard({
   status,
   isEditingName,
   nameDraft,
-  showDetails,
   onNameClick,
   onNameDraftChange,
   onSaveName,
-  onToggleDetails,
   onSetStatus,
 }: {
   child: Child;
   status: AttendanceStatus | null;
   isEditingName: boolean;
   nameDraft: { firstName: string; lastName: string; postName: string };
-  showDetails: boolean;
   onNameClick: () => void;
   onNameDraftChange: (value: { firstName: string; lastName: string; postName: string }) => void;
   onSaveName: () => void;
-  onToggleDetails: () => void;
   onSetStatus: (status: AttendanceStatus) => void;
 }) {
   return (
@@ -469,45 +463,148 @@ function ChildAttendanceCard({
 
         <div className="grid grid-cols-2 gap-3">
           <StatusButton
-            label="Marquer absent"
+            label="Absent"
             colorClass="border-red-200 bg-red-50 text-red-700"
             active={status === "ABSENT"}
             onClick={() => onSetStatus("ABSENT")}
           />
           <StatusButton
-            label="Marquer present"
+            label="Présent"
             colorClass="border-green-200 bg-green-50 text-green-700"
             active={status === "PRESENT"}
             onClick={() => onSetStatus("PRESENT")}
           />
           <StatusButton
-            label="Marquer malade"
+            label="Malade"
             colorClass="border-yellow-200 bg-yellow-50 text-yellow-700 col-span-2"
             active={status === "SICK"}
             onClick={() => onSetStatus("SICK")}
           />
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ChildDetailsModal({
+  child,
+  status,
+  onClose,
+  onEdit,
+}: {
+  child: Child;
+  status: AttendanceStatus | null;
+  onClose: () => void;
+  onEdit: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end bg-black/45 px-0" role="dialog" aria-modal="true">
+      <button type="button" className="absolute inset-0 cursor-default" aria-label="Fermer" onClick={onClose} />
+      <div className="attendance-sheet-in relative w-full rounded-t-[32px] bg-[#1b1b1b] px-6 pb-8 pt-3 text-white shadow-2xl">
+        <div className="mx-auto mb-5 h-1.5 w-28 rounded-full bg-white/55" />
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
+              Fiche enfant
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold leading-tight">
+              {child.lastName} {child.postName} {child.firstName}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white"
+            aria-label="Fermer"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="mb-5 flex gap-3 overflow-x-auto pb-1">
+          <DetailPill colorClass="bg-red-500" active={status === "ABSENT"} label="Absent" />
+          <DetailPill colorClass="bg-green-500" active={status === "PRESENT"} label="Présent" />
+          <DetailPill colorClass="bg-yellow-400" active={status === "SICK"} label="Malade" />
+        </div>
+
+        <div className="space-y-5">
+          <DetailRow
+            icon={<GraduationCap className="h-6 w-6" />}
+            title="Classe"
+            value={getClassLabel(child.classLevel)}
+          />
+          <DetailRow
+            icon={<Calendar className="h-6 w-6" />}
+            title="Naissance"
+            value={child.birthDate || "Non renseignée"}
+          />
+          <DetailRow
+            icon={<Phone className="h-6 w-6" />}
+            title="Téléphone parent"
+            value={child.parentPhone || "Non renseigné"}
+          />
+          <DetailRow
+            icon={<MapPin className="h-6 w-6" />}
+            title="Adresse"
+            value={child.address || "Non renseignée"}
+          />
+          <DetailRow
+            icon={<NotebookText className="h-6 w-6" />}
+            title="Notes"
+            value={child.notes || "Aucune note"}
+          />
+        </div>
 
         <button
           type="button"
-          onClick={onToggleDetails}
-          className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700"
+          onClick={onEdit}
+          className="mt-7 flex h-12 w-full items-center justify-center rounded-xl bg-white text-sm font-bold text-[#1b1b1b]"
         >
-          <Info className="h-4 w-4" />
-          Details
+          Modifier le nom
         </button>
+      </div>
+    </div>
+  );
+}
 
-        {showDetails && (
-          <div className="mt-4 rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
-            <p><span className="font-semibold text-gray-900">Classe:</span> {getClassLabel(child.classLevel)}</p>
-            <p><span className="font-semibold text-gray-900">Statut:</span> {getStatusLabel(status)}</p>
-            <p><span className="font-semibold text-gray-900">Adresse:</span> {child.address || "Non renseignee"}</p>
-            <p><span className="font-semibold text-gray-900">Naissance:</span> {child.birthDate || "Non renseignee"}</p>
-            <p><span className="font-semibold text-gray-900">Notes:</span> {child.notes || "Aucune note"}</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+function DetailPill({
+  label,
+  colorClass,
+  active,
+}: {
+  label: string;
+  colorClass: string;
+  active: boolean;
+}) {
+  return (
+    <div className={`flex h-10 shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold ${
+      active ? "bg-white text-[#1b1b1b]" : "bg-white/8 text-white/65"
+    }`}>
+      <span className={`h-2.5 w-2.5 rounded-full ${colorClass}`} />
+      {label}
+    </div>
+  );
+}
+
+function DetailRow({
+  icon,
+  title,
+  value,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  value: string;
+}) {
+  return (
+    <div className="flex gap-4">
+      <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/8 text-white/85">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-lg font-semibold leading-tight text-white">{title}</p>
+        <p className="mt-1 line-clamp-2 text-base leading-snug text-white/55">{value}</p>
+      </div>
+    </div>
   );
 }
 
@@ -527,11 +624,11 @@ function StatusButton({
       type="button"
       aria-label={label}
       onClick={onClick}
-      className={`h-11 rounded-lg border text-sm font-semibold shadow-sm transition-transform ${colorClass} ${
+      className={`h-11 rounded-lg border px-3 text-sm font-bold shadow-sm transition-transform ${colorClass} ${
         active ? "scale-[1.02] ring-2 ring-offset-2 ring-gray-900/15" : "opacity-95"
       }`}
     >
-      <span className="sr-only">{label}</span>
+      {label}
     </button>
   );
 }
