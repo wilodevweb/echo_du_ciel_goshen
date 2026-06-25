@@ -7,6 +7,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { Search, UserPlus, Phone, ArrowLeft, User } from 'lucide-react';
 import db, { getClassLabel } from '@/lib/db';
 import { Card, CardContent } from '@/components/ui/Card';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 export default function ChildrenList() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -58,9 +59,7 @@ export default function ChildrenList() {
 
       <div className="p-4 flex-1 overflow-y-auto">
         {children === undefined ? (
-          <div className="flex justify-center mt-10">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#00b22d]"></div>
-          </div>
+          <ChildrenListSkeleton />
         ) : children.length === 0 ? (
           <div className="text-center mt-10 text-gray-500">
             {searchQuery ? "Aucun résultat trouvé." : "Aucun enfant enregistré."}
@@ -123,5 +122,27 @@ export default function ChildrenList() {
         )}
       </div>
     </main>
+  );
+}
+
+function ChildrenListSkeleton() {
+  return (
+    <div className="space-y-4 pb-10">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <Card key={index} padding="none" className="overflow-hidden">
+          <CardContent className="p-4">
+            <div className="flex items-center">
+              <Skeleton className="h-14 w-14 shrink-0 rounded-full" />
+              <div className="ml-4 flex-1">
+                <Skeleton className="h-5 w-36" />
+                <Skeleton className="mt-2 h-3 w-20" />
+                <Skeleton className="mt-2 h-3 w-28" />
+              </div>
+              <Skeleton className="ml-2 h-10 w-10 rounded-full" />
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
   );
 }

@@ -5,6 +5,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { CloudOff, RefreshCw, UploadCloud } from "lucide-react";
 import db, { getSyncStatus, syncWithServer } from "@/lib/db";
 import { Button } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 export function SyncPanel() {
   const [isSyncing, setIsSyncing] = useState(false);
@@ -17,6 +18,7 @@ export function SyncPanel() {
   const attendancesCount = useLiveQuery(() => db.attendances.count(), []);
 
   const pendingChanges = syncStatus?.pendingChanges ?? 0;
+  const isLoading = syncStatus === undefined || childrenCount === undefined || attendancesCount === undefined;
   const hasLocalData = Boolean((childrenCount ?? 0) + (attendancesCount ?? 0));
   const lastSyncLabel = syncStatus?.lastSyncAt
     ? new Intl.DateTimeFormat("fr-FR", {
@@ -70,15 +72,19 @@ export function SyncPanel() {
           </div>
           <div>
             <h2 className="text-sm font-semibold text-gray-900">Synchronisation manuelle</h2>
-            <p className="text-xs text-gray-500">
-              {!isOnline
-                ? "Mode hors ligne: les données restent sur cet appareil."
-                : pendingChanges > 0
-                ? `${pendingChanges} modification${pendingChanges > 1 ? "s" : ""} en attente`
-                : lastSyncLabel
-                ? `Dernier envoi: ${lastSyncLabel}`
-                : "Les modifications restent hors ligne jusqu'à l'envoi."}
-            </p>
+            {isLoading ? (
+              <Skeleton className="mt-1 h-3 w-48" />
+            ) : (
+              <p className="text-xs text-gray-500">
+                {!isOnline
+                  ? "Mode hors ligne: les données restent sur cet appareil."
+                  : pendingChanges > 0
+                  ? `${pendingChanges} modification${pendingChanges > 1 ? "s" : ""} en attente`
+                  : lastSyncLabel
+                  ? `Dernier envoi: ${lastSyncLabel}`
+                  : "Les modifications restent hors ligne jusqu'à l'envoi."}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -86,7 +92,7 @@ export function SyncPanel() {
       <Button
         type="button"
         fullWidth
-        disabled={isSyncing || !hasLocalData || !isOnline}
+        disabled={isLoading || isSyncing || !hasLocalData || !isOnline}
         onClick={handleSync}
       >
         <RefreshCw className={`mr-2 h-5 w-5 ${isSyncing ? "animate-spin" : ""}`} />
