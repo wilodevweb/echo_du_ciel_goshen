@@ -1,0 +1,51 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// User = Moniteur qui peut se connecter
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String   // Mot de passe hashé
+  name      String?
+  role      String   @default("MONITOR")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Enfant
+model Child {
+  id          String   @id @default(cuid())
+  firstName   String
+  lastName    String
+  parentPhone String
+  address     String
+  birthDate   String?
+  notes       String?
+  photoUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  attendances Attendance[]
+}
+
+// Présences (Pointage)
+model Attendance {
+  id        String   @id @default(cuid())
+  childId   String
+  date      String   // Format YYYY-MM-DD
+  present   Boolean  @default(false)
+  markedAt  DateTime @default(now())
+
+  child     Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, date]) // Un enfant ne peut avoir qu'un seul pointage par jour
+}
