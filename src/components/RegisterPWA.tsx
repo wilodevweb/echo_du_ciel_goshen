@@ -8,12 +8,21 @@ export function RegisterPWA() {
       return;
     }
 
-    window.addEventListener("load", () => {
+    const register = () => {
       navigator.serviceWorker.register("/sw.js", {
         scope: "/",
         updateViaCache: "none",
+      }).catch((error) => {
+        console.error("Erreur d'enregistrement du Service Worker:", error);
       });
-    });
+    };
+
+    if (document.readyState === "complete") {
+      register();
+    } else {
+      window.addEventListener("load", register);
+      return () => window.removeEventListener("load", register);
+    }
   }, []);
 
   return null;

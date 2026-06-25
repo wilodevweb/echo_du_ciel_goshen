@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useDeferredValue, useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -11,20 +11,25 @@ import { Skeleton } from '@/components/ui/Skeleton';
 
 export default function ChildrenList() {
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
-  // Récupérer et filtrer les enfants depuis IndexedDB
-  const children = useLiveQuery(async () => {
-    const allChildren = await db.children.toArray();
-    allChildren.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    if (!searchQuery) return allChildren;
-    
-    const lowerQuery = searchQuery.toLowerCase();
-    return allChildren.filter(child => 
-      child.firstName.toLowerCase().includes(lowerQuery) || 
+  // Récupérer les enfants depuis IndexedDB sans dépendance sur la barre de recherche
+  const allChildren = useLiveQuery(() => db.children.toArray());
+
+  // Filtrer et trier les enfants en mémoire
+  const children = useMemo(() => {
+    if (!allChildren) return undefined;
+
+    const sorted = [...allChildren].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    if (!deferredSearchQuery) return sorted;
+
+    const lowerQuery = deferredSearchQuery.toLowerCase();
+    return sorted.filter(child =>
+      child.firstName.toLowerCase().includes(lowerQuery) ||
       child.lastName.toLowerCase().includes(lowerQuery) ||
-      child.parentPhone.includes(searchQuery)
+      child.parentPhone.includes(deferredSearchQuery)
     );
-  }, [searchQuery]);
+  }, [allChildren, deferredSearchQuery]);
 
   return (
     <main className="flex min-h-screen flex-col bg-gray-50">

@@ -284,9 +284,6 @@ export async function getSyncStatus() {
   };
 }
 
-function getCompactAttendanceKey(attendance: Pick<Attendance, 'childId' | 'date'>) {
-  return `${attendance.childId}:${encodeDate(attendance.date)}`;
-}
 
 function normalizeServerChild(child: Child): Child {
   return {
@@ -413,9 +410,11 @@ export async function syncWithServer() {
     const pendingItems = await db.pendingSync.toArray();
     const pendingChanges = Number(await getStateValue(PENDING_CHANGES_KEY)) || 0;
     const lastSyncAt = await getStateValue(LAST_SYNC_KEY);
-    const [localChildren, localAttendances] = await Promise.all([
-      db.children.toArray(),
-      db.attendances.toArray(),
+    const [kc, ka] = await Promise.all([
+      db.children.toCollection().primaryKeys() as Promise<string[]>,
+      db.attendances.orderBy('[childId+date]').keys().then(
+        (keys) => (keys as unknown as Array<[string, string]>).map(([childId, date]) => `${childId}:${encodeDate(date)}`)
+      ),
     ]);
     const effectivePendingItems = await getEffectivePendingItems(pendingItems, pendingChanges);
     const childIds = effectivePendingItems.filter((item) => item.entity === 'child').map((item) => item.id);
@@ -448,8 +447,8 @@ export async function syncWithServer() {
       body: JSON.stringify({
         mode: 'sync-v2',
         l: lastSyncAt,
-        kc: localChildren.map((child) => child.id),
-        ka: localAttendances.map(getCompactAttendanceKey),
+        kc,
+        ka,
         c: compactChildren,
         a: compactAttendances,
       }),

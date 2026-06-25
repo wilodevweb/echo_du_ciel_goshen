@@ -130,18 +130,13 @@ export async function POST(req: Request) {
       const hasValidLastSyncDate = lastSyncDate instanceof Date && !Number.isNaN(lastSyncDate.getTime());
       const serverSyncedAt = new Date();
 
-      for (const patch of childPatches) {
-        const { id, data: childData } = decodeChildPatch(patch);
-        const existingChild = await prisma.child.findUnique({ where: { id } });
-
-        if (existingChild) {
-          await prisma.child.update({
+      await prisma.$transaction(async (tx) => {
+        for (const patch of childPatches) {
+          const { id, data: childData } = decodeChildPatch(patch);
+          await tx.child.upsert({
             where: { id },
-            data: childData,
-          });
-        } else {
-          await prisma.child.create({
-            data: {
+            update: childData,
+            create: {
               id,
               firstName: String(childData.firstName ?? ""),
               lastName: String(childData.lastName ?? ""),
@@ -155,33 +150,24 @@ export async function POST(req: Request) {
             },
           });
         }
-      }
 
-      for (const patch of attendancePatches) {
-        const [childId, compactDate, statusCode] = patch;
-        const date = decodeDate(compactDate);
-        const status = decodeStatus(statusCode);
-        const existing = await prisma.attendance.findUnique({
-          where: {
-            childId_date: {
-              childId,
-              date,
+        for (const patch of attendancePatches) {
+          const [childId, compactDate, statusCode] = patch;
+          const date = decodeDate(compactDate);
+          const status = decodeStatus(statusCode);
+          await tx.attendance.upsert({
+            where: {
+              childId_date: {
+                childId,
+                date,
+              },
             },
-          },
-        });
-
-        if (existing) {
-          await prisma.attendance.update({
-            where: { id: existing.id },
-            data: {
+            update: {
               present: status === "PRESENT",
               status,
               markedAt: serverSyncedAt,
             },
-          });
-        } else {
-          await prisma.attendance.create({
-            data: {
+            create: {
               childId,
               date,
               present: status === "PRESENT",
@@ -190,7 +176,7 @@ export async function POST(req: Request) {
             },
           });
         }
-      }
+      });
 
       const childWhere = hasValidLastSyncDate
         ? knownChildIds.length > 0
@@ -214,6 +200,7 @@ export async function POST(req: Request) {
           ],
         }),
         prisma.attendance.findMany({
+          where: hasValidLastSyncDate ? { markedAt: { gt: lastSyncDate } } : undefined,
           orderBy: [
             { date: "asc" },
             { childId: "asc" },
@@ -248,62 +235,54 @@ export async function POST(req: Request) {
     const hasValidLastSyncDate = lastSyncDate instanceof Date && !Number.isNaN(lastSyncDate.getTime());
     const serverSyncedAt = new Date();
 
-    // 1. Synchronisation des enfants (Upsert : Création si nouveau, Mise à jour si existant)
-    for (const child of children) {
-      await prisma.child.upsert({
-        where: { id: child.id },
-        update: {
-          firstName: child.firstName,
-          lastName: child.lastName,
-          postName: child.postName ?? "",
-          classLevel: child.classLevel ?? "FIRST",
-          parentPhone: child.parentPhone,
-          address: child.address,
-          birthDate: child.birthDate,
-          notes: child.notes,
-          photoUrl: child.photoUrl,
-        },
-        create: {
-          id: child.id,
-          firstName: child.firstName,
-          lastName: child.lastName,
-          postName: child.postName ?? "",
-          classLevel: child.classLevel ?? "FIRST",
-          parentPhone: child.parentPhone,
-          address: child.address,
-          birthDate: child.birthDate,
-          notes: child.notes,
-          photoUrl: child.photoUrl,
-        },
-      });
-    }
+    await prisma.$transaction(async (tx) => {
+      // 1. Synchronisation des enfants (Upsert : Création si nouveau, Mise à jour si existant)
+      for (const child of children) {
+        await tx.child.upsert({
+          where: { id: child.id },
+          update: {
+            firstName: child.firstName,
+            lastName: child.lastName,
+            postName: child.postName ?? "",
+            classLevel: child.classLevel ?? "FIRST",
+            parentPhone: child.parentPhone,
+            address: child.address,
+            birthDate: child.birthDate,
+            notes: child.notes,
+            photoUrl: child.photoUrl,
+          },
+          create: {
+            id: child.id,
+            firstName: child.firstName,
+            lastName: child.lastName,
+            postName: child.postName ?? "",
+            classLevel: child.classLevel ?? "FIRST",
+            parentPhone: child.parentPhone,
+            address: child.address,
+            birthDate: child.birthDate,
+            notes: child.notes,
+            photoUrl: child.photoUrl,
+          },
+        });
+      }
 
-    // 2. Synchronisation des présences
-    for (const att of attendances) {
-      const status = att.status ?? (att.present ? "PRESENT" : "ABSENT");
+      // 2. Synchronisation des présences
+      for (const att of attendances) {
+        const status = att.status ?? (att.present ? "PRESENT" : "ABSENT");
 
-      // IndexedDB auto-increments don't easily map to CUIDs, so we use childId + date as unique identifier
-      const existing = await prisma.attendance.findUnique({
-        where: {
-          childId_date: {
-            childId: att.childId,
-            date: att.date
-          }
-        }
-      });
-
-      if (existing) {
-        await prisma.attendance.update({
-          where: { id: existing.id },
-          data: {
+        await tx.attendance.upsert({
+          where: {
+            childId_date: {
+              childId: att.childId,
+              date: att.date
+            }
+          },
+          update: {
             present: status === "PRESENT",
             status,
             markedAt: new Date(att.markedAt)
-          }
-        });
-      } else {
-        await prisma.attendance.create({
-          data: {
+          },
+          create: {
             id: att.id,
             childId: att.childId,
             date: att.date,
@@ -313,7 +292,7 @@ export async function POST(req: Request) {
           }
         });
       }
-    }
+    });
 
     if (mode === "sync-delta") {
       const childWhere = hasValidLastSyncDate
@@ -338,6 +317,7 @@ export async function POST(req: Request) {
           ],
         }),
         prisma.attendance.findMany({
+          where: hasValidLastSyncDate ? { markedAt: { gt: lastSyncDate } } : undefined,
           orderBy: [
             { date: "asc" },
             { childId: "asc" },

@@ -37,6 +37,8 @@ model Child {
   updatedAt   DateTime @updatedAt
 
   attendances Attendance[]
+
+  @@index([updatedAt])
 }
 
 // Présences (Pointage)
@@ -51,4 +53,6 @@ model Attendance {
   child     Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
 
   @@unique([childId, date]) // Un enfant ne peut avoir qu'un seul pointage par jour
+  @@index([markedAt])
 }
+
