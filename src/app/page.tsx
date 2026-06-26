@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Bell, CalendarCheck } from "lucide-react";
+import { Bell, CalendarCheck, Users, UserPlus } from "lucide-react";
 import { SyncPanel } from "@/components/SyncPanel";
 
 export default function Home() {
@@ -21,20 +21,41 @@ export default function Home() {
           <p className="mt-2 text-base text-gray-500">Presence, enfants et suivi hors ligne.</p>
 
           <div className="mt-8 grid w-full gap-3">
+            {/* Bouton Principal: Appel */}
+            <Link
+              href="/pointage"
+              className="flex h-16 w-full items-center justify-center gap-3 rounded-xl bg-[#00b22d] px-5 text-lg font-bold text-white shadow-md transition-all hover:bg-[#008f24] active:scale-[0.98]"
+            >
+              <CalendarCheck className="h-6 w-6" />
+              Faire l&apos;appel
+            </Link>
+
+            {/* Grille 2 colonnes pour Annuaire et Ajout */}
+            <div className="grid grid-cols-2 gap-3">
+              <Link
+                href="/enfants"
+                className="flex h-14 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-800 shadow-sm transition-all hover:bg-gray-50 active:scale-[0.98]"
+              >
+                <Users className="h-5 w-5 text-[#00b22d]" />
+                Annuaire
+              </Link>
+
+              <Link
+                href="/enfants/nouveau"
+                className="flex h-14 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-800 shadow-sm transition-all hover:bg-gray-50 active:scale-[0.98]"
+              >
+                <UserPlus className="h-5 w-5 text-[#00b22d]" />
+                Ajouter
+              </Link>
+            </div>
+
+            {/* Notifications */}
             <Link
               href="/notifications"
-              className="flex h-12 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+              className="mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-600 shadow-sm transition-all hover:bg-gray-50 active:scale-[0.98]"
             >
               <Bell className="h-5 w-5" />
               Notifications
-            </Link>
-
-            <Link
-              href="/pointage"
-              className="flex h-14 items-center justify-center gap-2 rounded-lg bg-[#00b22d] px-5 text-base font-semibold text-white shadow-sm transition-colors hover:bg-[#008f24]"
-            >
-              <CalendarCheck className="h-5 w-5" />
-              Proceder a l&apos;appel
             </Link>
           </div>
         </div>
