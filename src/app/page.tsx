@@ -5,7 +5,7 @@ import { SyncPanel } from "@/components/SyncPanel";
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center bg-gray-50 px-5 py-6">
+    <main className="flex h-[100dvh] flex-col items-center overflow-hidden bg-gray-50 px-5 py-6">
       <div className="flex w-full max-w-md flex-1 flex-col">
         <div className="flex flex-1 flex-col items-center justify-center py-8 text-center">
           <Image
