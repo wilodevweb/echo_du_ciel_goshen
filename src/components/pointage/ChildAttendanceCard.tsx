@@ -22,9 +22,8 @@ function StatusButton({
       type="button"
       aria-label={label}
       onClick={onClick}
-      className={`h-12 rounded-2xl px-3 text-sm font-black shadow-sm transition-all ${colorClass} ${
-        active ? "scale-[1.02] opacity-100 ring-2 ring-white/80" : "opacity-55"
-      }`}
+      className={`h-12 rounded-2xl px-3 text-sm font-black shadow-sm transition-all ${colorClass} ${active ? "scale-[1.02] opacity-100 ring-2 ring-white/80" : "opacity-55"
+        }`}
     >
       {label}
     </button>
@@ -49,7 +48,7 @@ export function ChildAttendanceCard({
   onSetStatus: (status: AttendanceStatus) => void;
 }) {
   return (
-    <Card padding="none" className="w-full overflow-hidden rounded-[28px] border-0 bg-[#1b1b1b] shadow-2xl">
+    <Card padding="none" className="w-full overflow-hidden rounded-[28px] border-0 bg-[#1b1b1b]">
       <CardContent className="relative px-5 pb-5 pt-3 text-white">
         <div className="mx-auto mb-4 h-1.5 w-24 rounded-full bg-white/45" />
 
@@ -58,7 +57,7 @@ export function ChildAttendanceCard({
             {getClassLabel(child.classLevel)}
           </div>
           <div className="flex items-center gap-2 rounded-full bg-white/8 px-3 py-1">
-            {[0, 1, 2].map((index) => (
+            {[2, 1, 0].map((index) => (
               <span
                 key={index}
                 className={`h-2.5 w-2.5 rounded-full ${getHistoryDotClass(recentStatuses[index])}`}
@@ -80,6 +79,9 @@ export function ChildAttendanceCard({
                 event.currentTarget.value = "";
               }}
             />
+
+
+
             {hasBirthdayThisWeek && (
               <div className="absolute -top-7 left-1/2 z-10 flex -translate-x-1/2 rotate-[-8deg] items-center justify-center rounded-full bg-yellow-300 p-2 text-[#1b1b1b] shadow-lg ring-4 ring-[#1b1b1b]">
                 <Crown className="h-8 w-8 fill-yellow-300" />
@@ -146,6 +148,9 @@ export function ChildAttendanceCard({
           />
           <StatusButton
             label="Présent"
+
+
+
             colorClass="bg-green-500 text-white col-span-2"
             active={status === "PRESENT"}
             onClick={() => onSetStatus("PRESENT")}

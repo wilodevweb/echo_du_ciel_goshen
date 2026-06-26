@@ -35,6 +35,7 @@ export const metadata: Metadata = {
 
 import AuthProvider from "@/components/AuthProvider";
 import { RegisterPWA } from "@/components/RegisterPWA";
+import { PushNotifier } from "@/components/PushNotifier";
 
 export default function RootLayout({
   children,
@@ -48,6 +49,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <RegisterPWA />
+        <PushNotifier />
         <AuthProvider>
           {children}
         </AuthProvider>

@@ -21,14 +21,13 @@ export default function Home() {
           <p className="mt-2 text-base text-gray-500">Presence, enfants et suivi hors ligne.</p>
 
           <div className="mt-8 grid w-full gap-3">
-            <button
-              type="button"
-              disabled
-              className="flex h-12 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-400 shadow-sm"
+            <Link
+              href="/notifications"
+              className="flex h-12 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
             >
               <Bell className="h-5 w-5" />
               Notifications
-            </button>
+            </Link>
 
             <Link
               href="/pointage"
