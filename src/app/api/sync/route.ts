@@ -144,6 +144,17 @@ export async function POST(req: Request) {
 
           for (const patch of childPatches) {
             const { id, data: childData } = decodeChildPatch(patch);
+            const isDeletion = childData.firstName === "" && childData.lastName === "" && childData.postName === "";
+
+            if (isDeletion) {
+              if (existingChildIds.has(id)) {
+                await tx.child.delete({
+                  where: { id },
+                });
+              }
+              continue;
+            }
+
             if (existingChildIds.has(id)) {
               childUpdates.push({ id, data: childData });
             } else {
@@ -180,8 +191,13 @@ export async function POST(req: Request) {
           }
         }
 
-        if (attendancePatches.length > 0) {
-          const attendanceKeys = attendancePatches.map((patch) => {
+        const filteredAttendancePatches = attendancePatches.filter((patch) => {
+          const date = decodeDate(patch[1]);
+          return date >= "2026-06-28";
+        });
+
+        if (filteredAttendancePatches.length > 0) {
+          const attendanceKeys = filteredAttendancePatches.map((patch) => {
             const [childId, compactDate] = patch;
             return { childId, date: decodeDate(compactDate) };
           });
@@ -199,7 +215,7 @@ export async function POST(req: Request) {
           const attendanceCreates: any[] = [];
           const attendanceUpdates: Array<{ childId: string; date: string; status: string }> = [];
 
-          for (const patch of attendancePatches) {
+          for (const patch of filteredAttendancePatches) {
             const [childId, compactDate, statusCode] = patch;
             const date = decodeDate(compactDate);
             const status = decodeStatus(statusCode);
@@ -271,7 +287,9 @@ export async function POST(req: Request) {
           ],
         }),
         prisma.attendance.findMany({
-          where: hasValidLastSyncDate ? { markedAt: { gt: lastSyncDate } } : undefined,
+          where: hasValidLastSyncDate
+            ? { markedAt: { gt: lastSyncDate }, date: { gte: "2026-06-28" } }
+            : { date: { gte: "2026-06-28" } },
           orderBy: [
             { date: "asc" },
             { childId: "asc" },
@@ -320,6 +338,17 @@ export async function POST(req: Request) {
         const childUpdates: Array<{ id: string; data: any }> = [];
 
         for (const child of children) {
+          const isDeletion = child.firstName === "" && child.lastName === "" && (child.postName ?? "") === "";
+
+          if (isDeletion) {
+            if (existingChildIds.has(child.id)) {
+              await tx.child.delete({
+                where: { id: child.id },
+              });
+            }
+            continue;
+          }
+
           const childData = {
             firstName: child.firstName,
             lastName: child.lastName,
@@ -361,8 +390,9 @@ export async function POST(req: Request) {
       }
 
       // 2. Synchronisation des présences (Optimisée)
-      if (attendances.length > 0) {
-        const attendanceKeys = attendances.map((att: any) => ({
+      const filteredAttendances = attendances.filter((att: any) => att.date >= "2026-06-28");
+      if (filteredAttendances.length > 0) {
+        const attendanceKeys = filteredAttendances.map((att: any) => ({
           childId: att.childId,
           date: att.date,
         }));
@@ -380,7 +410,7 @@ export async function POST(req: Request) {
         const attendanceCreates: any[] = [];
         const attendanceUpdates: Array<{ id: string; childId: string; date: string; status: string; markedAt: Date }> = [];
 
-        for (const att of attendances) {
+        for (const att of filteredAttendances) {
           const status = att.status ?? (att.present ? "PRESENT" : "ABSENT");
           const key = `${att.childId}:${att.date}`;
           const markedAtDate = new Date(att.markedAt);
@@ -459,7 +489,9 @@ export async function POST(req: Request) {
           ],
         }),
         prisma.attendance.findMany({
-          where: hasValidLastSyncDate ? { markedAt: { gt: lastSyncDate } } : undefined,
+          where: hasValidLastSyncDate
+            ? { markedAt: { gt: lastSyncDate }, date: { gte: "2026-06-28" } }
+            : { date: { gte: "2026-06-28" } },
           orderBy: [
             { date: "asc" },
             { childId: "asc" },

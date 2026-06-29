@@ -1,7 +1,7 @@
 import React, { FormEvent } from "react";
-import { CirclePlus } from "lucide-react";
+import { Calendar, MapPin, NotebookText, Phone, User } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/Card";
-import { CLASS_LEVELS } from "@/lib/db";
+import { CLASS_LEVELS, getClassLabel } from "@/lib/db";
 import type { NewChildForm } from "./types";
 
 export function AddChildCard({
@@ -19,91 +19,139 @@ export function AddChildCard({
     onChange({ ...value, [field]: fieldValue });
   };
 
+  const canAdd = Boolean(
+    value.firstName.trim() &&
+    value.lastName.trim() &&
+    value.postName.trim() &&
+    value.parentPhone.trim() &&
+    value.address.trim()
+  );
+
   return (
-    <Card padding="none" className="w-full rounded-lg border-dashed border-gray-300 shadow-md">
-      <CardContent className="p-5">
-        <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-[#00b22d]/10 text-[#00b22d]">
-            <CirclePlus className="h-7 w-7" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-gray-950">Ajouter un enfant</h2>
-            <p className="text-sm text-gray-500">Carte rapide hors ligne</p>
-          </div>
-        </div>
+    <Card padding="none" className="w-full overflow-hidden rounded-[28px] border-0 bg-[#1b1b1b]">
+      <CardContent className="relative px-5 pb-5 pt-3 text-white">
+        <div className="mx-auto mb-4 h-1.5 w-24 rounded-full bg-white/45" />
 
-        <form onSubmit={onSubmit} className="grid gap-3">
-          <div className="grid grid-cols-2 gap-3">
-            <input
-              required
-              value={value.lastName}
-              onChange={(event) => update("lastName", event.target.value)}
-              placeholder="Ajouter un nom"
-              className="h-11 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
-            />
-            <input
-              required
-              value={value.postName}
-              onChange={(event) => update("postName", event.target.value)}
-              placeholder="Ajouter un post-nom"
-              className="h-11 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
-            />
-            <input
-              required
-              value={value.firstName}
-              onChange={(event) => update("firstName", event.target.value)}
-              placeholder="Ajouter un prenom"
-              className="h-11 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
-            />
+        <form onSubmit={onSubmit} className="flex flex-col">
+          {/* Header avec sélection de classe */}
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <span className="text-xs font-semibold text-white/50 uppercase tracking-[0.1em]">
+              Classe :
+            </span>
+            <div className="flex gap-1">
+              {CLASS_LEVELS.map((level) => (
+                <button
+                  key={level.value}
+                  type="button"
+                  onClick={() => update("classLevel", level.value)}
+                  className={`rounded-full px-2.5 py-1 text-xs font-bold transition-all ${
+                    value.classLevel === level.value
+                      ? "bg-white text-[#1b1b1b]"
+                      : "bg-white/8 text-white/60 hover:bg-white/15"
+                  }`}
+                >
+                  {getClassLabel(level.value)}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <select
-            required
-            value={value.classLevel}
-            onChange={(event) => update("classLevel", event.target.value)}
-            className="h-11 rounded-lg border border-gray-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
-          >
-            {CLASS_LEVELS.map((level) => (
-              <option key={level.value} value={level.value}>
-                {level.label}
-              </option>
-            ))}
-          </select>
+          {/* Slot Photo / Avatar par défaut */}
+          <div className="mb-4 flex justify-center">
+            <div className="relative flex h-40 w-40 items-center justify-center rounded-full bg-white/8 text-white/55">
+              <User className="h-16 w-16 text-white/40" />
+              <div className="absolute bottom-1 right-1 flex h-11 w-11 items-center justify-center rounded-full bg-[#00b22d] text-xl font-black text-white shadow-lg ring-4 ring-[#1b1b1b]">
+                +
+              </div>
+            </div>
+          </div>
 
-          <input
-            required
-            value={value.parentPhone}
-            onChange={(event) => update("parentPhone", event.target.value)}
-            placeholder="Telephone parent"
-            className="h-11 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
-          />
-          <input
-            required
-            value={value.address}
-            onChange={(event) => update("address", event.target.value)}
-            placeholder="Adresse"
-            className="h-11 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
-          />
-          <input
-            type="date"
-            value={value.birthDate}
-            onChange={(event) => update("birthDate", event.target.value)}
-            className="h-11 rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
-          />
-          <textarea
-            value={value.notes}
-            onChange={(event) => update("notes", event.target.value)}
-            placeholder="Details, allergies, notes"
-            rows={3}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
-          />
+          {/* Saisie Nom, Post-nom, Prénom style Modale */}
+          <div className="mb-5 text-center">
+            <div className="mx-auto w-full rounded-[22px] bg-white px-4 py-3 text-[#111827]">
+              <div className="flex flex-col gap-1.5">
+                <input
+                  required
+                  value={value.lastName}
+                  onChange={(event) => update("lastName", event.target.value)}
+                  placeholder="NOM"
+                  className="w-full border-b border-gray-100 py-1 text-center text-lg font-black uppercase text-[#111827] placeholder:text-gray-300 outline-none"
+                />
+                <input
+                  required
+                  value={value.postName}
+                  onChange={(event) => update("postName", event.target.value)}
+                  placeholder="POST-NOM"
+                  className="w-full border-b border-gray-100 py-1 text-center text-lg font-black uppercase text-[#111827] placeholder:text-gray-300 outline-none"
+                />
+                <input
+                  required
+                  value={value.firstName}
+                  onChange={(event) => update("firstName", event.target.value)}
+                  placeholder="Prénom"
+                  className="w-full py-1 text-center text-lg font-bold text-[#111827] placeholder:text-gray-300 outline-none"
+                />
+              </div>
+            </div>
+          </div>
 
+          {/* Lignes de saisie des détails style Modale */}
+          <div className="mb-5 space-y-3.5 rounded-[22px] bg-white/5 p-4 text-left">
+            {/* Téléphone parent */}
+            <div className="flex items-center gap-3">
+              <Phone className="h-5 w-5 text-white/60 shrink-0" />
+              <input
+                required
+                value={value.parentPhone}
+                onChange={(event) => update("parentPhone", event.target.value)}
+                placeholder="Téléphone parent"
+                className="w-full bg-transparent text-sm text-white placeholder:text-white/30 outline-none"
+              />
+            </div>
+
+            {/* Adresse */}
+            <div className="flex items-center gap-3">
+              <MapPin className="h-5 w-5 text-white/60 shrink-0" />
+              <input
+                required
+                value={value.address}
+                onChange={(event) => update("address", event.target.value)}
+                placeholder="Adresse"
+                className="w-full bg-transparent text-sm text-white placeholder:text-white/30 outline-none"
+              />
+            </div>
+
+            {/* Date de naissance */}
+            <div className="flex items-center gap-3">
+              <Calendar className="h-5 w-5 text-white/60 shrink-0" />
+              <input
+                type="date"
+                value={value.birthDate}
+                onChange={(event) => update("birthDate", event.target.value)}
+                className="w-full bg-transparent text-sm text-white placeholder:text-white/30 outline-none color-scheme-dark"
+                style={{ colorScheme: "dark" }}
+              />
+            </div>
+
+            {/* Notes */}
+            <div className="flex items-center gap-3">
+              <NotebookText className="h-5 w-5 text-white/60 shrink-0" />
+              <input
+                value={value.notes}
+                onChange={(event) => update("notes", event.target.value)}
+                placeholder="Notes, allergies, détails..."
+                className="w-full bg-transparent text-sm text-white placeholder:text-white/30 outline-none"
+              />
+            </div>
+          </div>
+
+          {/* Bouton d'ajout */}
           <button
             type="submit"
-            disabled={isAdding}
-            className="h-12 rounded-lg bg-[#00b22d] text-sm font-bold text-white disabled:opacity-60"
+            disabled={!canAdd || isAdding}
+            className="h-14 w-full rounded-[22px] bg-[#00b22d] text-base font-bold text-white shadow-lg transition-all hover:bg-[#009e27] active:scale-[0.98] disabled:bg-white/10 disabled:text-white/40 disabled:scale-100 disabled:cursor-not-allowed"
           >
-            {isAdding ? "Ajout..." : "+ Ajouter"}
+            {isAdding ? "Ajout en cours..." : "+ Ajouter l'enfant"}
           </button>
         </form>
       </CardContent>

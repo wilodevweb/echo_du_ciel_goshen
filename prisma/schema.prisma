@@ -56,3 +56,16 @@ model Attendance {
   @@index([markedAt])
 }
 
+// Ressources Multimédias (Images, Vidéos, PDFs) stockées en ligne
+model MediaResource {
+  id          String   @id @default(cuid())
+  type        String   // "image", "video", "pdf"
+  title       String
+  url         String
+  thumbnail   String?  // Couleur bg (ex: "bg-rose-300") ou URL d'image
+  aspectRatio String   @default("square") // "tall", "wide", "square"
+  createdAt   DateTime @default(now())
+  
+  @@index([type])
+  @@index([createdAt])
+}

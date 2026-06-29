@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Bell, CalendarCheck, Users, UserPlus } from "lucide-react";
+import { Bell, CalendarCheck, Users, Images } from "lucide-react";
 import { SyncPanel } from "@/components/SyncPanel";
 
 export default function Home() {
@@ -41,11 +41,11 @@ export default function Home() {
               </Link>
 
               <Link
-                href="/enfants/nouveau"
+                href="/fichiers"
                 className="flex h-14 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-800 shadow-sm transition-all hover:bg-gray-50 active:scale-[0.98]"
               >
-                <UserPlus className="h-5 w-5 text-[#00b22d]" />
-                Ajouter
+                <Images className="h-5 w-5 text-[#00b22d]" />
+                Fichiers
               </Link>
             </div>
 

@@ -201,7 +201,8 @@ export function ChildDetailsModal({
   }));
   const [activeField, setActiveField] = useState<keyof ChildDetailsDraft | "name" | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const canSave = Boolean(draft.firstName.trim() && draft.lastName.trim() && draft.postName.trim());
+  const isDeletion = draft.firstName.trim() === "" && draft.lastName.trim() === "" && draft.postName.trim() === "";
+  const canSave = isDeletion || Boolean(draft.firstName.trim() && draft.lastName.trim() && draft.postName.trim());
 
   const updateDraft = (field: keyof ChildDetailsDraft, value: string) => {
     setDraft((currentDraft) => ({ ...currentDraft, [field]: value }));
@@ -209,6 +210,11 @@ export function ChildDetailsModal({
 
   const handleSave = async () => {
     if (!canSave || isSaving) return;
+
+    if (isDeletion) {
+      const confirmDelete = window.confirm("Êtes-vous sûr de vouloir supprimer définitivement cet enfant ?");
+      if (!confirmDelete) return;
+    }
 
     setIsSaving(true);
     try {
@@ -334,9 +340,13 @@ export function ChildDetailsModal({
           type="button"
           onClick={handleSave}
           disabled={!canSave || isSaving}
-          className="mt-7 flex h-12 w-full items-center justify-center rounded-xl bg-white text-sm font-bold text-[#1b1b1b] disabled:opacity-45"
+          className={`mt-7 flex h-12 w-full items-center justify-center rounded-xl text-sm font-bold disabled:opacity-45 transition-colors ${
+            isDeletion
+              ? "bg-red-600 text-white hover:bg-red-700"
+              : "bg-white text-[#1b1b1b] hover:bg-gray-100"
+          }`}
         >
-          {isSaving ? "Enregistrement..." : "Enregistrer"}
+          {isSaving ? "Enregistrement..." : isDeletion ? "Supprimer l'enfant" : "Enregistrer"}
         </button>
       </div>
     </div>

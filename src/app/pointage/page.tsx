@@ -90,7 +90,6 @@ export default function PointagePage() {
       .filter((status): status is AttendanceStatus => Boolean(status));
   }, [activeAttendances]);
 
-  const isAddCard = visibleIndex >= filteredChildren.length;
   const selectedClassLabel = selectedClasses.length === CLASS_LEVELS.length
     ? "Toutes les classes"
     : selectedClasses.map(getClassLabel).join(" + ");
@@ -105,6 +104,12 @@ export default function PointagePage() {
   };
 
   const setAttendanceStatus = async (childId: string, status: AttendanceStatus) => {
+    const maxSunday = getMostRecentSundayDateString(new Date());
+    if (selectedDate > maxSunday) {
+      alert("Le pointage pour le dimanche prochain (" + selectedDate + ") ou une date future est refusé car il n'est pas encore ouvert.");
+      return;
+    }
+
     const existingRecord = await db.attendances
       .where({ childId, date: selectedDate })
       .first();
@@ -144,6 +149,20 @@ export default function PointagePage() {
     const firstName = draft.firstName.trim();
     const lastName = draft.lastName.trim();
     const postName = draft.postName.trim();
+
+    const isDeletion = firstName === "" && lastName === "" && postName === "";
+
+    if (isDeletion) {
+      await db.attendances.where("childId").equals(childId).delete();
+      await db.children.update(childId, {
+        firstName: "",
+        lastName: "",
+        postName: "",
+      });
+      await markEntityForSync('child', childId);
+      setDetailsChild(null);
+      return;
+    }
 
     if (!firstName || !lastName || !postName) return;
 
@@ -283,15 +302,8 @@ export default function PointagePage() {
               onTouchStart={(event) => setTouchStartX(event.touches[0]?.clientX ?? null)}
               onTouchEnd={(event) => handleTouchEnd(event.changedTouches[0]?.clientX ?? 0)}
             >
-              <div key={isAddCard ? "add-child-card" : currentChild?.id} className="attendance-card-in w-full">
-                {isAddCard ? (
-                  <AddChildCard
-                    value={newChild}
-                    isAdding={isAdding}
-                    onChange={setNewChild}
-                    onSubmit={addChild}
-                  />
-                ) : currentChild ? (
+              <div key={currentChild ? currentChild.id : "add-child-card"} className="attendance-card-in w-full">
+                {currentChild ? (
                   <ChildAttendanceCard
                     child={currentChild}
                     status={getAttendanceStatus(attendanceMap.get(currentChild.id))}

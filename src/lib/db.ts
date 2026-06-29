@@ -477,10 +477,18 @@ export async function syncWithServer() {
 
       const pullResult = await applyServerDelta(data);
 
-      await db.transaction('rw', db.syncState, db.pendingSync, async () => {
+      await db.transaction('rw', db.syncState, db.pendingSync, db.children, async () => {
         await setStateValue(PENDING_CHANGES_KEY, '0');
         await setStateValue(LAST_SYNC_KEY, data.serverSyncedAt ?? new Date().toISOString());
         await db.pendingSync.bulkDelete(pendingItems.map((item) => item.key));
+
+        // Supprimer définitivement de Dexie les enfants marqués pour suppression (noms vides)
+        const toDeleteIds = changedChildren
+          .filter((c) => c.firstName === "" && c.lastName === "" && c.postName === "")
+          .map((c) => c.id);
+        if (toDeleteIds.length > 0) {
+          await db.children.bulkDelete(toDeleteIds);
+        }
       });
 
       return {
@@ -503,6 +511,21 @@ export async function syncWithServer() {
       error: 'Erreur réseau lors de la synchronisation',
     };
   }
+}
+
+// Nettoyage automatique des présences locales antérieures au premier jour (28 juin 2026)
+if (typeof window !== 'undefined') {
+  db.on('ready', () => {
+    db.attendances.where('date').below('2026-06-28').delete()
+      .then((count) => {
+        if (count > 0) {
+          console.log(`[Dexie] Nettoyage : ${count} présences antérieures au 2026-06-28 supprimées.`);
+        }
+      })
+      .catch((err) => {
+        console.error('[Dexie] Erreur nettoyage présences obsolètes:', err);
+      });
+  });
 }
 
 export default db;

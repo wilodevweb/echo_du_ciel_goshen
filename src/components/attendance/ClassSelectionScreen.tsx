@@ -8,7 +8,7 @@ import {
   type ClassLevel,
   getClassLabel,
 } from "@/lib/db";
-import { AttendanceDateSelector } from "@/components/attendance/AttendanceDateSelector";
+import { AttendanceDateSelector, getMostRecentSundayDateString } from "@/components/attendance/AttendanceDateSelector";
 
 export function ClassSelectionScreen({
   selectedDate,
@@ -35,6 +35,8 @@ export function ClassSelectionScreen({
     { FIRST: 0, SECOND: 0, THIRD: 0 },
   );
   const allSelected = selectedClasses.length === CLASS_LEVELS.length;
+  const maxSunday = getMostRecentSundayDateString(new Date());
+  const isFutureDate = selectedDate > maxSunday;
 
   return (
     <main className="flex min-h-screen flex-col bg-white px-5 py-5">
@@ -90,9 +92,15 @@ export function ClassSelectionScreen({
           {allSelected ? "Tout deselectionner" : "Selectionner les 3 classes"}
         </button>
 
+        {isFutureDate && (
+          <div className="mt-4 rounded-xl bg-red-50 border border-red-200 p-4 text-center text-sm font-semibold text-red-600">
+            Le pointage pour le dimanche prochain ({selectedDate}) ou une date future est refusé car il n&apos;est pas encore ouvert.
+          </div>
+        )}
+
         <button
           type="button"
-          disabled={selectedClasses.length === 0}
+          disabled={selectedClasses.length === 0 || isFutureDate}
           onClick={onStart}
           className="mt-5 h-14 rounded-lg bg-[#00b22d] text-base font-bold text-white shadow-sm disabled:bg-gray-200 disabled:text-gray-400"
         >

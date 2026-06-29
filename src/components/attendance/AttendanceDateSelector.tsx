@@ -48,9 +48,16 @@ export function AttendanceDateSelector({
   onChange: (value: string) => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const maxSunday = getMostRecentSundayDateString(new Date());
+  const isNextWeekDisabled = value >= maxSunday;
 
   const selectDate = (date: string) => {
-    onChange(getMostRecentSundayDateString(parseDateInput(date)));
+    const selectedSunday = getMostRecentSundayDateString(parseDateInput(date));
+    if (selectedSunday > maxSunday) {
+      alert("Le pointage pour le dimanche prochain (" + selectedSunday + ") ou une date future est refusé car il n'est pas encore ouvert.");
+      return;
+    }
+    onChange(selectedSunday);
   };
 
   return (
@@ -77,8 +84,11 @@ export function AttendanceDateSelector({
             <p className="text-center text-sm font-bold text-gray-900">{formatSundayLabel(value)}</p>
             <button
               type="button"
+              disabled={isNextWeekDisabled}
               onClick={() => onChange(moveByWeek(value, 1))}
-              className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-700"
+              className={`flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-700 transition-opacity ${
+                isNextWeekDisabled ? "opacity-30 cursor-not-allowed" : ""
+              }`}
             >
               <ChevronRight className="h-5 w-5" />
             </button>
@@ -91,6 +101,7 @@ export function AttendanceDateSelector({
             id="attendance-date"
             type="date"
             value={value}
+            max={maxSunday}
             onChange={(event) => selectDate(event.target.value)}
             className="h-11 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
           />
@@ -109,3 +120,4 @@ export function AttendanceDateSelector({
     </div>
   );
 }
+
