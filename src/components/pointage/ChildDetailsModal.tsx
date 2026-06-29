@@ -1,19 +1,25 @@
 import React, { useState } from "react";
 import {
   Calendar,
+  Loader2,
+  Pencil,
   GraduationCap,
   MapPin,
   NotebookText,
+  Save,
+  Trash2,
   X,
   User,
   Camera,
 } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { AttendanceStatus, Child, ClassLevel } from "@/lib/db";
-import db, { CLASS_LEVELS, getClassLabel, getClassNumber, markEntityForSync } from "@/lib/db";
+import db, { CLASS_LEVELS, getClassLabel, markEntityForSync } from "@/lib/db";
 import type { ChildDetailsDraft } from "./types";
 import { SiblingsList } from "./SiblingsList";
 import { AttendanceHistoryList } from "./AttendanceHistoryList";
+import { SelectionButtonGroup } from "./SelectionButtonGroup";
+import { calculateAgeLabel } from "./utils";
 
 type ModalTab = "infos" | "famille" | "pointages";
 
@@ -382,22 +388,17 @@ function EditableClassRow({
       <div className="min-w-0 flex-1">
         <p className="text-lg font-semibold leading-tight text-white">{title}</p>
         {isEditing ? (
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            {CLASS_LEVELS.map((level) => (
-              <button
-                key={level.value}
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onChange(level.value);
-                }}
-                className={`h-9 rounded-full px-2 text-sm font-semibold ${
-                  value === level.value ? "bg-white text-[#1b1b1b]" : "bg-white/8 text-white/65"
-                }`}
-              >
-                {getClassNumber(level.value)}
-              </button>
-            ))}
+          <div className="mt-2">
+            <SelectionButtonGroup
+              options={CLASS_LEVELS.map((level) => ({
+                value: level.value,
+                label: getClassLabel(level.value),
+              }))}
+              value={value}
+              onChange={onChange}
+              columns={3}
+              compact
+            />
           </div>
         ) : (
           <p className="mt-1 text-base leading-snug text-white/55">{getClassLabel(value)}</p>
@@ -438,31 +439,17 @@ function EditableGenderRow({
       <div className="min-w-0 flex-1">
         <p className="text-lg font-semibold leading-tight text-white">{title}</p>
         {isEditing ? (
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onChange('M');
-              }}
-              className={`h-9 rounded-full px-2 text-sm font-semibold ${
-                value === 'M' ? "bg-white text-[#1b1b1b]" : "bg-white/8 text-white/65"
-              }`}
-            >
-              Garçon (M)
-            </button>
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onChange('F');
-              }}
-              className={`h-9 rounded-full px-2 text-sm font-semibold ${
-                value === 'F' ? "bg-white text-[#1b1b1b]" : "bg-white/8 text-white/65"
-              }`}
-            >
-              Fille (F)
-            </button>
+          <div className="mt-2">
+            <SelectionButtonGroup
+              options={[
+                { value: "M", label: "Garçon" },
+                { value: "F", label: "Fille" },
+              ]}
+              value={value}
+              onChange={onChange}
+              columns={2}
+              compact
+            />
           </div>
         ) : (
           <p className="mt-1 text-base leading-snug text-white/55">
@@ -502,6 +489,7 @@ export function ChildDetailsModal({
   }));
   const [activeField, setActiveField] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ModalTab>("infos");
+  const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const localParents = useLiveQuery(async () => {
@@ -542,6 +530,8 @@ export function ChildDetailsModal({
   const canSave = isDeletion || Boolean(draft.firstName.trim() && draft.lastName.trim());
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isEditMode) return;
+
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
@@ -554,10 +544,17 @@ export function ChildDetailsModal({
   };
 
   const updateDraft = (field: keyof ChildDetailsDraft, value: string) => {
+    if (!isEditMode) return;
+
     setDraft((currentDraft) => ({ ...currentDraft, [field]: value }));
   };
 
   const handleSave = async () => {
+    if (!isEditMode) {
+      setIsEditMode(true);
+      return;
+    }
+
     if (!canSave || isSaving) return;
 
     if (isDeletion) {
@@ -615,8 +612,8 @@ export function ChildDetailsModal({
         {/* Header - Fixed */}
         <div className="shrink-0">
           <div className="mx-auto mb-5 h-1.5 w-28 rounded-full bg-white/55" />
-        <div className="mb-5 flex items-start justify-between gap-4">
-          <div className="flex gap-4 min-w-0 flex-1">
+        <div className="relative mb-5">
+          <div className="flex min-w-0 flex-col items-center text-center">
             {/* Avatar Photo */}
             <div className="relative shrink-0">
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-white/85 overflow-hidden border-2 border-white/10">
@@ -627,20 +624,24 @@ export function ChildDetailsModal({
                   <User className="h-8 w-8 text-white/50" />
                 )}
               </div>
-              <label className="absolute -bottom-2 -right-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-fiverr text-white shadow-lg hover:bg-fiverr-dark transition">
-                <Camera className="h-4 w-4" />
-                <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
-              </label>
+              {isEditMode && (
+                <label className="absolute -bottom-2 -right-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-fiverr text-white shadow-lg hover:bg-fiverr-dark transition">
+                  <Camera className="h-4 w-4" />
+                  <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+                </label>
+              )}
             </div>
 
             <div
               role="button"
               tabIndex={0}
-              onClick={() => setActiveField("name")}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") setActiveField("name");
+              onClick={() => {
+                if (isEditMode) setActiveField("name");
               }}
-              className="min-w-0 flex-1 text-left"
+              onKeyDown={(event) => {
+                if (isEditMode && (event.key === "Enter" || event.key === " ")) setActiveField("name");
+              }}
+              className="mt-4 w-full min-w-0 text-center"
             >
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">
                 Fiche enfant
@@ -677,7 +678,7 @@ export function ChildDetailsModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white"
+            className="absolute right-0 top-0 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white"
             aria-label="Fermer"
           >
             <X className="h-5 w-5" />
@@ -713,7 +714,7 @@ export function ChildDetailsModal({
         </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-5 pr-2 pb-4">
+        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-5 pr-2 pb-20">
           {activeTab === "infos" && (
             <>
               <EditableClassRow
@@ -721,7 +722,9 @@ export function ChildDetailsModal({
                 title="Classe"
                 value={draft.classLevel}
                 isEditing={activeField === "classLevel"}
-                onEdit={() => setActiveField("classLevel")}
+                onEdit={() => {
+                  if (isEditMode) setActiveField("classLevel");
+                }}
                 onChange={(value) => updateDraft("classLevel", value)}
               />
               <EditableGenderRow
@@ -729,7 +732,9 @@ export function ChildDetailsModal({
                 title="Sexe"
                 value={draft.gender}
                 isEditing={activeField === "gender"}
-                onEdit={() => setActiveField("gender")}
+                onEdit={() => {
+                  if (isEditMode) setActiveField("gender");
+                }}
                 onChange={(value) => updateDraft("gender", value)}
               />
               <EditableDetailRow
@@ -739,16 +744,31 @@ export function ChildDetailsModal({
                 placeholder="Non renseignée"
                 inputType="date"
                 isEditing={activeField === "birthDate"}
-                onEdit={() => setActiveField("birthDate")}
+                onEdit={() => {
+                  if (isEditMode) setActiveField("birthDate");
+                }}
                 onChange={(value) => updateDraft("birthDate", value)}
               />
+              <div className="flex w-full gap-4 text-left">
+                <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/8 text-white/85">
+                  <Calendar className="h-6 w-6" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-lg font-semibold leading-tight text-white">Âge</p>
+                  <p className="mt-1 text-base leading-snug text-white/55">
+                    {calculateAgeLabel(draft.birthDate)}
+                  </p>
+                </div>
+              </div>
               <EditableDetailRow
                 icon={<MapPin className="h-6 w-6" />}
                 title="Adresse"
                 value={draft.address}
                 placeholder="Non renseignée"
                 isEditing={activeField === "address"}
-                onEdit={() => setActiveField("address")}
+                onEdit={() => {
+                  if (isEditMode) setActiveField("address");
+                }}
                 onChange={(value) => updateDraft("address", value)}
               />
               <EditableDetailRow
@@ -758,7 +778,9 @@ export function ChildDetailsModal({
                 placeholder="Aucune note"
                 multiline
                 isEditing={activeField === "notes"}
-                onEdit={() => setActiveField("notes")}
+                onEdit={() => {
+                  if (isEditMode) setActiveField("notes");
+                }}
                 onChange={(value) => updateDraft("notes", value)}
               />
             </>
@@ -771,8 +793,12 @@ export function ChildDetailsModal({
                   parents={localParents}
                   draft={draft}
                   isEditing={activeField === "parent"}
-                  onEdit={() => setActiveField("parent")}
+                  onEdit={() => {
+                    if (isEditMode) setActiveField("parent");
+                  }}
                   onChange={(selectedParent) => {
+                    if (!isEditMode) return;
+
                     setDraft(current => ({
                       ...current,
                       parentId: selectedParent.id || undefined,
@@ -807,21 +833,28 @@ export function ChildDetailsModal({
           )}
         </div>
 
-        {/* Footer - Fixed */}
-        <div className="shrink-0 pt-4 border-t border-white/10 mt-auto">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={!canSave || isSaving}
-            className={`flex h-12 w-full items-center justify-center rounded-xl text-sm font-bold disabled:opacity-45 transition-colors ${
-              isDeletion
-                ? "bg-red-600 text-white hover:bg-red-700"
-                : "bg-white text-[#1b1b1b] hover:bg-gray-100"
-            }`}
-          >
-            {isSaving ? "Enregistrement..." : isDeletion ? "Supprimer l'enfant" : "Enregistrer"}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={isEditMode ? !canSave || isSaving : false}
+          title={!isEditMode ? "Modifier" : isDeletion ? "Supprimer" : "Enregistrer"}
+          aria-label={!isEditMode ? "Modifier" : isDeletion ? "Supprimer" : "Enregistrer"}
+          className={`absolute bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full shadow-sm transition-all active:scale-90 disabled:opacity-45 ${
+            isEditMode && isDeletion
+              ? "bg-red-600 text-white hover:bg-red-700"
+              : "bg-fiverr text-white hover:bg-fiverr-dark"
+          }`}
+        >
+          {isSaving ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : !isEditMode ? (
+            <Pencil className="h-5 w-5" />
+          ) : isDeletion ? (
+            <Trash2 className="h-5 w-5" />
+          ) : (
+            <Save className="h-5 w-5" />
+          )}
+        </button>
       </div>
     </div>
   );

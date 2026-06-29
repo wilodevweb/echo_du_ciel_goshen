@@ -1,13 +1,16 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import db, { getStatusLabel } from "@/lib/db";
-import { Loader2, Calendar as CalendarIcon, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
+import db, { getAttendanceStatus, getStatusLabel } from "@/lib/db";
+import { Loader2, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { getHistoryDotClass } from "./utils";
 
 interface AttendanceHistoryListProps {
   childId: string;
 }
 
 export function AttendanceHistoryList({ childId }: AttendanceHistoryListProps) {
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const attendances = useLiveQuery(async () => {
     // Fetch all attendances for this child, sorted by date descending
     const records = await db.attendances
@@ -17,6 +20,37 @@ export function AttendanceHistoryList({ childId }: AttendanceHistoryListProps) {
       
     return records.sort((a, b) => b.date.localeCompare(a.date));
   }, [childId]);
+
+  const visibleMonth = useMemo(() => {
+    const latestAttendanceDate = attendances?.[0]?.date;
+    const date = latestAttendanceDate ? new Date(latestAttendanceDate) : new Date();
+
+    date.setDate(1);
+    date.setMonth(date.getMonth() + monthOffset);
+    return date;
+  }, [attendances, monthOffset]);
+
+  const visibleMonthKey = `${visibleMonth.getFullYear()}-${String(visibleMonth.getMonth() + 1).padStart(2, "0")}`;
+  const monthLabel = visibleMonth.toLocaleDateString("fr-FR", {
+    month: "long",
+    year: "numeric",
+  });
+  const visibleAttendances = (attendances ?? [])
+    .filter((attendance) => attendance.date.startsWith(visibleMonthKey))
+    .slice(0, 4);
+
+  const handleTouchEnd = (endX: number) => {
+    if (touchStartX === null) return;
+
+    const delta = endX - touchStartX;
+    if (Math.abs(delta) > 45) {
+      setMonthOffset((offset) => {
+        const nextOffset = offset + (delta > 0 ? -1 : 1);
+        return Math.min(nextOffset, 0);
+      });
+    }
+    setTouchStartX(null);
+  };
 
   if (attendances === undefined) {
     return (
@@ -36,71 +70,87 @@ export function AttendanceHistoryList({ childId }: AttendanceHistoryListProps) {
     );
   }
 
-  const presentCount = attendances.filter(a => a.status === 'PRESENT').length;
-  const absentCount = attendances.filter(a => a.status === 'ABSENT').length;
-  const sickCount = attendances.filter(a => a.status === 'SICK').length;
-
   return (
-    <div className="mt-4">
-      <div className="flex gap-2 mb-4">
-        <div className="flex-1 bg-green-500/10 border border-green-500/20 rounded-xl p-3 text-center">
-          <p className="text-2xl font-bold text-green-400">{presentCount}</p>
-          <p className="text-[10px] uppercase tracking-wider text-green-400/70 font-semibold">Présences</p>
-        </div>
-        <div className="flex-1 bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
-          <p className="text-2xl font-bold text-red-400">{absentCount}</p>
-          <p className="text-[10px] uppercase tracking-wider text-red-400/70 font-semibold">Absences</p>
-        </div>
-        <div className="flex-1 bg-yellow-400/10 border border-yellow-400/20 rounded-xl p-3 text-center">
-          <p className="text-2xl font-bold text-yellow-400">{sickCount}</p>
-          <p className="text-[10px] uppercase tracking-wider text-yellow-400/70 font-semibold">Maladies</p>
-        </div>
+    <div
+      className="mt-4 touch-pan-y"
+      onTouchStart={(event) => setTouchStartX(event.touches[0]?.clientX ?? null)}
+      onTouchEnd={(event) => handleTouchEnd(event.changedTouches[0]?.clientX ?? 0)}
+    >
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setMonthOffset((offset) => offset - 1)}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/8 text-white/75 hover:bg-white/12"
+          aria-label="Mois précédent"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <p className="text-center text-sm font-black capitalize text-white">{monthLabel}</p>
+        <button
+          type="button"
+          onClick={() => setMonthOffset((offset) => Math.min(offset + 1, 0))}
+          disabled={monthOffset === 0}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/8 text-white/75 hover:bg-white/12 disabled:opacity-30"
+          aria-label="Mois suivant"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
       </div>
 
-      <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
-        {attendances.map((record) => {
-          const dateObj = new Date(record.date);
-          const formattedDate = dateObj.toLocaleDateString('fr-FR', {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric'
-          });
-
-          let Icon = XCircle;
-          let colorClass = "text-red-400 bg-red-500/10 border-red-500/20";
-          
-          if (record.status === 'PRESENT') {
-            Icon = CheckCircle2;
-            colorClass = "text-green-400 bg-green-500/10 border-green-500/20";
-          } else if (record.status === 'SICK') {
-            Icon = AlertCircle;
-            colorClass = "text-yellow-400 bg-yellow-400/10 border-yellow-400/20";
-          }
+      <div className="grid grid-cols-4 gap-2 mb-4">
+        {Array.from({ length: 4 }).map((_, index) => {
+          const status = getAttendanceStatus(visibleAttendances[index]) ?? undefined;
 
           return (
-            <div 
-              key={record.id} 
-              className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10"
-            >
-              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${colorClass}`}>
-                <Icon className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1 text-left">
-                <p className="text-sm font-semibold leading-tight text-white capitalize">
-                  {formattedDate}
-                </p>
-                <div className="flex items-center gap-1 mt-0.5">
-                  <CalendarIcon className="w-3 h-3 text-white/40" />
-                  <p className="text-xs font-medium text-white/55">
-                    Statut : <span className="text-white/80">{getStatusLabel(record.status ?? null)}</span>
-                  </p>
-                </div>
-              </div>
-            </div>
+            <span
+              key={index}
+              className={`h-2.5 rounded-full ${getHistoryDotClass(status)}`}
+              aria-label={status ? getStatusLabel(status) : "Aucun appel"}
+            />
           );
         })}
       </div>
+
+      {visibleAttendances.length === 0 ? (
+        <div className="text-center p-6 border border-white/10 rounded-2xl bg-white/5">
+          <p className="text-sm text-white/50 font-medium">Aucun appel pour ce mois.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {visibleAttendances.map((record) => {
+            const dateObj = new Date(record.date);
+            const formattedDate = dateObj.toLocaleDateString('fr-FR', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric'
+            });
+            const status = getAttendanceStatus(record) ?? undefined;
+
+            return (
+              <div 
+                key={record.id} 
+                className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5">
+                  <span className={`h-4 w-4 rounded-full ${getHistoryDotClass(status)}`} />
+                </div>
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="text-sm font-semibold leading-tight text-white capitalize">
+                    {formattedDate}
+                  </p>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <CalendarIcon className="w-3 h-3 text-white/40" />
+                    <p className="text-xs font-medium text-white/55">
+                      Statut : <span className="text-white/80">{getStatusLabel(record.status ?? null)}</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

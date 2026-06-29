@@ -8,7 +8,6 @@ export function ChildAttendanceCard(props: {
   recentStatuses: AttendanceStatus[];
   hasBirthdayThisWeek: boolean;
   onNameClick: () => void;
-  onPhotoChange: (file: File) => Promise<void>;
   onSetStatus: (status: AttendanceStatus) => void;
 }) {
   return <PointageCard mode="attendance" {...props} />;

@@ -3,9 +3,10 @@ import Image from "next/image";
 import { Crown, Phone, User } from "lucide-react";
 import type { AttendanceStatus, Child } from "@/lib/db";
 import db, { CLASS_LEVELS, getClassLabel, getClassNumber } from "@/lib/db";
-import { getHistoryDotClass } from "./utils";
+import { getHistoryDotClass, resizeImageFile } from "./utils";
 import { Card, CardContent } from "@/components/ui/Card";
 import type { NewChildForm } from "./types";
+import { SelectionButtonGroup } from "./SelectionButtonGroup";
 
 function StatusButton({
   label,
@@ -76,7 +77,6 @@ export type PointageCardProps =
       recentStatuses: AttendanceStatus[];
       hasBirthdayThisWeek: boolean;
       onNameClick: () => void;
-      onPhotoChange: (file: File) => Promise<void>;
       onSetStatus: (status: AttendanceStatus) => void;
     }
   | {
@@ -95,7 +95,7 @@ export type PointageCardProps =
 
 export function PointageCard(props: PointageCardProps) {
   if (props.mode === "attendance") {
-    const { child, status, recentStatuses, hasBirthdayThisWeek, onNameClick, onPhotoChange, onSetStatus } = props;
+    const { child, status, recentStatuses, hasBirthdayThisWeek, onNameClick, onSetStatus } = props;
 
     return (
       <BaseCardLayout
@@ -115,18 +115,7 @@ export function PointageCard(props: PointageCardProps) {
           </div>
         }
         avatar={
-          <label className="relative flex h-44 w-44 cursor-pointer items-center justify-center rounded-full bg-[#d7efe8]/90">
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="sr-only"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void onPhotoChange(file);
-                event.currentTarget.value = "";
-              }}
-            />
+          <div className="relative flex h-44 w-44 items-center justify-center rounded-full bg-[#d7efe8]/90">
             {hasBirthdayThisWeek && (
               <div className="absolute -top-7 left-1/2 z-10 flex -translate-x-1/2 rotate-[-8deg] items-center justify-center rounded-full bg-yellow-300 p-2 text-[#1b1b1b] shadow-lg ring-4 ring-[#1b1b1b]">
                 <Crown className="h-8 w-8 fill-yellow-300" />
@@ -151,7 +140,7 @@ export function PointageCard(props: PointageCardProps) {
             <div className="absolute bottom-2 right-2 flex h-12 w-12 items-center justify-center rounded-full bg-[#342ee8] text-2xl font-black text-white shadow-lg ring-4 ring-[#1b1b1b]">
               {getClassNumber(child.classLevel)}
             </div>
-          </label>
+          </div>
         }
         nameBox={
           <button
@@ -333,33 +322,54 @@ export function PointageCard(props: PointageCardProps) {
           <span className="text-xs font-semibold uppercase tracking-[0.1em] text-white/50">
             Classe :
           </span>
-          <div className="flex gap-1">
-            {CLASS_LEVELS.map((level) => (
-              <button
-                key={level.value}
-                type="button"
-                onClick={() => update("classLevel", level.value)}
-                className={`rounded-full px-3 py-1.5 text-xs font-black transition-all ${
-                  value.classLevel === level.value
-                    ? "bg-fiverr text-white shadow-sm scale-105"
-                    : "bg-white/15 border border-white/10 text-white hover:bg-white/25"
-                }`}
-              >
-                {getClassLabel(level.value)}
-              </button>
-            ))}
+          <div className="min-w-0 flex-1">
+            <SelectionButtonGroup
+              options={CLASS_LEVELS.map((level) => ({
+                value: level.value,
+                label: getClassLabel(level.value),
+              }))}
+              value={value.classLevel}
+              onChange={(nextClassLevel) => update("classLevel", nextClassLevel)}
+              columns={3}
+              compact
+            />
           </div>
         </div>
       }
       avatar={
-        <div className="relative flex h-44 w-44 items-center justify-center rounded-full bg-[#d7efe8]/90">
+        <label className="relative flex h-44 w-44 cursor-pointer items-center justify-center rounded-full bg-[#d7efe8]/90">
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="sr-only"
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                const photoUrl = await resizeImageFile(file);
+                onChange({ ...value, photoUrl });
+              }
+              event.currentTarget.value = "";
+            }}
+          />
           <div className="h-36 w-36 overflow-hidden rounded-full bg-white/35 flex items-center justify-center">
-            <User className="h-14 w-14 text-[#1b1b1b]/45" />
+            {value.photoUrl ? (
+              <Image
+                src={value.photoUrl}
+                alt="Photo du nouvel enfant"
+                width={144}
+                height={144}
+                className="h-full w-full object-cover"
+                unoptimized
+              />
+            ) : (
+              <User className="h-14 w-14 text-[#1b1b1b]/45" />
+            )}
           </div>
           <div className="absolute bottom-2 right-2 flex h-12 w-12 items-center justify-center rounded-full bg-[#342ee8] text-2xl font-black text-white shadow-lg ring-4 ring-[#1b1b1b]">
             {getClassNumber(value.classLevel)}
           </div>
-        </div>
+        </label>
       }
       nameBox={
         <div className="mx-auto w-full rounded-[22px] bg-white px-4 py-3 text-[#111827]">

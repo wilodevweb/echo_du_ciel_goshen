@@ -27,7 +27,7 @@ import {
   type NewChildForm,
   emptyNewChild,
 } from "@/components/pointage/types";
-import { isBirthdayInWeek, resizeImageFile } from "@/components/pointage/utils";
+import { isBirthdayInWeek } from "@/components/pointage/utils";
 
 export default function PointagePage() {
   const [selectedDate, setSelectedDate] = useState(() => getMostRecentSundayDateString());
@@ -137,12 +137,6 @@ export default function PointagePage() {
     moveCard(1);
   };
 
-  const updateChildPhoto = async (childId: string, file: File) => {
-    const photoUrl = await resizeImageFile(file);
-    await db.children.update(childId, { photoUrl });
-    await markEntityForSync('child', childId, ['photoUrl']);
-  };
-
   const saveChildDetails = async (childId: string, draft: ChildDetailsDraft) => {
     const existingChild = await db.children.get(childId);
     const firstName = draft.firstName.trim();
@@ -163,7 +157,7 @@ export default function PointagePage() {
       return;
     }
 
-    if (!firstName || !lastName || !postName) return;
+    if (!firstName || !lastName) return;
 
     if (draft.birthDate) {
       const today = new Date().toISOString().split('T')[0];
@@ -185,6 +179,7 @@ export default function PointagePage() {
       address: draft.address.trim(),
       birthDate: draft.birthDate || undefined,
       notes: draft.notes.trim(),
+      photoUrl: draft.photoUrl,
     };
     const changedFields = (Object.keys(nextChild) as Array<keyof typeof nextChild>).filter((field) => {
       return existingChild?.[field] !== nextChild[field];
@@ -223,6 +218,7 @@ export default function PointagePage() {
         address: newChild.address.trim(),
         birthDate: newChild.birthDate || undefined,
         notes: newChild.notes.trim(),
+        photoUrl: newChild.photoUrl,
         createdAt: new Date().toISOString(),
       });
       await markEntityForSync('child', childId);
@@ -350,7 +346,6 @@ export default function PointagePage() {
                     recentStatuses={recentStatuses}
                     hasBirthdayThisWeek={isBirthdayInWeek(currentChild.birthDate, selectedDate)}
                     onNameClick={() => setDetailsChild(currentChild)}
-                    onPhotoChange={(file) => updateChildPhoto(currentChild.id, file)}
                     onSetStatus={(status) => setAttendanceStatus(currentChild.id, status)}
                   />
                 ) : (
@@ -383,4 +378,3 @@ export default function PointagePage() {
     </main>
   );
 }
-

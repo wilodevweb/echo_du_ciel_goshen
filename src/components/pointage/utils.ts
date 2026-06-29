@@ -50,6 +50,21 @@ export function getHistoryDotClass(status?: AttendanceStatus) {
   return "bg-white/25";
 }
 
+export function calculateAgeLabel(birthDate?: string | null, referenceDate = new Date()) {
+  const birthday = parseDateString(birthDate);
+  if (!birthday) return "Non renseigné";
+
+  let age = referenceDate.getFullYear() - birthday.getFullYear();
+  const hasBirthdayPassed =
+    referenceDate.getMonth() > birthday.getMonth() ||
+    (referenceDate.getMonth() === birthday.getMonth() && referenceDate.getDate() >= birthday.getDate());
+
+  if (!hasBirthdayPassed) age -= 1;
+  if (age < 0) return "Non renseigné";
+
+  return `${age} ${age > 1 ? "ans" : "an"}`;
+}
+
 export function buildAttendanceHistoryMap(attendances?: Attendance[]) {
   const map = new Map<string, AttendanceStatus[]>();
   const sortedAttendances = [...(attendances ?? [])].sort((a, b) => b.date.localeCompare(a.date));
