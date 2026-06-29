@@ -16,6 +16,10 @@ const childFieldByCode: Record<string, string> = {
   b: "birthDate",
   n: "notes",
   h: "photoUrl",
+  g: "gender",
+  u: "parentFirstName",
+  v: "parentLastName",
+  p: "parentId",
 };
 
 function decodeDate(value?: string | null) {
@@ -77,12 +81,16 @@ function compactChild(child: {
   postName: string;
   classLevel: string;
   parentPhone: string;
+  parentFirstName: string;
+  parentLastName: string;
   address: string;
   birthDate: string | null;
   notes: string | null;
   photoUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
+  gender: string;
+  parentId: string | null;
 }) {
   return [
     child.id,
@@ -97,6 +105,30 @@ function compactChild(child: {
     child.photoUrl ?? "",
     child.createdAt.toISOString(),
     child.updatedAt.toISOString(),
+    child.gender,
+    child.parentFirstName,
+    child.parentLastName,
+    child.parentId ?? "",
+  ];
+}
+
+function compactParent(parent: {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  address: string;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return [
+    parent.id,
+    parent.firstName,
+    parent.lastName,
+    parent.phone,
+    parent.address,
+    parent.createdAt.toISOString(),
+    parent.updatedAt.toISOString(),
   ];
 }
 
@@ -146,9 +178,6 @@ export async function POST(req: Request) {
           });
           const existingChildIds = new Set(existingChildren.map((c) => c.id));
 
-          const childCreates: any[] = [];
-          const childUpdates: Array<{ id: string; data: any }> = [];
-
           for (const patch of childPatches) {
             const { id, data: childData } = decodeChildPatch(patch);
             const isDeletion = childData.firstName === "" && childData.lastName === "" && childData.postName === "";
@@ -162,39 +191,57 @@ export async function POST(req: Request) {
               continue;
             }
 
-            if (existingChildIds.has(id)) {
-              childUpdates.push({ id, data: childData });
-            } else {
-              childCreates.push({
-                id,
-                firstName: String(childData.firstName ?? ""),
-                lastName: String(childData.lastName ?? ""),
-                postName: String(childData.postName ?? ""),
-                classLevel: String(childData.classLevel ?? "FIRST"),
-                parentPhone: String(childData.parentPhone ?? ""),
-                address: String(childData.address ?? ""),
-                birthDate: typeof childData.birthDate === "string" ? childData.birthDate : null,
-                notes: typeof childData.notes === "string" ? childData.notes : null,
-                photoUrl: typeof childData.photoUrl === "string" ? childData.photoUrl : null,
+            // 1. Gérer le Parent
+            const parentPhone = String(childData.parentPhone ?? "");
+            let parentId = childData.parentId ? String(childData.parentId) : null;
+
+            if (parentPhone) {
+              const parentFirstName = String(childData.parentFirstName ?? "Parent");
+              const parentLastName = String(childData.parentLastName ?? childData.lastName ?? "Parent");
+              const address = String(childData.address ?? "");
+
+              const parent = await tx.parent.upsert({
+                where: { phone: parentPhone },
+                update: {
+                  firstName: parentFirstName || undefined,
+                  lastName: parentLastName || undefined,
+                  address: address || undefined,
+                },
+                create: {
+                  firstName: parentFirstName || "Parent",
+                  lastName: parentLastName || "Parent",
+                  phone: parentPhone,
+                  address: address || "",
+                },
               });
+              parentId = parent.id;
             }
-          }
 
-          if (childCreates.length > 0) {
-            await tx.child.createMany({
-              data: childCreates,
+            // 2. Gérer le Child
+            const childFields = {
+              firstName: String(childData.firstName ?? ""),
+              lastName: String(childData.lastName ?? ""),
+              postName: String(childData.postName ?? ""),
+              gender: String(childData.gender ?? "M"),
+              classLevel: String(childData.classLevel ?? "FIRST"),
+              parentPhone: parentPhone,
+              parentFirstName: String(childData.parentFirstName ?? ""),
+              parentLastName: String(childData.parentLastName ?? ""),
+              address: String(childData.address ?? ""),
+              birthDate: typeof childData.birthDate === "string" ? childData.birthDate : null,
+              notes: typeof childData.notes === "string" ? childData.notes : null,
+              photoUrl: typeof childData.photoUrl === "string" ? childData.photoUrl : null,
+              parentId: parentId,
+            };
+
+            await tx.child.upsert({
+              where: { id },
+              update: childFields,
+              create: {
+                id,
+                ...childFields,
+              },
             });
-          }
-
-          if (childUpdates.length > 0) {
-            await Promise.all(
-              childUpdates.map((up) =>
-                tx.child.update({
-                  where: { id: up.id },
-                  data: up.data,
-                })
-              )
-            );
           }
         }
 
@@ -284,7 +331,12 @@ export async function POST(req: Request) {
         : knownChildIds.length > 0
           ? { id: { notIn: knownChildIds } }
           : undefined;
-      const [serverChildren, serverAttendances] = await Promise.all([
+
+      const parentWhere = hasValidLastSyncDate
+        ? { updatedAt: { gt: lastSyncDate } }
+        : undefined;
+
+      const [serverChildren, serverParents, serverAttendances] = await Promise.all([
         prisma.child.findMany({
           where: childWhere,
           orderBy: [
@@ -292,6 +344,9 @@ export async function POST(req: Request) {
             { postName: "asc" },
             { firstName: "asc" },
           ],
+        }),
+        prisma.parent.findMany({
+          where: parentWhere,
         }),
         prisma.attendance.findMany({
           where: hasValidLastSyncDate
@@ -327,6 +382,7 @@ export async function POST(req: Request) {
         success: true,
         serverSyncedAt: serverSyncedAt.toISOString(),
         c: deltaChildren.map(compactChild),
+        p: serverParents.map(compactParent),
         a: deltaAttendances.map(compactAttendance),
       });
     }
@@ -352,9 +408,6 @@ export async function POST(req: Request) {
         });
         const existingChildIds = new Set(existingChildren.map((c) => c.id));
 
-        const childCreates: any[] = [];
-        const childUpdates: Array<{ id: string; data: any }> = [];
-
         for (const child of children) {
           const isDeletion = child.firstName === "" && child.lastName === "" && (child.postName ?? "") === "";
 
@@ -367,43 +420,56 @@ export async function POST(req: Request) {
             continue;
           }
 
-          const childData = {
+          // Gérer le Parent
+          const parentPhone = String(child.parentPhone ?? "");
+          let parentId = child.parentId ? String(child.parentId) : null;
+
+          if (parentPhone) {
+            const parentFirstName = String(child.parentFirstName ?? "Parent");
+            const parentLastName = String(child.parentLastName ?? child.lastName ?? "Parent");
+            const address = String(child.address ?? "");
+
+            const parent = await tx.parent.upsert({
+              where: { phone: parentPhone },
+              update: {
+                firstName: parentFirstName || undefined,
+                lastName: parentLastName || undefined,
+                address: address || undefined,
+              },
+              create: {
+                firstName: parentFirstName || "Parent",
+                lastName: parentLastName || "Parent",
+                phone: parentPhone,
+                address: address || "",
+              },
+            });
+            parentId = parent.id;
+          }
+
+          const childFields = {
             firstName: child.firstName,
             lastName: child.lastName,
             postName: child.postName ?? "",
+            gender: child.gender ?? "M",
             classLevel: child.classLevel ?? "FIRST",
-            parentPhone: child.parentPhone,
+            parentPhone: parentPhone,
+            parentFirstName: child.parentFirstName ?? "",
+            parentLastName: child.parentLastName ?? "",
             address: child.address,
             birthDate: child.birthDate,
             notes: child.notes,
             photoUrl: child.photoUrl,
+            parentId: parentId,
           };
 
-          if (existingChildIds.has(child.id)) {
-            childUpdates.push({ id: child.id, data: childData });
-          } else {
-            childCreates.push({
+          await tx.child.upsert({
+            where: { id: child.id },
+            update: childFields,
+            create: {
               id: child.id,
-              ...childData,
-            });
-          }
-        }
-
-        if (childCreates.length > 0) {
-          await tx.child.createMany({
-            data: childCreates,
+              ...childFields,
+            },
           });
-        }
-
-        if (childUpdates.length > 0) {
-          await Promise.all(
-            childUpdates.map((up) =>
-              tx.child.update({
-                where: { id: up.id },
-                data: up.data,
-              })
-            )
-          );
         }
       }
 
@@ -497,7 +563,12 @@ export async function POST(req: Request) {
         : knownChildIds.length > 0
           ? { id: { notIn: knownChildIds } }
           : undefined;
-      const [serverChildren, serverAttendances] = await Promise.all([
+
+      const parentWhere = hasValidLastSyncDate
+        ? { updatedAt: { gt: lastSyncDate } }
+        : undefined;
+
+      const [serverChildren, serverParents, serverAttendances] = await Promise.all([
         prisma.child.findMany({
           where: childWhere,
           orderBy: [
@@ -505,6 +576,9 @@ export async function POST(req: Request) {
             { postName: "asc" },
             { firstName: "asc" },
           ],
+        }),
+        prisma.parent.findMany({
+          where: parentWhere,
         }),
         prisma.attendance.findMany({
           where: hasValidLastSyncDate
@@ -544,6 +618,11 @@ export async function POST(req: Request) {
           ...child,
           createdAt: child.createdAt.toISOString(),
           updatedAt: child.updatedAt.toISOString(),
+        })),
+        parents: serverParents.map((parent) => ({
+          ...parent,
+          createdAt: parent.createdAt.toISOString(),
+          updatedAt: parent.updatedAt.toISOString(),
         })),
         attendances: deltaAttendances.map((attendance) => ({
           ...attendance,

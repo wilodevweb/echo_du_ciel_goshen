@@ -2,7 +2,7 @@ import React, { FormEvent } from "react";
 import Image from "next/image";
 import { Calendar, Crown, MapPin, NotebookText, Phone, User } from "lucide-react";
 import type { AttendanceStatus, Child } from "@/lib/db";
-import { CLASS_LEVELS, getClassLabel, getClassNumber } from "@/lib/db";
+import db, { CLASS_LEVELS, getClassLabel, getClassNumber } from "@/lib/db";
 import { getHistoryDotClass } from "./utils";
 import { Card, CardContent } from "@/components/ui/Card";
 import type { NewChildForm } from "./types";
@@ -309,8 +309,24 @@ export function PointageCard(props: PointageCardProps) {
 
   // mode === "add"
   const { value, isAdding, onChange, onSubmit } = props;
-  const update = (field: keyof NewChildForm, fieldValue: string) => {
-    onChange({ ...value, [field]: fieldValue });
+  const update = async (field: keyof NewChildForm, fieldValue: string) => {
+    let nextValue = { ...value, [field]: fieldValue };
+    
+    if (field === 'parentPhone') {
+      const phone = fieldValue.trim();
+      if (phone.length >= 4) {
+        const match = await db.children.where('parentPhone').equals(phone).first();
+        if (match) {
+          nextValue = {
+            ...nextValue,
+            parentFirstName: nextValue.parentFirstName || match.parentFirstName || '',
+            parentLastName: nextValue.parentLastName || match.parentLastName || '',
+            address: nextValue.address || match.address || '',
+          };
+        }
+      }
+    }
+    onChange(nextValue);
   };
 
   const canAdd = Boolean(
@@ -318,6 +334,8 @@ export function PointageCard(props: PointageCardProps) {
       value.lastName.trim() &&
       value.postName.trim() &&
       value.parentPhone.trim() &&
+      value.parentFirstName.trim() &&
+      value.parentLastName.trim() &&
       value.address.trim()
   );
 
@@ -386,12 +404,44 @@ export function PointageCard(props: PointageCardProps) {
         <>
           <div className="mb-5 space-y-3.5 rounded-[22px] bg-white/5 p-4 text-left">
             <div className="flex items-center gap-3">
+              <User className="h-5 w-5 shrink-0 text-white/60" />
+              <select
+                value={value.gender}
+                onChange={(event) => update("gender", event.target.value as 'M' | 'F')}
+                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/30 border-none"
+                style={{ colorScheme: "dark" }}
+              >
+                <option value="M" className="text-black">Garçon (M)</option>
+                <option value="F" className="text-black">Fille (F)</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-3">
               <Phone className="h-5 w-5 shrink-0 text-white/60" />
               <input
                 required
                 value={value.parentPhone}
                 onChange={(event) => update("parentPhone", event.target.value)}
                 placeholder="Téléphone parent"
+                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/30"
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <User className="h-5 w-5 shrink-0 text-white/60" />
+              <input
+                required
+                value={value.parentLastName}
+                onChange={(event) => update("parentLastName", event.target.value)}
+                placeholder="Nom du parent"
+                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/30"
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <User className="h-5 w-5 shrink-0 text-white/60" />
+              <input
+                required
+                value={value.parentFirstName}
+                onChange={(event) => update("parentFirstName", event.target.value)}
+                placeholder="Prénom du parent"
                 className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/30"
               />
             </div>

@@ -39,7 +39,10 @@ export default function AddChildPage() {
     firstName: '',
     lastName: '',
     postName: '',
+    gender: 'M' as 'M' | 'F',
     parentPhone: '',
+    parentFirstName: '',
+    parentLastName: '',
     address: '',
     classLevel: 'FIRST' as ClassLevel,
     birthDate: '',
@@ -48,8 +51,24 @@ export default function AddChildPage() {
   const [photoUrl, setPhotoUrl] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleChange = async (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+
+    if (name === 'parentPhone') {
+      const phone = value.trim();
+      if (phone.length >= 4) {
+        const match = await db.children.where('parentPhone').equals(phone).first();
+        if (match) {
+          setFormData(prev => ({
+            ...prev,
+            parentFirstName: prev.parentFirstName || match.parentFirstName || '',
+            parentLastName: prev.parentLastName || match.parentLastName || '',
+            address: prev.address || match.address || '',
+          }));
+        }
+      }
+    }
   };
 
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,6 +89,15 @@ export default function AddChildPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+
+    if (formData.birthDate) {
+      const today = new Date().toISOString().split('T')[0];
+      if (formData.birthDate > today) {
+        alert("La date de naissance ne peut pas être dans le futur.");
+        setIsSubmitting(false);
+        return;
+      }
+    }
     
     try {
       const childId = generateId();
@@ -78,10 +106,13 @@ export default function AddChildPage() {
         firstName: formData.firstName,
         lastName: formData.lastName,
         postName: formData.postName,
+        gender: formData.gender,
         classLevel: formData.classLevel,
         parentPhone: formData.parentPhone,
+        parentFirstName: formData.parentFirstName,
+        parentLastName: formData.parentLastName,
         address: formData.address,
-        birthDate: formData.birthDate,
+        birthDate: formData.birthDate || undefined,
         notes: formData.notes,
         photoUrl: photoUrl,
         createdAt: new Date().toISOString(),
@@ -194,6 +225,36 @@ export default function AddChildPage() {
                 </select>
               </div>
 
+              <div className="w-full flex flex-col mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Sexe
+                </label>
+                <div className="flex gap-6 mt-1">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-700">
+                    <input
+                      type="radio"
+                      name="gender"
+                      value="M"
+                      checked={formData.gender === "M"}
+                      onChange={handleChange}
+                      className="h-4 w-4 border-gray-300 text-[#00b22d] focus:ring-[#00b22d]"
+                    />
+                    Masculin (M)
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-700">
+                    <input
+                      type="radio"
+                      name="gender"
+                      value="F"
+                      checked={formData.gender === "F"}
+                      onChange={handleChange}
+                      className="h-4 w-4 border-gray-300 text-[#00b22d] focus:ring-[#00b22d]"
+                    />
+                    Féminin (F)
+                  </label>
+                </div>
+              </div>
+
               <Input 
                 label="Téléphone Parent" 
                 name="parentPhone" 
@@ -204,6 +265,25 @@ export default function AddChildPage() {
                 placeholder="Ex: 081 234 5678"
                 helperText="Pour contacter rapidement via l'application"
               />
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-4">
+                <Input
+                  label="Nom du Parent"
+                  name="parentLastName"
+                  required
+                  value={formData.parentLastName}
+                  onChange={handleChange}
+                  placeholder="Ex: Mbuyi"
+                />
+                <Input
+                  label="Prénom du Parent"
+                  name="parentFirstName"
+                  required
+                  value={formData.parentFirstName}
+                  onChange={handleChange}
+                  placeholder="Ex: Joseph"
+                />
+              </div>
 
               <Input 
                 label="Adresse Physique" 

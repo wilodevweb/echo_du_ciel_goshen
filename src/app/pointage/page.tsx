@@ -165,14 +165,25 @@ export default function PointagePage() {
 
     if (!firstName || !lastName || !postName) return;
 
+    if (draft.birthDate) {
+      const today = new Date().toISOString().split('T')[0];
+      if (draft.birthDate > today) {
+        alert("La date de naissance ne peut pas être dans le futur.");
+        return;
+      }
+    }
+
     const nextChild = {
       firstName,
       lastName,
       postName,
+      gender: draft.gender,
       classLevel: draft.classLevel,
       parentPhone: draft.parentPhone.trim(),
+      parentFirstName: draft.parentFirstName.trim(),
+      parentLastName: draft.parentLastName.trim(),
       address: draft.address.trim(),
-      birthDate: draft.birthDate,
+      birthDate: draft.birthDate || undefined,
       notes: draft.notes.trim(),
     };
     const changedFields = (Object.keys(nextChild) as Array<keyof typeof nextChild>).filter((field) => {
@@ -188,6 +199,15 @@ export default function PointagePage() {
 
   const addChild = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (newChild.birthDate) {
+      const today = new Date().toISOString().split('T')[0];
+      if (newChild.birthDate > today) {
+        alert("La date de naissance ne peut pas être dans le futur.");
+        return;
+      }
+    }
+
     setIsAdding(true);
 
     try {
@@ -197,10 +217,13 @@ export default function PointagePage() {
         firstName: newChild.firstName.trim(),
         lastName: newChild.lastName.trim(),
         postName: newChild.postName.trim(),
+        gender: newChild.gender,
         classLevel: newChild.classLevel,
         parentPhone: newChild.parentPhone.trim(),
+        parentFirstName: newChild.parentFirstName.trim(),
+        parentLastName: newChild.parentLastName.trim(),
         address: newChild.address.trim(),
-        birthDate: newChild.birthDate,
+        birthDate: newChild.birthDate || undefined,
         notes: newChild.notes.trim(),
         createdAt: new Date().toISOString(),
       });

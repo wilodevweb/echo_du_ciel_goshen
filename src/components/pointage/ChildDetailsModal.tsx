@@ -6,6 +6,7 @@ import {
   NotebookText,
   Phone,
   X,
+  User,
 } from "lucide-react";
 import type { AttendanceStatus, Child, ClassLevel } from "@/lib/db";
 import db, { CLASS_LEVELS, getClassLabel, getClassNumber, markEntityForSync } from "@/lib/db";
@@ -178,6 +179,73 @@ function EditableClassRow({
   );
 }
 
+function EditableGenderRow({
+  icon,
+  title,
+  value,
+  isEditing,
+  onEdit,
+  onChange,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  value: 'M' | 'F';
+  isEditing: boolean;
+  onEdit: () => void;
+  onChange: (value: 'M' | 'F') => void;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onEdit}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") onEdit();
+      }}
+      className="flex items-start gap-4 text-left"
+    >
+      <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/8 text-white/85">
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-lg font-semibold leading-tight text-white">{title}</p>
+        {isEditing ? (
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onChange('M');
+              }}
+              className={`h-9 rounded-full px-2 text-sm font-semibold ${
+                value === 'M' ? "bg-white text-[#1b1b1b]" : "bg-white/8 text-white/65"
+              }`}
+            >
+              Garçon (M)
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onChange('F');
+              }}
+              className={`h-9 rounded-full px-2 text-sm font-semibold ${
+                value === 'F' ? "bg-white text-[#1b1b1b]" : "bg-white/8 text-white/65"
+              }`}
+            >
+              Fille (F)
+            </button>
+          </div>
+        ) : (
+          <p className="mt-1 text-base leading-snug text-white/55">
+            {value === 'M' ? 'Garçon (M)' : 'Fille (F)'}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ChildDetailsModal({
   child,
   status = null,
@@ -193,8 +261,11 @@ export function ChildDetailsModal({
     firstName: child.firstName,
     lastName: child.lastName,
     postName: child.postName,
+    gender: child.gender ?? "M",
     classLevel: child.classLevel,
     parentPhone: child.parentPhone,
+    parentFirstName: child.parentFirstName ?? "",
+    parentLastName: child.parentLastName ?? "",
     address: child.address,
     birthDate: child.birthDate ?? "",
     notes: child.notes ?? "",
@@ -216,6 +287,14 @@ export function ChildDetailsModal({
       if (!confirmDelete) return;
     }
 
+    if (draft.birthDate) {
+      const today = new Date().toISOString().split('T')[0];
+      if (draft.birthDate > today) {
+        alert("La date de naissance ne peut pas être dans le futur.");
+        return;
+      }
+    }
+
     setIsSaving(true);
     try {
       if (onSave) {
@@ -229,8 +308,11 @@ export function ChildDetailsModal({
             firstName: draft.firstName.trim(),
             lastName: draft.lastName.trim(),
             postName: draft.postName.trim(),
+            gender: draft.gender,
             classLevel: draft.classLevel,
             parentPhone: draft.parentPhone.trim(),
+            parentFirstName: draft.parentFirstName.trim(),
+            parentLastName: draft.parentLastName.trim(),
             address: draft.address.trim(),
             birthDate: draft.birthDate || undefined,
             notes: draft.notes.trim(),
@@ -317,6 +399,14 @@ export function ChildDetailsModal({
             onEdit={() => setActiveField("classLevel")}
             onChange={(value) => updateDraft("classLevel", value)}
           />
+          <EditableGenderRow
+            icon={<User className="h-6 w-6" />}
+            title="Sexe"
+            value={draft.gender}
+            isEditing={activeField === "gender"}
+            onEdit={() => setActiveField("gender")}
+            onChange={(value) => updateDraft("gender", value)}
+          />
           <EditableDetailRow
             icon={<Calendar className="h-6 w-6" />}
             title="Naissance"
@@ -336,6 +426,24 @@ export function ChildDetailsModal({
             isEditing={activeField === "parentPhone"}
             onEdit={() => setActiveField("parentPhone")}
             onChange={(value) => updateDraft("parentPhone", value)}
+          />
+          <EditableDetailRow
+            icon={<User className="h-6 w-6" />}
+            title="Nom du parent"
+            value={draft.parentLastName}
+            placeholder="Non renseigné"
+            isEditing={activeField === "parentLastName"}
+            onEdit={() => setActiveField("parentLastName")}
+            onChange={(value) => updateDraft("parentLastName", value)}
+          />
+          <EditableDetailRow
+            icon={<User className="h-6 w-6" />}
+            title="Prénom du parent"
+            value={draft.parentFirstName}
+            placeholder="Non renseigné"
+            isEditing={activeField === "parentFirstName"}
+            onEdit={() => setActiveField("parentFirstName")}
+            onChange={(value) => updateDraft("parentFirstName", value)}
           />
           <EditableDetailRow
             icon={<MapPin className="h-6 w-6" />}

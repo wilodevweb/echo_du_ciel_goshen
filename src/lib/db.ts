@@ -9,15 +9,30 @@ export interface Child {
   firstName: string;
   lastName: string;
   postName: string;
+  gender: 'M' | 'F';
   classLevel: ClassLevel;
   photoUrl?: string;
   parentPhone: string;
+  parentFirstName?: string;
+  parentLastName?: string;
   address: string;
   birthDate?: string;
   notes?: string;
   createdAt: string;
   updatedAt?: string;
+  parentId?: string;
 }
+
+export interface Parent {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  address: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 
 export interface Attendance {
   id: string; // Changed to string
@@ -34,7 +49,7 @@ export interface SyncState {
 }
 
 export type SyncEntity = 'child' | 'attendance';
-type ChildSyncField = 'firstName' | 'lastName' | 'postName' | 'classLevel' | 'parentPhone' | 'address' | 'birthDate' | 'notes' | 'photoUrl';
+type ChildSyncField = 'firstName' | 'lastName' | 'postName' | 'classLevel' | 'parentPhone' | 'address' | 'birthDate' | 'notes' | 'photoUrl' | 'gender' | 'parentFirstName' | 'parentLastName' | 'parentId';
 
 export interface PendingSyncItem {
   key: string;
@@ -47,8 +62,10 @@ export interface PendingSyncItem {
 interface SyncDeltaResponse {
   success: boolean;
   children?: Child[];
+  parents?: Parent[];
   attendances?: Attendance[];
   c?: CompactServerChild[];
+  p?: CompactServerParent[];
   a?: CompactServerAttendance[];
   serverSyncedAt?: string;
   error?: string;
@@ -69,6 +86,19 @@ type CompactServerChild = [
   string,
   string,
   string,
+  string,
+  string,
+  string,
+  string,
+];
+type CompactServerParent = [
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
+  string,
 ];
 type CompactServerAttendance = [string, string, string, string, string];
 
@@ -82,6 +112,10 @@ const CHILD_SYNC_FIELDS: ChildSyncField[] = [
   'birthDate',
   'notes',
   'photoUrl',
+  'gender',
+  'parentFirstName',
+  'parentLastName',
+  'parentId',
 ];
 const CHILD_FIELD_CODES: Record<ChildSyncField, string> = {
   firstName: 'f',
@@ -93,6 +127,10 @@ const CHILD_FIELD_CODES: Record<ChildSyncField, string> = {
   birthDate: 'b',
   notes: 'n',
   photoUrl: 'h',
+  gender: 'g',
+  parentFirstName: 'u',
+  parentLastName: 'v',
+  parentId: 'p',
 };
 
 // Générateur basique d'ID unique (fallback simple pour mode hors-ligne)
@@ -178,6 +216,7 @@ function decodeDate(value?: string | null) {
 
 const db = new Dexie('SundaySchoolDB') as Dexie & {
   children: EntityTable<Child, 'id'>;
+  parents: EntityTable<Parent, 'id'>;
   attendances: EntityTable<Attendance, 'id'>;
   syncState: EntityTable<SyncState, 'key'>;
   pendingSync: EntityTable<PendingSyncItem, 'key'>;
@@ -230,6 +269,22 @@ db.version(6)
     attendances: 'id, childId, date, status, [childId+date]',
     syncState: 'key',
     pendingSync: 'key, entity, id, updatedAt',
+  });
+
+db.version(7)
+  .stores({
+    children: 'id, firstName, lastName, postName, parentPhone, classLevel, gender, parentId',
+    parents: 'id, phone, firstName, lastName',
+    attendances: 'id, childId, date, status, [childId+date]',
+    syncState: 'key',
+    pendingSync: 'key, entity, id, updatedAt',
+  })
+  .upgrade(async (transaction) => {
+    await transaction.table('children').toCollection().modify((child) => {
+      child.gender = child.gender ?? 'M';
+      child.parentFirstName = child.parentFirstName ?? '';
+      child.parentLastName = child.parentLastName ?? '';
+    });
   });
 
 const PENDING_CHANGES_KEY = 'pendingChanges';
@@ -291,8 +346,12 @@ function normalizeServerChild(child: Child): Child {
     postName: child.postName ?? '',
     classLevel: normalizeClassLevel(child.classLevel),
     parentPhone: child.parentPhone ?? '',
+    parentFirstName: child.parentFirstName ?? '',
+    parentLastName: child.parentLastName ?? '',
     address: child.address ?? '',
     createdAt: child.createdAt,
+    gender: child.gender ?? 'M',
+    parentId: child.parentId,
   };
 }
 
@@ -310,7 +369,27 @@ function decodeCompactServerChild(child: CompactServerChild): Child {
     photoUrl: child[9] || undefined,
     createdAt: child[10],
     updatedAt: child[11],
+    gender: (child[12] as 'M' | 'F') || 'M',
+    parentFirstName: child[13] || '',
+    parentLastName: child[14] || '',
+    parentId: child[15] || undefined,
   });
+}
+
+function normalizeServerParent(parent: Parent): Parent {
+  return parent;
+}
+
+function decodeCompactServerParent(parent: CompactServerParent): Parent {
+  return {
+    id: parent[0],
+    firstName: parent[1],
+    lastName: parent[2],
+    phone: parent[3],
+    address: parent[4],
+    createdAt: parent[5],
+    updatedAt: parent[6] || undefined,
+  };
 }
 
 function normalizeServerAttendance(attendance: Attendance): Attendance {
@@ -384,13 +463,20 @@ async function applyServerDelta(data: SyncDeltaResponse) {
   const deltaChildren = data.c
     ? data.c.map(decodeCompactServerChild)
     : (data.children ?? []).map(normalizeServerChild);
+  const deltaParents = data.p
+    ? data.p.map(decodeCompactServerParent)
+    : (data.parents ?? []).map(normalizeServerParent);
   const deltaAttendances = data.a
     ? data.a.map(decodeCompactServerAttendance)
     : (data.attendances ?? []).map(normalizeServerAttendance);
 
-  await db.transaction('rw', db.children, db.attendances, async () => {
+  await db.transaction('rw', db.children, db.parents, db.attendances, async () => {
     if (deltaChildren.length > 0) {
       await db.children.bulkPut(deltaChildren);
+    }
+
+    if (deltaParents.length > 0) {
+      await db.parents.bulkPut(deltaParents);
     }
 
     if (deltaAttendances.length > 0) {
@@ -477,7 +563,7 @@ export async function syncWithServer() {
 
       const pullResult = await applyServerDelta(data);
 
-      await db.transaction('rw', db.syncState, db.pendingSync, db.children, async () => {
+      await db.transaction('rw', db.syncState, db.pendingSync, db.children, db.parents, async () => {
         await setStateValue(PENDING_CHANGES_KEY, '0');
         await setStateValue(LAST_SYNC_KEY, data.serverSyncedAt ?? new Date().toISOString());
         await db.pendingSync.bulkDelete(pendingItems.map((item) => item.key));

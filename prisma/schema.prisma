@@ -37,20 +37,39 @@ model ActivityLog {
   @@index([createdAt])
 }
 
+// Parent
+model Parent {
+  id              String   @id @default(cuid())
+  firstName       String   // Prénom du parent
+  lastName        String   // Nom de famille du parent
+  phone           String   @unique // Téléphone du parent (identifiant unique)
+  address         String   // Adresse du parent
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  children        Child[]
+}
+
 // Enfant
 model Child {
-  id          String   @id @default(cuid())
-  firstName   String
-  lastName    String
-  postName    String   @default("")
-  classLevel  String   @default("FIRST")
-  parentPhone String
-  address     String
-  birthDate   String?
-  notes       String?
-  photoUrl    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  firstName       String
+  lastName        String
+  postName        String   @default("")
+  gender          String   @default("M") // "M" or "F"
+  classLevel      String   @default("FIRST")
+  parentPhone     String
+  parentFirstName String   @default("")
+  parentLastName  String   @default("")
+  address         String
+  birthDate       String?
+  notes           String?
+  photoUrl        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  parentId        String?
+  parent          Parent?  @relation(fields: [parentId], references: [id], onDelete: SetNull)
 
   attendances Attendance[]
 
