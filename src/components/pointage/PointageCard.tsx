@@ -82,18 +82,15 @@ export type PointageCardProps =
   | {
       mode: "profile";
       child: Child;
-      status?: AttendanceStatus | null;
       onNameClick: () => void;
       onPhotoChange?: (file: File) => Promise<void>;
-      onSetStatus?: (status: AttendanceStatus) => void;
     }
   | {
       mode: "add";
       value: NewChildForm;
       isAdding: boolean;
-      showAttendance?: boolean;
       onChange: (value: NewChildForm) => void;
-      onSubmit: (status: AttendanceStatus) => void;
+      onSubmit: () => void;
     };
 
 export function PointageCard(props: PointageCardProps) {
@@ -205,7 +202,7 @@ export function PointageCard(props: PointageCardProps) {
       />
     );
   }  if (props.mode === "profile") {
-    const { child, status, onNameClick, onPhotoChange, onSetStatus } = props;
+    const { child, onNameClick, onPhotoChange } = props;
     const parentName = (child.parentFirstName || child.parentLastName)
       ? `${child.parentFirstName} ${child.parentLastName}`.trim()
       : "le parent";
@@ -283,33 +280,19 @@ export function PointageCard(props: PointageCardProps) {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3 rounded-[22px] bg-white/7 p-2">
-              <StatusButton
-                label="Malade"
-                colorClass="bg-yellow-400 text-[#1b1b1b]"
-                active={status === "SICK"}
-                onClick={() => onSetStatus ? onSetStatus("SICK") : alert("Le pointage se fait depuis l'écran de pointage.")}
-              />
-              <StatusButton
-                label="Absent"
-                colorClass="bg-red-500 text-white"
-                active={status === "ABSENT"}
-                onClick={() => onSetStatus ? onSetStatus("ABSENT") : alert("Le pointage se fait depuis l'écran de pointage.")}
-              />
-              <a
-                href={`tel:${child.parentPhone}`}
-                onClick={(e) => {
-                  if (!child.parentPhone) e.preventDefault();
-                }}
-                className={`flex h-12 items-center justify-center rounded-2xl px-3 text-sm font-black shadow-sm transition-all col-span-2 ${
-                  child.parentPhone 
-                    ? "bg-[#00b22d] text-white hover:bg-[#008f24] active:scale-[0.98]" 
-                    : "bg-gray-500 text-white opacity-40 cursor-not-allowed"
-                }`}
-              >
-                Appeler {parentName}
-              </a>
-            </div>
+            <a
+              href={`tel:${child.parentPhone}`}
+              onClick={(e) => {
+                if (!child.parentPhone) e.preventDefault();
+              }}
+              className={`flex h-12 w-full items-center justify-center rounded-2xl px-3 text-sm font-black shadow-sm transition-all ${
+                child.parentPhone 
+                  ? "bg-[#00b22d] text-white hover:bg-[#008f24] active:scale-[0.98]" 
+                  : "bg-gray-500 text-white opacity-40 cursor-not-allowed"
+              }`}
+            >
+              Appeler {parentName}
+            </a>
           </>
         }
       />
@@ -317,7 +300,7 @@ export function PointageCard(props: PointageCardProps) {
   }
 
   // mode === "add"
-  const { value, isAdding, showAttendance, onChange, onSubmit } = props;
+  const { value, isAdding, onChange, onSubmit } = props;
   const update = async (field: keyof NewChildForm, fieldValue: string) => {
     let nextValue = { ...value, [field]: fieldValue };
     
@@ -356,10 +339,10 @@ export function PointageCard(props: PointageCardProps) {
                 key={level.value}
                 type="button"
                 onClick={() => update("classLevel", level.value)}
-                className={`rounded-full px-2.5 py-1 text-xs font-bold transition-all ${
+                className={`rounded-full px-3 py-1.5 text-xs font-black transition-all ${
                   value.classLevel === level.value
-                    ? "bg-white text-[#1b1b1b]"
-                    : "bg-white/8 text-white/60 hover:bg-white/15"
+                    ? "bg-[#00b22d] text-white shadow-sm scale-105"
+                    : "bg-white/15 border border-white/10 text-white hover:bg-white/25"
                 }`}
               >
                 {getClassLabel(level.value)}
@@ -369,10 +352,12 @@ export function PointageCard(props: PointageCardProps) {
         </div>
       }
       avatar={
-        <div className="relative flex h-40 w-40 items-center justify-center rounded-full bg-white/8 text-white/55">
-          <User className="h-16 w-16 text-white/40" />
-          <div className="absolute bottom-1 right-1 flex h-11 w-11 items-center justify-center rounded-full bg-[#00b22d] text-xl font-black text-white shadow-lg ring-4 ring-[#1b1b1b]">
-            +
+        <div className="relative flex h-44 w-44 items-center justify-center rounded-full bg-[#d7efe8]/90">
+          <div className="h-36 w-36 overflow-hidden rounded-full bg-white/35 flex items-center justify-center">
+            <User className="h-14 w-14 text-[#1b1b1b]/45" />
+          </div>
+          <div className="absolute bottom-2 right-2 flex h-12 w-12 items-center justify-center rounded-full bg-[#342ee8] text-2xl font-black text-white shadow-lg ring-4 ring-[#1b1b1b]">
+            {getClassNumber(value.classLevel)}
           </div>
         </div>
       }
@@ -403,34 +388,14 @@ export function PointageCard(props: PointageCardProps) {
         </div>
       }
       body={
-        <div className="grid grid-cols-2 gap-3 rounded-[22px] bg-white/7 p-2">
-          {showAttendance !== false && (
-            <>
-              <StatusButton
-                label="Malade"
-                colorClass="bg-yellow-400 text-[#1b1b1b]"
-                active={false}
-                disabled={!canAdd || isAdding}
-                onClick={() => onSubmit("SICK")}
-              />
-              <StatusButton
-                label="Absent"
-                colorClass="bg-red-500 text-white"
-                active={false}
-                disabled={!canAdd || isAdding}
-                onClick={() => onSubmit("ABSENT")}
-              />
-            </>
-          )}
-          <button
-            type="button"
-            disabled={!canAdd || isAdding}
-            onClick={() => onSubmit("PRESENT")}
-            className="flex h-12 items-center justify-center rounded-2xl bg-[#00b22d] px-3 text-sm font-black text-white shadow-sm transition-all hover:bg-[#008f24] active:scale-[0.98] col-span-2 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/40"
-          >
-            {isAdding ? "Enregistrement..." : "Enregistrer"}
-          </button>
-        </div>
+        <button
+          type="button"
+          disabled={!canAdd || isAdding}
+          onClick={onSubmit}
+          className="flex h-12 w-full items-center justify-center rounded-2xl bg-[#00b22d] px-3 text-sm font-black text-white shadow-sm transition-all hover:bg-[#008f24] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/40"
+        >
+          {isAdding ? "Enregistrement..." : "Enregistrer"}
+        </button>
       }
     />
   );

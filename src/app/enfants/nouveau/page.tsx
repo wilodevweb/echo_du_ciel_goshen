@@ -6,14 +6,14 @@ import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { PointageCard } from '@/components/pointage/PointageCard';
 import { NewChildForm, emptyNewChild } from '@/components/pointage/types';
-import db, { generateId, markEntityForSync, type AttendanceStatus } from '@/lib/db';
+import db, { generateId, markEntityForSync } from '@/lib/db';
 
 export default function AddChildPage() {
   const router = useRouter();
   const [newChild, setNewChild] = useState<NewChildForm>(emptyNewChild);
   const [isAdding, setIsAdding] = useState(false);
 
-  const handleAddChild = async (status: AttendanceStatus) => {
+  const handleAddChild = async () => {
     setIsAdding(true);
 
     try {
@@ -59,7 +59,6 @@ export default function AddChildPage() {
             mode="add"
             value={newChild}
             isAdding={isAdding}
-            showAttendance={false}
             onChange={setNewChild}
             onSubmit={handleAddChild}
           />

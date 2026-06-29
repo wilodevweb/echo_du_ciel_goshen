@@ -197,7 +197,7 @@ export default function PointagePage() {
     setDetailsChild(null);
   };
 
-  const addChild = async (status: AttendanceStatus) => {
+  const addChild = async () => {
     if (newChild.birthDate) {
       const today = new Date().toISOString().split('T')[0];
       if (newChild.birthDate > today) {
@@ -227,10 +227,10 @@ export default function PointagePage() {
       });
       await markEntityForSync('child', childId);
 
-      // Enregistrer le statut de pointage pour ce jour
+      // Enregistrer le statut de pointage pour ce jour (Présent par défaut)
       const payload = {
-        present: status === "PRESENT",
-        status,
+        present: true,
+        status: "PRESENT" as AttendanceStatus,
         markedAt: new Date().toISOString(),
       };
       const attendanceId = generateId();
