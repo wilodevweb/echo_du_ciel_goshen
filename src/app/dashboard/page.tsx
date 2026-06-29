@@ -10,12 +10,8 @@ import {
   Upload, 
   UserPlus, 
   Trash2, 
-  ShieldAlert, 
   Unlock, 
   Lock, 
-  FileText, 
-  Video, 
-  Image as ImageIcon,
   ArrowLeft,
   Loader2,
   LogOut,
@@ -99,7 +95,7 @@ export default function DashboardPage() {
     }
   }, [activeTab, status, session]);
 
-  const fetchUsers = async () => {
+  async function fetchUsers() {
     setLoadingUsers(true);
     try {
       const res = await fetch("/api/admin/users");
@@ -112,9 +108,9 @@ export default function DashboardPage() {
     } finally {
       setLoadingUsers(false);
     }
-  };
+  }
 
-  const fetchLogs = async () => {
+  async function fetchLogs() {
     setLoadingLogs(true);
     try {
       const res = await fetch("/api/admin/logs");
@@ -127,7 +123,7 @@ export default function DashboardPage() {
     } finally {
       setLoadingLogs(false);
     }
-  };
+  }
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
