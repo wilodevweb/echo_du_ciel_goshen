@@ -7,8 +7,8 @@ export default withAuth({
 });
 
 export const config = {
-  // Protéger tout le site sauf la page de connexion, les routes d'auth next-auth, les fichiers statiques/uploads, et les fichiers PWA (sw.js, manifest, icônes)
+  // Protéger tout le site sauf la page de connexion, les routes d'auth next-auth, les fichiers statiques/uploads, sw.js, manifest et images
   matcher: [
-    "/((?!api/auth|login|_next/static|_next/image|favicon.ico|uploads|sw\\.js|manifest\\.webmanifest|.*\\.png$).*)",
+    "/((?!api/auth|login|_next/static|_next/image|favicon.ico|uploads|sw.js|manifest.webmanifest|.*\\.png$).*)",
   ],
 };

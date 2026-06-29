@@ -2,8 +2,6 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../auth/[...nextauth]/route";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -25,17 +23,9 @@ export async function POST(req: Request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Simplifier et sécuriser le nom du fichier
-    const cleanFileName = Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-    const uploadDir = path.join(process.cwd(), "public", "uploads");
-    
-    // Créer le dossier s'il n'existe pas
-    await mkdir(uploadDir, { recursive: true });
-
-    const filePath = path.join(uploadDir, cleanFileName);
-    await writeFile(filePath, buffer);
-
-    const fileUrl = `/uploads/${cleanFileName}`;
+    // Convertir en Base64 Data URL pour stockage en BDD (évite d'écrire sur le disque en prod/serverless)
+    const mimeType = file.type || "application/octet-stream";
+    const fileUrl = `data:${mimeType};base64,${buffer.toString("base64")}`;
 
     // Thumbnail par défaut en fonction du type
     let thumbnail = "bg-gray-100";
