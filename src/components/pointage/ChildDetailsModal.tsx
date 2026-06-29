@@ -232,7 +232,7 @@ export function ChildDetailsModal({
             classLevel: draft.classLevel,
             parentPhone: draft.parentPhone.trim(),
             address: draft.address.trim(),
-            birthDate: draft.birthDate || null,
+            birthDate: draft.birthDate || undefined,
             notes: draft.notes.trim(),
             updatedAt: new Date().toISOString(),
           };

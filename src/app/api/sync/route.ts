@@ -280,7 +280,7 @@ export async function POST(req: Request) {
                 { updatedAt: { gt: lastSyncDate } },
               ],
             }
-          : undefined
+          : { updatedAt: { gt: lastSyncDate } }
         : knownChildIds.length > 0
           ? { id: { notIn: knownChildIds } }
           : undefined;
@@ -493,7 +493,7 @@ export async function POST(req: Request) {
                 { updatedAt: { gt: lastSyncDate } },
               ],
             }
-          : undefined
+          : { updatedAt: { gt: lastSyncDate } }
         : knownChildIds.length > 0
           ? { id: { notIn: knownChildIds } }
           : undefined;
