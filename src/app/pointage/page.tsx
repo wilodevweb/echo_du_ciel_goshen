@@ -197,9 +197,7 @@ export default function PointagePage() {
     setDetailsChild(null);
   };
 
-  const addChild = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
+  const addChild = async (status: AttendanceStatus) => {
     if (newChild.birthDate) {
       const today = new Date().toISOString().split('T')[0];
       if (newChild.birthDate > today) {
@@ -228,8 +226,27 @@ export default function PointagePage() {
         createdAt: new Date().toISOString(),
       });
       await markEntityForSync('child', childId);
+
+      // Enregistrer le statut de pointage pour ce jour
+      const payload = {
+        present: status === "PRESENT",
+        status,
+        markedAt: new Date().toISOString(),
+      };
+      const attendanceId = generateId();
+      await db.attendances.add({
+        id: attendanceId,
+        childId,
+        date: selectedDate,
+        ...payload,
+      });
+      await markEntityForSync('attendance', attendanceId);
+
       setNewChild(emptyNewChild);
       setCurrentIndex(filteredChildren.length);
+    } catch (error) {
+      console.error("Erreur lors de l'enregistrement", error);
+      alert("Une erreur est survenue lors de l'enregistrement.");
     } finally {
       setIsAdding(false);
     }

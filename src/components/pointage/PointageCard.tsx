@@ -12,19 +12,24 @@ function StatusButton({
   colorClass,
   active,
   onClick,
+  disabled = false,
 }: {
   label: string;
   colorClass: string;
   active: boolean;
   onClick: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       aria-label={label}
       onClick={onClick}
+      disabled={disabled}
       className={`h-12 rounded-2xl px-3 text-sm font-black shadow-sm transition-all ${colorClass} ${
         active ? "scale-[1.02] opacity-100 ring-2 ring-white/80" : "opacity-55"
+      } ${
+        disabled ? "opacity-20 cursor-not-allowed scale-100 pointer-events-none" : ""
       }`}
     >
       {label}
@@ -77,15 +82,17 @@ export type PointageCardProps =
   | {
       mode: "profile";
       child: Child;
+      status?: AttendanceStatus | null;
       onNameClick: () => void;
       onPhotoChange?: (file: File) => Promise<void>;
+      onSetStatus?: (status: AttendanceStatus) => void;
     }
   | {
       mode: "add";
       value: NewChildForm;
       isAdding: boolean;
       onChange: (value: NewChildForm) => void;
-      onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+      onSubmit: (status: AttendanceStatus) => void;
     };
 
 export function PointageCard(props: PointageCardProps) {
@@ -196,10 +203,11 @@ export function PointageCard(props: PointageCardProps) {
         }
       />
     );
-  }
-
-  if (props.mode === "profile") {
-    const { child, onNameClick, onPhotoChange } = props;
+  }  if (props.mode === "profile") {
+    const { child, status, onNameClick, onPhotoChange, onSetStatus } = props;
+    const parentName = (child.parentFirstName || child.parentLastName)
+      ? `${child.parentFirstName} ${child.parentLastName}`.trim()
+      : "le parent";
 
     return (
       <BaseCardLayout
@@ -208,13 +216,9 @@ export function PointageCard(props: PointageCardProps) {
             <div className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-white/60">
               {getClassLabel(child.classLevel)}
             </div>
-            <a
-              href={`tel:${child.parentPhone}`}
-              className="flex items-center gap-1.5 rounded-full bg-[#00b22d]/20 px-3 py-1 text-xs font-bold text-[#00b22d] transition-colors hover:bg-[#00b22d] hover:text-white"
-            >
-              <Phone className="h-3.5 w-3.5" />
-              Appeler
-            </a>
+            <div className="text-[10px] uppercase font-black text-white/45 tracking-widest">
+              Profil de l&apos;enfant
+            </div>
           </div>
         }
         avatar={
@@ -269,39 +273,43 @@ export function PointageCard(props: PointageCardProps) {
           </button>
         }
         body={
-          <div className="space-y-4">
-            <div className="space-y-3.5 rounded-[22px] bg-white/5 p-4 text-left">
-              <div className="flex items-center gap-3">
-                <Phone className="h-5 w-5 shrink-0 text-[#00b22d]" />
-                <a href={`tel:${child.parentPhone}`} className="text-sm font-semibold text-white hover:underline">
-                  {child.parentPhone || "Téléphone non renseigné"}
-                </a>
+          <>
+            {(child.parentPhone || child.address || child.notes) && (
+              <div className="mb-4 space-y-1.5 rounded-[22px] bg-white/5 p-4 text-left text-xs text-white/80">
+                {child.parentPhone && <p className="truncate">📞 {child.parentPhone}</p>}
+                {child.address && <p className="truncate">📍 {child.address}</p>}
+                {child.notes && <p className="line-clamp-2">📝 {child.notes}</p>}
               </div>
-              <div className="flex items-center gap-3">
-                <MapPin className="h-5 w-5 shrink-0 text-white/60" />
-                <span className="text-sm text-white/90">{child.address || "Adresse non renseignée"}</span>
-              </div>
-              {child.birthDate && (
-                <div className="flex items-center gap-3">
-                  <Calendar className="h-5 w-5 shrink-0 text-white/60" />
-                  <span className="text-sm text-white/90">{child.birthDate}</span>
-                </div>
-              )}
-              {child.notes && (
-                <div className="flex items-start gap-3">
-                  <NotebookText className="h-5 w-5 shrink-0 text-white/60 mt-0.5" />
-                  <span className="text-sm text-white/80">{child.notes}</span>
-                </div>
-              )}
+            )}
+
+            <div className="grid grid-cols-2 gap-3 rounded-[22px] bg-white/7 p-2">
+              <StatusButton
+                label="Malade"
+                colorClass="bg-yellow-400 text-[#1b1b1b]"
+                active={status === "SICK"}
+                onClick={() => onSetStatus ? onSetStatus("SICK") : alert("Le pointage se fait depuis l'écran de pointage.")}
+              />
+              <StatusButton
+                label="Absent"
+                colorClass="bg-red-500 text-white"
+                active={status === "ABSENT"}
+                onClick={() => onSetStatus ? onSetStatus("ABSENT") : alert("Le pointage se fait depuis l'écran de pointage.")}
+              />
+              <a
+                href={`tel:${child.parentPhone}`}
+                onClick={(e) => {
+                  if (!child.parentPhone) e.preventDefault();
+                }}
+                className={`flex h-12 items-center justify-center rounded-2xl px-3 text-sm font-black shadow-sm transition-all col-span-2 ${
+                  child.parentPhone 
+                    ? "bg-[#00b22d] text-white hover:bg-[#008f24] active:scale-[0.98]" 
+                    : "bg-gray-500 text-white opacity-40 cursor-not-allowed"
+                }`}
+              >
+                Appeler {parentName}
+              </a>
             </div>
-            <button
-              type="button"
-              onClick={onNameClick}
-              className="h-12 w-full rounded-[22px] bg-white/10 text-sm font-bold text-white transition-all hover:bg-white/20"
-            >
-              Voir / Modifier la fiche
-            </button>
-          </div>
+          </>
         }
       />
     );
@@ -336,7 +344,6 @@ export function PointageCard(props: PointageCardProps) {
 
   return (
     <BaseCardLayout
-      onSubmit={onSubmit}
       header={
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs font-semibold uppercase tracking-[0.1em] text-white/50">
@@ -395,13 +402,30 @@ export function PointageCard(props: PointageCardProps) {
         </div>
       }
       body={
-        <button
-          type="submit"
-          disabled={!canAdd || isAdding}
-          className="h-14 w-full rounded-[22px] bg-[#00b22d] text-base font-bold text-white shadow-lg transition-all hover:bg-[#009e27] active:scale-[0.98] disabled:cursor-not-allowed disabled:scale-100 disabled:bg-white/10 disabled:text-white/40"
-        >
-          {isAdding ? "Ajout en cours..." : "+ Ajouter l'enfant"}
-        </button>
+        <div className="grid grid-cols-2 gap-3 rounded-[22px] bg-white/7 p-2">
+          <StatusButton
+            label="Malade"
+            colorClass="bg-yellow-400 text-[#1b1b1b]"
+            active={false}
+            disabled={!canAdd || isAdding}
+            onClick={() => onSubmit("SICK")}
+          />
+          <StatusButton
+            label="Absent"
+            colorClass="bg-red-500 text-white"
+            active={false}
+            disabled={!canAdd || isAdding}
+            onClick={() => onSubmit("ABSENT")}
+          />
+          <button
+            type="button"
+            disabled={!canAdd || isAdding}
+            onClick={() => onSubmit("PRESENT")}
+            className="flex h-12 items-center justify-center rounded-2xl bg-[#00b22d] px-3 text-sm font-black text-white shadow-sm transition-all hover:bg-[#008f24] active:scale-[0.98] col-span-2 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/40"
+          >
+            {isAdding ? "Enregistrement..." : "Enregistrer"}
+          </button>
+        </div>
       }
     />
   );
