@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import { MobileHeader } from '@/components/ui/MobileHeader';
 import { PointageCard } from '@/components/pointage/PointageCard';
 import { NewChildForm, emptyNewChild } from '@/components/pointage/types';
 import db, { generateId, markEntityForSync } from '@/lib/db';
@@ -45,13 +46,7 @@ export default function AddChildPage() {
 
   return (
     <main className="flex min-h-screen flex-col bg-gray-50 pb-10">
-      {/* Header Mobile */}
-      <header className="bg-[#00b22d] text-white p-4 sticky top-0 z-10 flex items-center shadow-md">
-        <Link href="/enfants" className="mr-4">
-          <ArrowLeft className="w-6 h-6" />
-        </Link>
-        <h1 className="text-xl font-bold">Nouveau Profil</h1>
-      </header>
+      <MobileHeader title="Nouveau Profil" backUrl="/enfants" />
 
       <div className="p-4 flex-1 flex items-center justify-center">
         <div className="w-full max-w-md">

@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Search, UserPlus, Phone, ArrowLeft, User } from 'lucide-react';
+import { Search, UserPlus, Phone, ArrowLeft, User, Trash2 } from 'lucide-react';
 import db, { getClassLabel, type Child } from '@/lib/db';
 import { Card, CardContent } from '@/components/ui/Card';
+import { MobileHeader } from '@/components/ui/MobileHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { PointageCard } from '@/components/pointage/PointageCard';
 import { ChildDetailsModal } from '@/components/pointage/ChildDetailsModal';
@@ -36,40 +37,30 @@ export default function ChildrenList() {
     }
   }, [router]);
 
-  // Récupérer les enfants depuis IndexedDB sans dépendance sur la barre de recherche
-  const allChildren = useLiveQuery(() => db.children.toArray());
-
-  // Filtrer et trier les enfants en mémoire
-  const children = useMemo(() => {
-    if (!allChildren) return undefined;
-
-    const sorted = [...allChildren].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    if (!deferredSearchQuery) return sorted;
-
-    const lowerQuery = deferredSearchQuery.toLowerCase();
-    return sorted.filter(child =>
-      child.firstName.toLowerCase().includes(lowerQuery) ||
+  // Récupérer et filtrer les enfants depuis IndexedDB
+  const children = useLiveQuery(async () => {
+    const allChildren = await db.children.reverse().sortBy('createdAt');
+    if (!searchQuery) return allChildren;
+    
+    const lowerQuery = searchQuery.toLowerCase();
+    return allChildren.filter(child => 
+      child.firstName.toLowerCase().includes(lowerQuery) || 
       child.lastName.toLowerCase().includes(lowerQuery) ||
-      child.parentPhone.includes(deferredSearchQuery)
+      child.parentPhone.includes(searchQuery)
     );
-  }, [allChildren, deferredSearchQuery]);
+  }, [searchQuery]);
+
+  const rightAction = (
+    <Link href="/enfants/nouveau" className="bg-white/20 p-2 rounded-full hover:bg-white/30 transition">
+      <UserPlus className="w-5 h-5" />
+    </Link>
+  );
 
   return (
     <main className="flex min-h-screen flex-col bg-gray-50">
-      {/* Header Mobile */}
-      <header className="bg-[#00b22d] text-white p-4 sticky top-0 z-10 shadow-md">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center">
-            <Link href="/" className="mr-4">
-              <ArrowLeft className="w-6 h-6" />
-            </Link>
-            <h1 className="text-xl font-bold">Annuaire</h1>
-          </div>
-          <Link href="/enfants/nouveau" className="bg-white/20 p-2 rounded-full hover:bg-white/30 transition">
-            <UserPlus className="w-5 h-5" />
-          </Link>
-        </div>
-        
+      <MobileHeader title="Annuaire" rightElement={rightAction} />
+      
+      <div className="bg-fiverr px-4 pb-4 sticky top-[60px] z-10 shadow-md">
         {/* Barre de recherche */}
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -83,7 +74,7 @@ export default function ChildrenList() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-      </header>
+      </div>
 
       <div className="p-4 flex-1 overflow-y-auto">
         {children === undefined ? (
@@ -93,7 +84,7 @@ export default function ChildrenList() {
             {searchQuery ? "Aucun résultat trouvé." : "Aucun enfant enregistré."}
             {!searchQuery && (
               <div className="mt-4">
-                <Link href="/enfants/nouveau" className="text-[#00b22d] font-semibold underline">
+                <Link href="/enfants/nouveau" className="text-fiverr font-semibold underline">
                   Ajouter le premier enfant
                 </Link>
               </div>
@@ -129,7 +120,7 @@ export default function ChildrenList() {
                       <h3 className="font-semibold text-gray-900 text-lg leading-tight truncate">
                         {child.lastName} {child.postName} {child.firstName}
                       </h3>
-                      <p className="text-xs font-semibold text-[#00b22d]">
+                      <p className="text-xs font-semibold text-fiverr">
                         {getClassLabel(child.classLevel)}
                       </p>
                       <p className="text-sm text-gray-500 mt-0.5 truncate">
@@ -141,7 +132,7 @@ export default function ChildrenList() {
                     <a 
                       href={`tel:${child.parentPhone}`} 
                       onClick={(e) => e.stopPropagation()}
-                      className="ml-2 w-10 h-10 rounded-full bg-[#00b22d]/10 flex items-center justify-center text-[#00b22d] hover:bg-[#00b22d] hover:text-white transition-colors flex-shrink-0"
+                      className="ml-2 w-10 h-10 rounded-full bg-fiverr/10 flex items-center justify-center text-fiverr hover:bg-fiverr hover:text-white transition-colors flex-shrink-0"
                       title="Appeler le parent"
                     >
                       <Phone className="w-5 h-5" />

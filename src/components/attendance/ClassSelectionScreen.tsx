@@ -64,19 +64,19 @@ export function ClassSelectionScreen({
                 onClick={() => onToggleClass(level.value)}
                 className={`flex h-16 items-center justify-between rounded-lg border px-5 text-left text-lg font-bold shadow-sm transition-colors ${
                   isSelected
-                    ? "border-[#00b22d] bg-[#00b22d]/10 text-gray-950"
-                    : "border-gray-200 bg-gray-50 text-gray-950 hover:border-[#00b22d] hover:bg-[#00b22d]/5"
+                    ? "border-fiverr bg-fiverr/10 text-gray-950"
+                    : "border-gray-200 bg-gray-50 text-gray-950 hover:border-fiverr hover:bg-fiverr/5"
                 }`}
               >
                 <span className="flex items-center gap-3">
                   <span className={`flex h-6 w-6 items-center justify-center rounded-md border ${
-                    isSelected ? "border-[#00b22d] bg-[#00b22d] text-white" : "border-gray-300"
+                    isSelected ? "border-fiverr bg-fiverr text-white" : "border-gray-300"
                   }`}>
                     {isSelected && <Check className="h-4 w-4" />}
                   </span>
                   {getClassLabel(level.value)}
                 </span>
-                <span className="rounded-lg bg-white px-3 py-1 text-sm font-bold text-[#00b22d]">
+                <span className="rounded-lg bg-white px-3 py-1 text-sm font-bold text-fiverr">
                   {countByClass[level.value]}
                 </span>
               </button>
@@ -102,7 +102,7 @@ export function ClassSelectionScreen({
           type="button"
           disabled={selectedClasses.length === 0 || isFutureDate}
           onClick={onStart}
-          className="mt-5 h-14 rounded-lg bg-[#00b22d] text-base font-bold text-white shadow-sm disabled:bg-gray-200 disabled:text-gray-400"
+          className="mt-5 h-14 rounded-lg bg-fiverr text-base font-bold text-white shadow-sm disabled:bg-gray-200 disabled:text-gray-400"
         >
           Commencer l&apos;appel
         </button>

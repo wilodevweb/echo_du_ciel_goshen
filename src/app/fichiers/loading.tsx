@@ -3,6 +3,7 @@
 import React from 'react';
 import { ArrowLeft, Search } from 'lucide-react';
 import Link from 'next/link';
+import { MobileHeader } from '@/components/ui/MobileHeader';
 
 export default function FichiersLoading() {
   const skeletonItems = [
@@ -16,17 +17,9 @@ export default function FichiersLoading() {
 
   return (
     <main className="flex min-h-screen flex-col bg-gray-50 pb-10">
-      {/* Header */}
-      <header className="bg-[#00b22d] text-white p-4 sticky top-0 z-20 shadow-md">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center">
-            <Link href="/" className="mr-4">
-              <ArrowLeft className="w-6 h-6" />
-            </Link>
-            <h1 className="text-xl font-bold">Ressources</h1>
-          </div>
-        </div>
-        
+      <MobileHeader title="Ressources" />
+      
+      <div className="bg-fiverr px-4 pb-4 sticky top-[60px] z-20 shadow-md">
         {/* Formulaire de recherche simulé */}
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -34,7 +27,7 @@ export default function FichiersLoading() {
           </div>
           <div className="block w-full h-9 pl-10 pr-3 py-2 bg-white/20 rounded-xl" />
         </div>
-      </header>
+      </div>
 
       {/* Filtres rapides simulés */}
       <div className="px-4 py-3 flex gap-2 overflow-x-auto no-scrollbar">

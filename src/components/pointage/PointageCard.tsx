@@ -172,7 +172,7 @@ export function PointageCard(props: PointageCardProps) {
           <>
             <div className="sr-only">
               <a href={`tel:${child.parentPhone}`} className="flex items-center gap-2 font-semibold">
-                <Phone className="h-4 w-4 text-[#00b22d]" />
+                <Phone className="h-4 w-4 text-fiverr" />
                 {child.parentPhone || "Telephone parent"}
               </a>
               {child.notes && <p className="line-clamp-2">{child.notes}</p>}
@@ -287,7 +287,7 @@ export function PointageCard(props: PointageCardProps) {
               }}
               className={`flex h-12 w-full items-center justify-center rounded-2xl px-3 text-sm font-black shadow-sm transition-all ${
                 child.parentPhone 
-                  ? "bg-[#00b22d] text-white hover:bg-[#008f24] active:scale-[0.98]" 
+                  ? "bg-fiverr text-white hover:bg-fiverr-dark active:scale-[0.98]" 
                   : "bg-gray-500 text-white opacity-40 cursor-not-allowed"
               }`}
             >
@@ -341,7 +341,7 @@ export function PointageCard(props: PointageCardProps) {
                 onClick={() => update("classLevel", level.value)}
                 className={`rounded-full px-3 py-1.5 text-xs font-black transition-all ${
                   value.classLevel === level.value
-                    ? "bg-[#00b22d] text-white shadow-sm scale-105"
+                    ? "bg-fiverr text-white shadow-sm scale-105"
                     : "bg-white/15 border border-white/10 text-white hover:bg-white/25"
                 }`}
               >
@@ -374,7 +374,7 @@ export function PointageCard(props: PointageCardProps) {
             <input
               value={value.postName}
               onChange={(event) => update("postName", event.target.value)}
-              placeholder="POST-NOM (Optionnel)"
+              placeholder="POST-NOM"
               className="w-full border-b border-gray-100 py-1 text-center text-lg font-black uppercase text-[#111827] outline-none placeholder:text-gray-300"
             />
             <input
@@ -392,7 +392,7 @@ export function PointageCard(props: PointageCardProps) {
           type="button"
           disabled={!canAdd || isAdding}
           onClick={onSubmit}
-          className="flex h-12 w-full items-center justify-center rounded-2xl bg-[#00b22d] px-3 text-sm font-black text-white shadow-sm transition-all hover:bg-[#008f24] active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/40"
+          className="flex h-12 w-full items-center justify-center rounded-2xl bg-fiverr px-3 text-sm font-black text-white transition-all hover:bg-fiverr-dark active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/40"
         >
           {isAdding ? "Enregistrement..." : "Enregistrer"}
         </button>

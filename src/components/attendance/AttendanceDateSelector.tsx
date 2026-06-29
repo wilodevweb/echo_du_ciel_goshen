@@ -67,7 +67,7 @@ export function AttendanceDateSelector({
         onClick={() => setIsOpen((open) => !open)}
         className="mx-auto flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-center text-lg font-bold text-gray-950 transition-colors hover:bg-gray-100"
       >
-        <CalendarDays className="h-5 w-5 text-[#00b22d]" />
+        <CalendarDays className="h-5 w-5 text-fiverr" />
         {formatSundayLabel(value)}
       </button>
 
@@ -103,7 +103,7 @@ export function AttendanceDateSelector({
             value={value}
             max={maxSunday}
             onChange={(event) => selectDate(event.target.value)}
-            className="h-11 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00b22d]"
+            className="h-11 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-fiverr"
           />
           <button
             type="button"
@@ -111,7 +111,7 @@ export function AttendanceDateSelector({
               onChange(getMostRecentSundayDateString());
               setIsOpen(false);
             }}
-            className="mt-3 h-10 w-full rounded-lg bg-[#00b22d]/10 text-sm font-bold text-[#00b22d]"
+            className="mt-3 h-10 w-full rounded-lg bg-fiverr/10 text-sm font-bold text-fiverr"
           >
             Revenir au dimanche recent
           </button>

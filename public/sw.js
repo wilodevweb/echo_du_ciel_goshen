@@ -1,9 +1,11 @@
 const CACHE_VERSION = "goshen-v1";
 const APP_CACHE = `${CACHE_VERSION}-app`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
+const MAX_RUNTIME_ITEMS = 50;
 
 const PRECACHE_URLS = [
   "/login",
+  "/offline",
   "/manifest.webmanifest",
   "/icon-192x192.png",
   "/icon-512x512.png",
@@ -46,7 +48,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (request.mode === "navigate") {
-    event.respondWith(networkFirst(request, "/login"));
+    event.respondWith(networkFirst(request, "/offline"));
     return;
   }
 
@@ -101,6 +103,7 @@ async function networkFirst(request, fallbackUrl) {
     const response = await fetch(request);
     if (response.ok) {
       await cache.put(request, response.clone());
+      trimCache(RUNTIME_CACHE, MAX_RUNTIME_ITEMS);
     }
     return response;
   } catch {
@@ -119,6 +122,7 @@ async function cacheFirst(request) {
   if (response.ok) {
     const cache = await caches.open(RUNTIME_CACHE);
     await cache.put(request, response.clone());
+    trimCache(RUNTIME_CACHE, MAX_RUNTIME_ITEMS);
   }
 
   return response;
@@ -126,4 +130,17 @@ async function cacheFirst(request) {
 
 function isStaticAsset(request) {
   return ["image", "script", "style", "font", "worker"].includes(request.destination);
+}
+
+async function trimCache(cacheName, maxItems) {
+  try {
+    const cache = await caches.open(cacheName);
+    const keys = await cache.keys();
+    if (keys.length > maxItems) {
+      await cache.delete(keys[0]);
+      trimCache(cacheName, maxItems);
+    }
+  } catch (err) {
+    // Ignore les erreurs de cache silencieusement
+  }
 }

@@ -44,7 +44,7 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
       <div className="w-full max-w-md">
         <div className="flex justify-center mb-8">
-          <div className="bg-[#00b22d] p-4 rounded-full shadow-lg">
+          <div className="bg-fiverr p-4 rounded-full shadow-lg">
             <Lock className="w-10 h-10 text-white" />
           </div>
         </div>
@@ -56,7 +56,7 @@ export default function LoginPage() {
           Espace réservé aux moniteurs
         </p>
 
-        <Card padding="lg" className="shadow-xl">
+        <Card padding="lg">
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <Input

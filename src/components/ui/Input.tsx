@@ -24,7 +24,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           className={`
             flex h-11 w-full rounded-xl border border-[var(--input-border)] bg-[var(--input-bg)] text-[var(--input-text)] px-3 py-2 text-sm 
             transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium 
-            placeholder:text-[var(--input-placeholder)] focus:outline-none focus:ring-2 focus:ring-[#00b22d] focus:border-transparent
+            placeholder:text-[var(--input-placeholder)] focus:outline-none focus:ring-2 focus:ring-fiverr focus:border-transparent
             disabled:cursor-not-allowed disabled:opacity-50
             ${error ? 'border-red-500 focus:ring-red-500' : ''}
             ${className}

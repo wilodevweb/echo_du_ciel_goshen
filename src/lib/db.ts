@@ -300,10 +300,7 @@ async function setStateValue(key: string, value: string) {
 }
 
 export async function markPendingChange() {
-  const pendingChanges = Number(await getStateValue(PENDING_CHANGES_KEY)) || 0;
-
   await db.transaction('rw', db.syncState, async () => {
-    await setStateValue(PENDING_CHANGES_KEY, String(pendingChanges + 1));
     await setStateValue(LAST_LOCAL_CHANGE_KEY, new Date().toISOString());
   });
 }
@@ -327,13 +324,13 @@ export async function markEntityForSync(entity: SyncEntity, id: string, fields?:
 
 export async function getSyncStatus() {
   const [pendingChanges, lastLocalChangeAt, lastSyncAt] = await Promise.all([
-    getStateValue(PENDING_CHANGES_KEY),
+    db.pendingSync.count(),
     getStateValue(LAST_LOCAL_CHANGE_KEY),
     getStateValue(LAST_SYNC_KEY),
   ]);
 
   return {
-    pendingChanges: Number(pendingChanges) || 0,
+    pendingChanges,
     lastLocalChangeAt,
     lastSyncAt,
   };
@@ -509,7 +506,7 @@ async function applyServerDelta(data: SyncDeltaResponse) {
 export async function syncWithServer() {
   try {
     const pendingItems = await db.pendingSync.toArray();
-    const pendingChanges = Number(await getStateValue(PENDING_CHANGES_KEY)) || 0;
+    const pendingChanges = pendingItems.length;
     const lastSyncAt = await getStateValue(LAST_SYNC_KEY);
     const kc: string[] = [];
     const ka: string[] = [];
@@ -564,7 +561,6 @@ export async function syncWithServer() {
       const pullResult = await applyServerDelta(data);
 
       await db.transaction('rw', db.syncState, db.pendingSync, db.children, db.parents, async () => {
-        await setStateValue(PENDING_CHANGES_KEY, '0');
         await setStateValue(LAST_SYNC_KEY, data.serverSyncedAt ?? new Date().toISOString());
         await db.pendingSync.bulkDelete(pendingItems.map((item) => item.key));
 

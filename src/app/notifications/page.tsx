@@ -7,6 +7,9 @@ import { Bell, ArrowLeft, Gift, UserX, Phone, AlertCircle, Stethoscope } from 'l
 import db, { getClassLabel, Child } from '@/lib/db';
 import { buildAttendanceHistoryMap } from '@/components/pointage/utils';
 import { Card, CardContent } from '@/components/ui/Card';
+import { MobileHeader } from '@/components/ui/MobileHeader';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 function isBirthdaySoon(birthDate: string | undefined | null) {
   if (!birthDate) return false;
@@ -106,19 +109,14 @@ export default function NotificationsPage() {
 
   return (
     <main className="flex min-h-screen flex-col bg-gray-50 pb-10">
-      <header className="bg-[#00b22d] text-white p-4 sticky top-0 z-10 flex items-center shadow-md">
-        <Link href="/" className="mr-4">
-          <ArrowLeft className="w-6 h-6" />
-        </Link>
-        <div className="flex items-center gap-2">
-          <Bell className="w-6 h-6" />
-          <h1 className="text-xl font-bold">Notifications</h1>
-        </div>
-      </header>
+      <MobileHeader 
+        title="Notifications" 
+        rightElement={<Bell className="w-6 h-6 ml-2" />} 
+      />
 
       <div className="p-4 flex-1 space-y-6 max-w-md mx-auto w-full">
         {!notifications ? (
-          <div className="text-center mt-10 text-gray-500">Chargement...</div>
+          <LoadingState message="Chargement des notifications..." />
         ) : (
           <>
             {/* Anniversaires */}

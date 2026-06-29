@@ -38,14 +38,17 @@ function ParentEditor({
   const [manualLastName, setManualLastName] = useState(draft.parentLastName || "");
   const [manualPhone, setManualPhone] = useState(draft.parentPhone || "");
 
-  const filteredParents = parents.filter(p => {
+  const filteredParents = React.useMemo(() => {
+    if (!searchQuery.trim()) return parents;
     const query = searchQuery.toLowerCase();
-    return (
-      (p.firstName || "").toLowerCase().includes(query) ||
-      (p.lastName || "").toLowerCase().includes(query) ||
-      (p.phone || "").includes(query)
-    );
-  });
+    return parents.filter(p => {
+      return (
+        (p.firstName || "").toLowerCase().includes(query) ||
+        (p.lastName || "").toLowerCase().includes(query) ||
+        (p.phone || "").includes(query)
+      );
+    });
+  }, [parents, searchQuery]);
 
   return (
     <div className="mt-3 rounded-2xl bg-white/5 p-4 border border-white/10" onClick={(e) => e.stopPropagation()}>
@@ -57,7 +60,7 @@ function ParentEditor({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Rechercher par nom ou téléphone..."
-              className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-[#00b22d] focus:ring-1 focus:ring-[#00b22d]"
+              className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-fiverr focus:ring-1 focus:ring-fiverr"
               autoFocus
             />
           </div>
@@ -82,7 +85,7 @@ function ParentEditor({
                     </p>
                     <p className="text-xs text-white/45 truncate">{p.phone}</p>
                   </div>
-                  <span className="text-[10px] font-bold text-[#00b22d] bg-[#00b22d]/10 px-2 py-0.5 rounded-full border border-[#00b22d]/20 shrink-0">
+                  <span className="text-[10px] font-bold text-fiverr bg-fiverr/10 px-2 py-0.5 rounded-full border border-fiverr/20 shrink-0">
                     Choisir
                   </span>
                 </button>
@@ -119,21 +122,21 @@ function ParentEditor({
               value={manualLastName}
               onChange={(e) => setManualLastName(e.target.value)}
               placeholder="Nom du parent"
-              className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-[#00b22d]"
+              className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-fiverr"
             />
             <input
               type="text"
               value={manualFirstName}
               onChange={(e) => setManualFirstName(e.target.value)}
               placeholder="Prénom du parent"
-              className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-[#00b22d]"
+              className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-fiverr"
             />
             <input
               type="tel"
               value={manualPhone}
               onChange={(e) => setManualPhone(e.target.value)}
               placeholder="Téléphone du parent"
-              className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-[#00b22d]"
+              className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-fiverr"
             />
           </div>
 
@@ -148,7 +151,7 @@ function ParentEditor({
               });
               onCancel();
             }}
-            className="w-full h-10 flex items-center justify-center rounded-xl bg-[#00b22d] hover:bg-[#008f24] disabled:bg-white/10 disabled:text-white/40 disabled:cursor-not-allowed text-xs font-black text-white shadow-sm transition-all"
+            className="w-full h-10 flex items-center justify-center rounded-xl bg-fiverr hover:bg-fiverr-dark disabled:bg-white/10 disabled:text-white/40 disabled:cursor-not-allowed text-xs font-black text-white shadow-sm transition-all"
           >
             Enregistrer
           </button>
@@ -495,6 +498,10 @@ export function ChildDetailsModal({
   const [isSaving, setIsSaving] = useState(false);
 
   const localParents = useLiveQuery(async () => {
+    // OPTIMISATION : Ne charger la lourde liste des parents/enfants
+    // QUE si l'utilisateur est effectivement en train de modifier le champ parent.
+    if (activeField !== "parent") return [];
+
     const parentList = await db.parents.toArray();
     const childrenList = await db.children.toArray();
     
@@ -523,7 +530,7 @@ export function ChildDetailsModal({
     });
     
     return Array.from(parentMap.values());
-  }) || [];
+  }, [activeField]) || [];
   const isDeletion = draft.firstName.trim() === "" && draft.lastName.trim() === "" && draft.postName.trim() === "";
   const canSave = isDeletion || Boolean(draft.firstName.trim() && draft.lastName.trim() && draft.postName.trim());
 

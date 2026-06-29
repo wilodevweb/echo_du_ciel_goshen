@@ -99,7 +99,7 @@ export function SyncPanel() {
     }
   };
 
-  if (isLoading || pendingChanges <= 0) return null;
+  if (isLoading) return null;
 
   return (
     <div className="fixed bottom-6 right-6 z-30 flex flex-col items-end gap-2 animate-bounce-in">
@@ -112,17 +112,19 @@ export function SyncPanel() {
         type="button"
         disabled={isSyncing || !isOnline}
         onClick={handleSync}
-        className={`flex h-14 w-14 items-center justify-center rounded-full bg-[#00b22d] text-white shadow-xl hover:bg-[#008f24] active:scale-95 transition-all relative border border-[#00b22d]/20 ${
+        className={`flex h-14 w-14 items-center justify-center rounded-full bg-fiverr text-white shadow-xl hover:bg-fiverr-dark active:scale-95 transition-all relative border border-fiverr/20 ${
           isSyncing ? "opacity-90" : ""
         } ${!isOnline ? "bg-gray-500 cursor-not-allowed" : ""}`}
-        title={`${pendingChanges} modification(s) en attente d'envoi`}
+        title={pendingChanges > 0 ? `${pendingChanges} modification(s) en attente d'envoi` : "Rafraîchir les données"}
       >
         <RefreshCw className={`h-6 w-6 ${isSyncing ? "animate-spin" : ""}`} />
         
         {/* Badge pour le nombre de modifications */}
-        <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white border-2 border-white shadow-sm">
-          {pendingChanges}
-        </span>
+        {pendingChanges > 0 && (
+          <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white border-2 border-white shadow-sm">
+            {pendingChanges}
+          </span>
+        )}
       </button>
     </div>
   );

@@ -2,6 +2,8 @@ import React from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Search, FileText, Play, Download } from 'lucide-react';
 import { prisma } from "@/lib/prisma";
+import { MobileHeader } from '@/components/ui/MobileHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface PageProps {
   searchParams: Promise<{ q?: string; type?: string }>;
@@ -54,16 +56,9 @@ export default async function FichiersPage({ searchParams }: PageProps) {
 
   return (
     <main className="flex min-h-screen flex-col bg-gray-50 pb-10">
-      <header className="bg-[#00b22d] text-white p-4 sticky top-0 z-20 shadow-md">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center">
-            <Link href="/" className="mr-4">
-              <ArrowLeft className="w-6 h-6" />
-            </Link>
-            <h1 className="text-xl font-bold">Ressources</h1>
-          </div>
-        </div>
-        
+      <MobileHeader title="Ressources" />
+      
+      <div className="bg-fiverr px-4 pb-4 sticky top-[60px] z-20 shadow-md">
         {/* Formulaire de recherche */}
         <form method="GET" action="/fichiers" className="relative">
           <input type="hidden" name="type" value={filterType} />
@@ -78,7 +73,7 @@ export default async function FichiersPage({ searchParams }: PageProps) {
             placeholder="Rechercher des fichiers, leçons..."
           />
         </form>
-      </header>
+      </div>
 
       {/* Filtres rapides */}
       <div className="px-4 py-3 flex gap-2 overflow-x-auto no-scrollbar">
@@ -111,7 +106,7 @@ export default async function FichiersPage({ searchParams }: PageProps) {
       {/* Grid */}
       <div className="px-4 mt-2">
         {files.length === 0 ? (
-          <div className="text-center py-12 text-gray-500 font-medium">Aucun fichier trouvé.</div>
+          <EmptyState title="Aucun fichier trouvé" description="Essayez une autre recherche ou un autre filtre." />
         ) : (
           <div className="columns-2 gap-4 space-y-4">
             {files.map((file) => (
