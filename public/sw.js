@@ -3,10 +3,7 @@ const APP_CACHE = `${CACHE_VERSION}-app`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
 const PRECACHE_URLS = [
-  "/",
   "/login",
-  "/enfants",
-  "/pointage",
   "/manifest.webmanifest",
   "/icon-192x192.png",
   "/icon-512x512.png",
@@ -49,7 +46,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (request.mode === "navigate") {
-    event.respondWith(networkFirst(request, "/"));
+    event.respondWith(networkFirst(request, "/login"));
     return;
   }
 
