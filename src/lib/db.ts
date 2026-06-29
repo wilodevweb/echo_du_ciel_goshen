@@ -425,12 +425,8 @@ export async function syncWithServer() {
     const pendingItems = await db.pendingSync.toArray();
     const pendingChanges = Number(await getStateValue(PENDING_CHANGES_KEY)) || 0;
     const lastSyncAt = await getStateValue(LAST_SYNC_KEY);
-    const [kc, ka] = await Promise.all([
-      db.children.toCollection().primaryKeys() as Promise<string[]>,
-      db.attendances.orderBy('[childId+date]').keys().then(
-        (keys) => (keys as unknown as Array<[string, string]>).map(([childId, date]) => `${childId}:${encodeDate(date)}`)
-      ),
-    ]);
+    const kc: string[] = [];
+    const ka: string[] = [];
     const effectivePendingItems = await getEffectivePendingItems(pendingItems, pendingChanges);
     const childIds = effectivePendingItems.filter((item) => item.entity === 'child').map((item) => item.id);
     const attendanceIds = effectivePendingItems.filter((item) => item.entity === 'attendance').map((item) => item.id);

@@ -59,16 +59,21 @@ export default function PointagePage() {
     return sortedChildren.filter((child) => selectedClasses.includes(child.classLevel));
   }, [selectedClasses, sortedChildren]);
 
-  const filteredChildrenIds = useMemo(() => {
-    return filteredChildren.map((c) => c.id);
-  }, [filteredChildren]);
+  const totalCards = filteredChildren.length + 1;
+  const visibleIndex = Math.min(currentIndex, totalCards - 1);
+  const currentChild = filteredChildren[visibleIndex];
+  const currentChildId = currentChild?.id;
 
   const activeAttendances = useLiveQuery(
     async () => {
-      if (filteredChildrenIds.length === 0) return [];
-      return db.attendances.where("childId").anyOf(filteredChildrenIds).toArray();
+      if (!currentChildId) return [];
+      return db.attendances
+        .where("childId")
+        .equals(currentChildId)
+        .toArray()
+        .then((items) => items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3));
     },
-    [filteredChildrenIds],
+    [currentChildId],
   );
 
   const attendanceMap = useMemo(() => {
@@ -79,27 +84,12 @@ export default function PointagePage() {
     return map;
   }, [attendances]);
 
-  const attendanceHistoryMap = useMemo(() => {
-    const map = new Map<string, AttendanceStatus[]>();
-    const sortedAttendances = [...(activeAttendances ?? [])].sort((a, b) => b.date.localeCompare(a.date));
-
-    sortedAttendances.forEach((attendance) => {
-      const status = getAttendanceStatus(attendance);
-      if (!status) return;
-
-      const history = map.get(attendance.childId) ?? [];
-      if (history.length >= 3) return;
-
-      history.push(status);
-      map.set(attendance.childId, history);
-    });
-
-    return map;
+  const recentStatuses = useMemo(() => {
+    return (activeAttendances ?? [])
+      .map((att) => getAttendanceStatus(att))
+      .filter((status): status is AttendanceStatus => Boolean(status));
   }, [activeAttendances]);
 
-  const totalCards = filteredChildren.length + 1;
-  const visibleIndex = Math.min(currentIndex, totalCards - 1);
-  const currentChild = filteredChildren[visibleIndex];
   const isAddCard = visibleIndex >= filteredChildren.length;
   const selectedClassLabel = selectedClasses.length === CLASS_LEVELS.length
     ? "Toutes les classes"
@@ -305,7 +295,7 @@ export default function PointagePage() {
                   <ChildAttendanceCard
                     child={currentChild}
                     status={getAttendanceStatus(attendanceMap.get(currentChild.id))}
-                    recentStatuses={attendanceHistoryMap.get(currentChild.id) ?? []}
+                    recentStatuses={recentStatuses}
                     hasBirthdayThisWeek={isBirthdayInWeek(currentChild.birthDate, selectedDate)}
                     onNameClick={() => setDetailsChild(currentChild)}
                     onPhotoChange={(file) => updateChildPhoto(currentChild.id, file)}
