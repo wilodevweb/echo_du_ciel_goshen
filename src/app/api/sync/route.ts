@@ -131,51 +131,122 @@ export async function POST(req: Request) {
       const serverSyncedAt = new Date();
 
       await prisma.$transaction(async (tx) => {
-        for (const patch of childPatches) {
-          const { id, data: childData } = decodeChildPatch(patch);
-          await tx.child.upsert({
-            where: { id },
-            update: childData,
-            create: {
-              id,
-              firstName: String(childData.firstName ?? ""),
-              lastName: String(childData.lastName ?? ""),
-              postName: String(childData.postName ?? ""),
-              classLevel: String(childData.classLevel ?? "FIRST"),
-              parentPhone: String(childData.parentPhone ?? ""),
-              address: String(childData.address ?? ""),
-              birthDate: typeof childData.birthDate === "string" ? childData.birthDate : null,
-              notes: typeof childData.notes === "string" ? childData.notes : null,
-              photoUrl: typeof childData.photoUrl === "string" ? childData.photoUrl : null,
-            },
+        if (childPatches.length > 0) {
+          const childIds = childPatches.map((patch) => patch[0]);
+          const existingChildren = await tx.child.findMany({
+            where: { id: { in: childIds } },
+            select: { id: true },
           });
+          const existingChildIds = new Set(existingChildren.map((c) => c.id));
+
+          const childCreates: any[] = [];
+          const childUpdates: Array<{ id: string; data: any }> = [];
+
+          for (const patch of childPatches) {
+            const { id, data: childData } = decodeChildPatch(patch);
+            if (existingChildIds.has(id)) {
+              childUpdates.push({ id, data: childData });
+            } else {
+              childCreates.push({
+                id,
+                firstName: String(childData.firstName ?? ""),
+                lastName: String(childData.lastName ?? ""),
+                postName: String(childData.postName ?? ""),
+                classLevel: String(childData.classLevel ?? "FIRST"),
+                parentPhone: String(childData.parentPhone ?? ""),
+                address: String(childData.address ?? ""),
+                birthDate: typeof childData.birthDate === "string" ? childData.birthDate : null,
+                notes: typeof childData.notes === "string" ? childData.notes : null,
+                photoUrl: typeof childData.photoUrl === "string" ? childData.photoUrl : null,
+              });
+            }
+          }
+
+          if (childCreates.length > 0) {
+            await tx.child.createMany({
+              data: childCreates,
+            });
+          }
+
+          if (childUpdates.length > 0) {
+            await Promise.all(
+              childUpdates.map((up) =>
+                tx.child.update({
+                  where: { id: up.id },
+                  data: up.data,
+                })
+              )
+            );
+          }
         }
 
-        for (const patch of attendancePatches) {
-          const [childId, compactDate, statusCode] = patch;
-          const date = decodeDate(compactDate);
-          const status = decodeStatus(statusCode);
-          await tx.attendance.upsert({
+        if (attendancePatches.length > 0) {
+          const attendanceKeys = attendancePatches.map((patch) => {
+            const [childId, compactDate] = patch;
+            return { childId, date: decodeDate(compactDate) };
+          });
+
+          const existingAttendances = await tx.attendance.findMany({
             where: {
-              childId_date: {
+              OR: attendanceKeys,
+            },
+            select: { childId: true, date: true },
+          });
+          const existingKeys = new Set(
+            existingAttendances.map((a) => `${a.childId}:${a.date}`)
+          );
+
+          const attendanceCreates: any[] = [];
+          const attendanceUpdates: Array<{ childId: string; date: string; status: string }> = [];
+
+          for (const patch of attendancePatches) {
+            const [childId, compactDate, statusCode] = patch;
+            const date = decodeDate(compactDate);
+            const status = decodeStatus(statusCode);
+            const key = `${childId}:${date}`;
+
+            if (existingKeys.has(key)) {
+              attendanceUpdates.push({ childId, date, status });
+            } else {
+              attendanceCreates.push({
                 childId,
                 date,
-              },
-            },
-            update: {
-              present: status === "PRESENT",
-              status,
-              markedAt: serverSyncedAt,
-            },
-            create: {
-              childId,
-              date,
-              present: status === "PRESENT",
-              status,
-              markedAt: serverSyncedAt,
-            },
-          });
+                present: status === "PRESENT",
+                status,
+                markedAt: serverSyncedAt,
+              });
+            }
+          }
+
+          if (attendanceCreates.length > 0) {
+            await tx.attendance.createMany({
+              data: attendanceCreates,
+            });
+          }
+
+          if (attendanceUpdates.length > 0) {
+            await Promise.all(
+              attendanceUpdates.map((up) =>
+                tx.attendance.update({
+                  where: {
+                    childId_date: {
+                      childId: up.childId,
+                      date: up.date,
+                    },
+                  },
+                  data: {
+                    present: up.status === "PRESENT",
+                    status: up.status,
+                    markedAt: serverSyncedAt,
+                  },
+                })
+              )
+            );
+          }
         }
+      }, {
+        maxWait: 15000,
+        timeout: 30000,
       });
 
       const childWhere = hasValidLastSyncDate
@@ -236,62 +307,133 @@ export async function POST(req: Request) {
     const serverSyncedAt = new Date();
 
     await prisma.$transaction(async (tx) => {
-      // 1. Synchronisation des enfants (Upsert : Création si nouveau, Mise à jour si existant)
-      for (const child of children) {
-        await tx.child.upsert({
-          where: { id: child.id },
-          update: {
-            firstName: child.firstName,
-            lastName: child.lastName,
-            postName: child.postName ?? "",
-            classLevel: child.classLevel ?? "FIRST",
-            parentPhone: child.parentPhone,
-            address: child.address,
-            birthDate: child.birthDate,
-            notes: child.notes,
-            photoUrl: child.photoUrl,
-          },
-          create: {
-            id: child.id,
-            firstName: child.firstName,
-            lastName: child.lastName,
-            postName: child.postName ?? "",
-            classLevel: child.classLevel ?? "FIRST",
-            parentPhone: child.parentPhone,
-            address: child.address,
-            birthDate: child.birthDate,
-            notes: child.notes,
-            photoUrl: child.photoUrl,
-          },
+      // 1. Synchronisation des enfants (Optimisée)
+      if (children.length > 0) {
+        const childIds = children.map((c: any) => c.id);
+        const existingChildren = await tx.child.findMany({
+          where: { id: { in: childIds } },
+          select: { id: true },
         });
-      }
+        const existingChildIds = new Set(existingChildren.map((c) => c.id));
 
-      // 2. Synchronisation des présences
-      for (const att of attendances) {
-        const status = att.status ?? (att.present ? "PRESENT" : "ABSENT");
+        const childCreates: any[] = [];
+        const childUpdates: Array<{ id: string; data: any }> = [];
 
-        await tx.attendance.upsert({
-          where: {
-            childId_date: {
-              childId: att.childId,
-              date: att.date
-            }
-          },
-          update: {
-            present: status === "PRESENT",
-            status,
-            markedAt: new Date(att.markedAt)
-          },
-          create: {
-            id: att.id,
-            childId: att.childId,
-            date: att.date,
-            present: status === "PRESENT",
-            status,
-            markedAt: new Date(att.markedAt)
+        for (const child of children) {
+          const childData = {
+            firstName: child.firstName,
+            lastName: child.lastName,
+            postName: child.postName ?? "",
+            classLevel: child.classLevel ?? "FIRST",
+            parentPhone: child.parentPhone,
+            address: child.address,
+            birthDate: child.birthDate,
+            notes: child.notes,
+            photoUrl: child.photoUrl,
+          };
+
+          if (existingChildIds.has(child.id)) {
+            childUpdates.push({ id: child.id, data: childData });
+          } else {
+            childCreates.push({
+              id: child.id,
+              ...childData,
+            });
           }
-        });
+        }
+
+        if (childCreates.length > 0) {
+          await tx.child.createMany({
+            data: childCreates,
+          });
+        }
+
+        if (childUpdates.length > 0) {
+          await Promise.all(
+            childUpdates.map((up) =>
+              tx.child.update({
+                where: { id: up.id },
+                data: up.data,
+              })
+            )
+          );
+        }
       }
+
+      // 2. Synchronisation des présences (Optimisée)
+      if (attendances.length > 0) {
+        const attendanceKeys = attendances.map((att: any) => ({
+          childId: att.childId,
+          date: att.date,
+        }));
+
+        const existingAttendances = await tx.attendance.findMany({
+          where: {
+            OR: attendanceKeys,
+          },
+          select: { childId: true, date: true },
+        });
+        const existingKeys = new Set(
+          existingAttendances.map((a) => `${a.childId}:${a.date}`)
+        );
+
+        const attendanceCreates: any[] = [];
+        const attendanceUpdates: Array<{ id: string; childId: string; date: string; status: string; markedAt: Date }> = [];
+
+        for (const att of attendances) {
+          const status = att.status ?? (att.present ? "PRESENT" : "ABSENT");
+          const key = `${att.childId}:${att.date}`;
+          const markedAtDate = new Date(att.markedAt);
+
+          if (existingKeys.has(key)) {
+            attendanceUpdates.push({
+              id: att.id,
+              childId: att.childId,
+              date: att.date,
+              status,
+              markedAt: markedAtDate,
+            });
+          } else {
+            attendanceCreates.push({
+              id: att.id,
+              childId: att.childId,
+              date: att.date,
+              present: status === "PRESENT",
+              status,
+              markedAt: markedAtDate,
+            });
+          }
+        }
+
+        if (attendanceCreates.length > 0) {
+          await tx.attendance.createMany({
+            data: attendanceCreates,
+          });
+        }
+
+        if (attendanceUpdates.length > 0) {
+          await Promise.all(
+            attendanceUpdates.map((up) =>
+              tx.attendance.update({
+                where: {
+                  childId_date: {
+                    childId: up.childId,
+                    date: up.date,
+                  },
+                },
+                data: {
+                  present: up.status === "PRESENT",
+                  status: up.status,
+                  markedAt: up.markedAt,
+                },
+              })
+            )
+          );
+        }
+      }
+    }, {
+      maxWait: 15000,
+      timeout: 30000,
     });
 
     if (mode === "sync-delta") {

@@ -394,6 +394,21 @@ async function applyServerDelta(data: SyncDeltaResponse) {
     }
 
     if (deltaAttendances.length > 0) {
+      // Pour éviter les doublons d'attendances créées localement avec un ID temporaire
+      // et reçues du serveur avec leur ID définitif (CUID), on supprime les
+      // enregistrements locaux correspondants ayant un ID différent avant d'insérer.
+      for (const att of deltaAttendances) {
+        const existing = await db.attendances
+          .where('[childId+date]')
+          .equals([att.childId, att.date])
+          .toArray();
+        const toDelete = existing
+          .filter((e) => e.id !== att.id)
+          .map((e) => e.id);
+        if (toDelete.length > 0) {
+          await db.attendances.bulkDelete(toDelete);
+        }
+      }
       await db.attendances.bulkPut(deltaAttendances);
     }
   });
