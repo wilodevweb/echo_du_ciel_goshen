@@ -251,26 +251,26 @@ export default function DashboardPage() {
     <main className="flex min-h-screen flex-col bg-gray-900 text-gray-100">
       {/* Header Premium */}
       <header className="border-b border-gray-800 bg-gray-950 p-4 sticky top-0 z-20 shadow-lg">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="bg-gray-800 hover:bg-gray-700 p-2.5 rounded-xl transition text-gray-300">
+        <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <Link href="/" className="bg-gray-800 hover:bg-gray-700 p-2.5 rounded-xl transition text-gray-300 flex-shrink-0">
               <ArrowLeft className="w-5 h-5" />
             </Link>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-                Administration
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#00b22d]/20 text-[#00b22d] font-bold border border-[#00b22d]/30">
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                <span className="truncate">Administration</span>
+                <span className="hidden sm:inline-flex text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full bg-[#00b22d]/20 text-[#00b22d] font-bold border border-[#00b22d]/30 flex-shrink-0">
                   {(session?.user as any)?.title || "Moniteur-Admin"}
                 </span>
               </h1>
-              <p className="text-xs text-gray-400 font-medium">
+              <p className="text-xs text-gray-400 font-medium truncate">
                 Connecté en tant que <span className="text-gray-200">{session?.user?.name}</span>
               </p>
             </div>
           </div>
           <button 
             onClick={() => signOut({ callbackUrl: "/login" })} 
-            className="flex items-center gap-2 text-sm font-semibold bg-red-950/40 border border-red-900/30 hover:bg-red-900/30 text-red-400 px-4 py-2 rounded-xl transition"
+            className="flex items-center gap-2 text-sm font-semibold bg-red-950/40 border border-red-900/30 hover:bg-red-900/30 text-red-400 px-4 py-2 rounded-xl transition flex-shrink-0"
           >
             <LogOut className="w-4 h-4" />
             <span className="hidden sm:inline">Déconnexion</span>
@@ -280,10 +280,10 @@ export default function DashboardPage() {
 
       {/* Barre de navigation des tabs */}
       <nav className="border-b border-gray-800 bg-gray-950/50 py-2">
-        <div className="max-w-6xl mx-auto px-4 flex gap-2">
+        <div className="max-w-6xl mx-auto px-4 flex gap-2 overflow-x-auto no-scrollbar scroll-smooth">
           <button
             onClick={() => setActiveTab("moniteurs")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition flex-shrink-0 whitespace-nowrap ${
               activeTab === "moniteurs"
                 ? "bg-[#00b22d] text-white shadow-md shadow-[#00b22d]/10"
                 : "text-gray-400 hover:bg-gray-800 hover:text-white"
@@ -294,7 +294,7 @@ export default function DashboardPage() {
           </button>
           <button
             onClick={() => setActiveTab("activites")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition flex-shrink-0 whitespace-nowrap ${
               activeTab === "activites"
                 ? "bg-[#00b22d] text-white shadow-md shadow-[#00b22d]/10"
                 : "text-gray-400 hover:bg-gray-800 hover:text-white"
@@ -305,7 +305,7 @@ export default function DashboardPage() {
           </button>
           <button
             onClick={() => setActiveTab("upload")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition flex-shrink-0 whitespace-nowrap ${
               activeTab === "upload"
                 ? "bg-[#00b22d] text-white shadow-md shadow-[#00b22d]/10"
                 : "text-gray-400 hover:bg-gray-800 hover:text-white"

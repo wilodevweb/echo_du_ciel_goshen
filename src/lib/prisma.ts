@@ -1,6 +1,20 @@
 import { PrismaClient } from '../generated/prisma/client';
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
+// @ts-ignore
+import { ProxyAgent, setGlobalDispatcher } from 'undici';
+
+// Configurer le proxy pour les requêtes sortantes de fetch (ex: Turso) si présent dans l'environnement
+const proxyUrl = process.env.https_proxy || process.env.http_proxy || process.env.HTTPS_PROXY || process.env.HTTP_PROXY;
+if (proxyUrl) {
+  try {
+    const proxyAgent = new ProxyAgent(proxyUrl);
+    setGlobalDispatcher(proxyAgent);
+    console.log(`[Proxy] Global dispatcher set to ${proxyUrl}`);
+  } catch (error) {
+    console.error("[Proxy] Failed to configure global proxy dispatcher:", error);
+  }
+}
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
