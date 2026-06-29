@@ -1,4 +1,3 @@
-import Link from "next/link";
 import Image from "next/image";
 import { Bell, CalendarCheck, Users, Images, ShieldCheck } from "lucide-react";
 import { SyncPanel } from "@/components/SyncPanel";
@@ -43,7 +42,7 @@ export default async function Home() {
 
           <div className="mt-8 grid w-full gap-3">
             <LinkButton href="/pointage" icon={CalendarCheck} variant="primary" fullWidth>
-              Faire l'appel
+              Faire l&apos;appel
             </LinkButton>
 
             <div className="grid grid-cols-2 gap-3">

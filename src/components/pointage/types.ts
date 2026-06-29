@@ -13,6 +13,7 @@ export type NewChildForm = {
   birthDate: string;
   notes: string;
   parentId?: string;
+  photoUrl?: string;
 };
 
 export type ChildDetailsDraft = NewChildForm;
@@ -29,4 +30,5 @@ export const emptyNewChild: NewChildForm = {
   address: "",
   birthDate: "",
   notes: "",
+  photoUrl: "",
 };

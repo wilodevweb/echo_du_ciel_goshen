@@ -6,12 +6,11 @@ import { WifiOff, RotateCw, Home } from "lucide-react";
 
 export default function OfflinePage() {
   const [isChecking, setIsChecking] = useState(false);
-  const [isOnline, setIsOnline] = useState(false);
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator === "undefined" ? false : navigator.onLine
+  );
 
   useEffect(() => {
-    // Check initial status
-    setIsOnline(navigator.onLine);
-
     // Listen for online status changes
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);

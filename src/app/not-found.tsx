@@ -1,8 +1,7 @@
-"use client";
-
 import React from "react";
 import Link from "next/link";
-import { FileQuestion, ArrowLeft, Home } from "lucide-react";
+import { FileQuestion, Home } from "lucide-react";
+import { BackButton } from "@/components/BackButton";
 
 export default function NotFound() {
   return (
@@ -28,13 +27,7 @@ export default function NotFound() {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-3 w-full">
-            <button
-              onClick={() => window.history.back()}
-              className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl border border-gray-800 bg-gray-900 text-gray-300 font-semibold hover:bg-gray-800 transition"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Retour
-            </button>
+            <BackButton />
             <Link 
               href="/"
               className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-fiverr hover:bg-fiverr-dark text-white font-bold transition shadow-lg shadow-fiverr/20"
