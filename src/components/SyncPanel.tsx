@@ -64,12 +64,7 @@ export function SyncPanel() {
 
   const pendingChanges = syncStatus?.pendingChanges ?? 0;
   const isLoading = syncStatus === undefined || childrenCount === undefined || attendancesCount === undefined;
-  const lastSyncLabel = syncStatus?.lastSyncAt
-    ? new Intl.DateTimeFormat("fr-FR", {
-        dateStyle: "short",
-        timeStyle: "short",
-      }).format(new Date(syncStatus.lastSyncAt))
-    : null;
+
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);

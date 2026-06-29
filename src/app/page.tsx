@@ -13,7 +13,7 @@ export default async function Home() {
     redirect("/login");
   }
 
-  const isAdmin = (session.user as any)?.role === "ADMIN";
+  const isAdmin = (session?.user as { role?: string } | undefined)?.role === "ADMIN";
 
   return (
     <main className="flex h-[100dvh] flex-col items-center overflow-hidden bg-gray-50 px-5 py-6 relative">

@@ -1,7 +1,6 @@
 import { PrismaClient } from '../generated/prisma/client';
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
-// @ts-ignore
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 
 // Configurer le proxy pour les requêtes sortantes de fetch (ex: Turso) si présent dans l'environnement

@@ -3,6 +3,14 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
+interface CustomUser {
+  id: string;
+  username: string;
+  name?: string | null;
+  role?: string;
+  title?: string | null;
+}
+
 function getSortedNormalizedWords(str: string): string {
   if (!str) return "";
   return str
@@ -40,7 +48,7 @@ export const authOptions: AuthOptions = {
                role: "ADMIN"
              }
            });
-           return { id: admin.id, username: admin.username, name: admin.name } as any;
+           return { id: admin.id, username: admin.username, name: admin.name } as CustomUser;
         }
 
         let user = await prisma.user.findUnique({
@@ -90,7 +98,7 @@ export const authOptions: AuthOptions = {
           name: user.name,
           role: user.role,
           title: user.title,
-        } as any;
+        } as CustomUser;
       }
     })
   ],
@@ -101,18 +109,19 @@ export const authOptions: AuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.username = (user as any).username;
-        token.role = (user as any).role;
-        token.title = (user as any).title;
+        token.username = (user as CustomUser).username;
+        token.role = (user as CustomUser).role;
+        token.title = (user as CustomUser).title;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).id = token.id;
-        (session.user as any).username = token.username;
-        (session.user as any).role = token.role;
-        (session.user as any).title = token.title;
+        const u = session.user as CustomUser;
+        u.id = token.id as string;
+        u.username = token.username as string;
+        u.role = token.role as string;
+        u.title = token.title as string;
       }
       return session;
     }

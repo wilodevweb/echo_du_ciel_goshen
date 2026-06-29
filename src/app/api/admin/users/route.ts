@@ -4,9 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 
-export async function GET(req: Request) {
+export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!session || (session.user as any).role !== "ADMIN") {
+  if (!session || (session.user as { role?: string }).role !== "ADMIN") {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   }
 
@@ -14,8 +14,11 @@ export async function GET(req: Request) {
     const users = await prisma.user.findMany({
       orderBy: { createdAt: "desc" },
     });
-    // Ne pas renvoyer les mots de passe
-    const sanitizedUsers = users.map(({ password, ...user }) => user);
+    const sanitizedUsers = users.map((user) => {
+      const rest = { ...user };
+      delete (rest as { password?: string }).password;
+      return rest;
+    });
     return NextResponse.json({ users: sanitizedUsers });
   } catch (error) {
     console.error("Erreur GET /api/admin/users:", error);
@@ -25,7 +28,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
-  if (!session || (session.user as any).role !== "ADMIN") {
+  if (!session || (session.user as { role?: string }).role !== "ADMIN") {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   }
 
@@ -67,8 +70,8 @@ export async function POST(req: Request) {
     // Enregistrer le log d'activité
     await prisma.activityLog.create({
       data: {
-        userId: (session.user as any).id || "",
-        username: (session.user as any).username || "",
+        userId: (session.user as { id?: string }).id || "",
+        username: (session.user as { username?: string }).username || "",
         userFullName: session.user?.name || "",
         action: "CREATE_USER",
         details: `Création du compte moniteur ${user.name} (${user.username}) avec le titre/statut "${user.title}"`,

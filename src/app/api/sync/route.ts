@@ -6,6 +6,20 @@ import { authOptions } from "../auth/[...nextauth]/route";
 type ChildPatch = [string, string, ...string[]];
 type AttendancePatch = [string, string, string];
 
+interface CustomUser {
+  id: string;
+  username: string;
+}
+
+interface SyncAttendance {
+  id: string;
+  childId: string;
+  date: string;
+  status?: string;
+  present?: boolean;
+  markedAt: string | Date;
+}
+
 const childFieldByCode: Record<string, string> = {
   f: "firstName",
   l: "lastName",
@@ -151,8 +165,8 @@ function compactAttendance(attendance: {
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    const userId = session ? (session.user as any).id : "anonymous";
-    const username = session ? (session.user as any)?.username || "anonymous" : "anonymous";
+    const userId = session ? (session.user as CustomUser).id : "anonymous";
+    const username = session ? (session.user as CustomUser)?.username || "anonymous" : "anonymous";
     const userFullName = session ? session.user?.name || "Moniteur anonyme" : "Moniteur anonyme";
 
     const data = await req.json();
@@ -266,7 +280,7 @@ export async function POST(req: Request) {
             existingAttendances.map((a) => `${a.childId}:${a.date}`)
           );
 
-          const attendanceCreates: any[] = [];
+          const attendanceCreates: Array<{ childId: string; date: string; present: boolean; status: string; markedAt: Date }> = [];
           const attendanceUpdates: Array<{ childId: string; date: string; status: string }> = [];
 
           for (const patch of filteredAttendancePatches) {
@@ -401,7 +415,7 @@ export async function POST(req: Request) {
     await prisma.$transaction(async (tx) => {
       // 1. Synchronisation des enfants (Optimisée)
       if (children.length > 0) {
-        const childIds = children.map((c: any) => c.id);
+        const childIds = children.map((c: { id: string }) => c.id);
         const existingChildren = await tx.child.findMany({
           where: { id: { in: childIds } },
           select: { id: true },
@@ -474,9 +488,9 @@ export async function POST(req: Request) {
       }
 
       // 2. Synchronisation des présences (Optimisée)
-      const filteredAttendances = attendances.filter((att: any) => att.date >= "2026-06-28");
+      const filteredAttendances = (attendances as SyncAttendance[]).filter((att) => att.date >= "2026-06-28");
       if (filteredAttendances.length > 0) {
-        const attendanceKeys = filteredAttendances.map((att: any) => ({
+        const attendanceKeys = filteredAttendances.map((att) => ({
           childId: att.childId,
           date: att.date,
         }));
@@ -491,7 +505,7 @@ export async function POST(req: Request) {
           existingAttendances.map((a) => `${a.childId}:${a.date}`)
         );
 
-        const attendanceCreates: any[] = [];
+        const attendanceCreates: Array<{ id: string; childId: string; date: string; present: boolean; status: string; markedAt: Date }> = [];
         const attendanceUpdates: Array<{ id: string; childId: string; date: string; status: string; markedAt: Date }> = [];
 
         for (const att of filteredAttendances) {

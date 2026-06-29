@@ -8,12 +8,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
-  if (!session || (session.user as any).role !== "ADMIN") {
+  if (!session || (session.user as { role?: string }).role !== "ADMIN") {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   }
 
   const { id } = await params;
-  if ((session.user as any).id === id) {
+  if ((session.user as { id?: string }).id === id) {
     return NextResponse.json({ error: "Vous ne pouvez pas bloquer votre propre compte" }, { status: 400 });
   }
 
@@ -41,8 +41,8 @@ export async function PATCH(
 
     await prisma.activityLog.create({
       data: {
-        userId: (session.user as any).id || "",
-        username: (session.user as any).username || "",
+        userId: (session.user as { id?: string }).id || "",
+        username: (session.user as { username?: string }).username || "",
         userFullName: session.user?.name || "",
         action,
         details,
@@ -61,12 +61,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
-  if (!session || (session.user as any).role !== "ADMIN") {
+  if (!session || (session.user as { role?: string }).role !== "ADMIN") {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   }
 
   const { id } = await params;
-  if ((session.user as any).id === id) {
+  if ((session.user as { id?: string }).id === id) {
     return NextResponse.json({ error: "Vous ne pouvez pas supprimer votre propre compte" }, { status: 400 });
   }
 
@@ -86,8 +86,8 @@ export async function DELETE(
     // Enregistrer le log
     await prisma.activityLog.create({
       data: {
-        userId: (session.user as any).id || "",
-        username: (session.user as any).username || "",
+        userId: (session.user as { id?: string }).id || "",
+        username: (session.user as { username?: string }).username || "",
         userFullName: session.user?.name || "",
         action: "DELETE_USER",
         details: `Suppression définitive du compte de ${targetUser.name} (${targetUser.username})`,

@@ -1,6 +1,6 @@
 import React, { FormEvent } from "react";
 import Image from "next/image";
-import { Calendar, Crown, MapPin, NotebookText, Phone, User } from "lucide-react";
+import { Crown, Phone, User } from "lucide-react";
 import type { AttendanceStatus, Child } from "@/lib/db";
 import db, { CLASS_LEVELS, getClassLabel, getClassNumber } from "@/lib/db";
 import { getHistoryDotClass } from "./utils";

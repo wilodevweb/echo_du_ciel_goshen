@@ -79,14 +79,14 @@ export default function DashboardPage() {
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login");
-    } else if (status === "authenticated" && (session?.user as any)?.role !== "ADMIN") {
+    } else if (status === "authenticated" && (session?.user as { role?: string } | undefined)?.role !== "ADMIN") {
       router.push("/");
     }
   }, [status, session, router]);
 
   // Charger les moniteurs et logs au chargement ou changement de tab
   useEffect(() => {
-    if (status === "authenticated" && (session?.user as any)?.role === "ADMIN") {
+    if (status === "authenticated" && (session?.user as { role?: string } | undefined)?.role === "ADMIN") {
       if (activeTab === "moniteurs") {
         fetchUsers();
       } else if (activeTab === "activites") {
@@ -236,7 +236,7 @@ export default function DashboardPage() {
     }
   };
 
-  if (status === "loading" || (status === "authenticated" && (session?.user as any)?.role !== "ADMIN")) {
+  if (status === "loading" || (status === "authenticated" && (session?.user as { role?: string } | undefined)?.role !== "ADMIN")) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center gap-3">
@@ -260,7 +260,7 @@ export default function DashboardPage() {
               <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2">
                 <span className="truncate">Administration</span>
                 <span className="hidden sm:inline-flex text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full bg-[#00b22d]/20 text-[#00b22d] font-bold border border-[#00b22d]/30 flex-shrink-0">
-                  {(session?.user as any)?.title || "Moniteur-Admin"}
+                  {(session?.user as { title?: string } | undefined)?.title || "Moniteur-Admin"}
                 </span>
               </h1>
               <p className="text-xs text-gray-400 font-medium truncate">
@@ -611,7 +611,7 @@ export default function DashboardPage() {
                       <label className="block text-sm font-semibold text-gray-300 mb-1.5">Type de média</label>
                       <select
                         value={uploadType}
-                        onChange={(e) => setUploadType(e.target.value as any)}
+                        onChange={(e) => setUploadType(e.target.value as "image" | "video" | "pdf")}
                         className="block w-full py-2.5 px-3 border border-gray-800 rounded-xl bg-gray-900 text-white text-sm focus:border-[#00b22d] focus:outline-none"
                       >
                         <option value="pdf">Document (PDF)</option>
@@ -624,7 +624,7 @@ export default function DashboardPage() {
                       <label className="block text-sm font-semibold text-gray-300 mb-1.5">Format d&apos;affichage (Aspect Ratio)</label>
                       <select
                         value={aspectRatio}
-                        onChange={(e) => setAspectRatio(e.target.value as any)}
+                        onChange={(e) => setAspectRatio(e.target.value as "square" | "wide" | "tall")}
                         className="block w-full py-2.5 px-3 border border-gray-800 rounded-xl bg-gray-900 text-white text-sm focus:border-[#00b22d] focus:outline-none"
                       >
                         <option value="square">Carré (1:1)</option>
