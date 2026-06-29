@@ -59,6 +59,7 @@ export default function AddChildPage() {
             mode="add"
             value={newChild}
             isAdding={isAdding}
+            showAttendance={false}
             onChange={setNewChild}
             onSubmit={handleAddChild}
           />

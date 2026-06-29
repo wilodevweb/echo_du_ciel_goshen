@@ -91,6 +91,7 @@ export type PointageCardProps =
       mode: "add";
       value: NewChildForm;
       isAdding: boolean;
+      showAttendance?: boolean;
       onChange: (value: NewChildForm) => void;
       onSubmit: (status: AttendanceStatus) => void;
     };
@@ -316,7 +317,7 @@ export function PointageCard(props: PointageCardProps) {
   }
 
   // mode === "add"
-  const { value, isAdding, onChange, onSubmit } = props;
+  const { value, isAdding, showAttendance, onChange, onSubmit } = props;
   const update = async (field: keyof NewChildForm, fieldValue: string) => {
     let nextValue = { ...value, [field]: fieldValue };
     
@@ -403,20 +404,24 @@ export function PointageCard(props: PointageCardProps) {
       }
       body={
         <div className="grid grid-cols-2 gap-3 rounded-[22px] bg-white/7 p-2">
-          <StatusButton
-            label="Malade"
-            colorClass="bg-yellow-400 text-[#1b1b1b]"
-            active={false}
-            disabled={!canAdd || isAdding}
-            onClick={() => onSubmit("SICK")}
-          />
-          <StatusButton
-            label="Absent"
-            colorClass="bg-red-500 text-white"
-            active={false}
-            disabled={!canAdd || isAdding}
-            onClick={() => onSubmit("ABSENT")}
-          />
+          {showAttendance !== false && (
+            <>
+              <StatusButton
+                label="Malade"
+                colorClass="bg-yellow-400 text-[#1b1b1b]"
+                active={false}
+                disabled={!canAdd || isAdding}
+                onClick={() => onSubmit("SICK")}
+              />
+              <StatusButton
+                label="Absent"
+                colorClass="bg-red-500 text-white"
+                active={false}
+                disabled={!canAdd || isAdding}
+                onClick={() => onSubmit("ABSENT")}
+              />
+            </>
+          )}
           <button
             type="button"
             disabled={!canAdd || isAdding}
