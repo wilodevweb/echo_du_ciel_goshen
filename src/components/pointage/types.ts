@@ -12,6 +12,7 @@ export type NewChildForm = {
   address: string;
   birthDate: string;
   notes: string;
+  parentId?: string;
 };
 
 export type ChildDetailsDraft = NewChildForm;

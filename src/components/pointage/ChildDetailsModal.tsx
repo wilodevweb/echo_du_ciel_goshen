@@ -4,13 +4,233 @@ import {
   GraduationCap,
   MapPin,
   NotebookText,
-  Phone,
   X,
   User,
 } from "lucide-react";
+import { useLiveQuery } from "dexie-react-hooks";
 import type { AttendanceStatus, Child, ClassLevel } from "@/lib/db";
 import db, { CLASS_LEVELS, getClassLabel, getClassNumber, markEntityForSync } from "@/lib/db";
 import type { ChildDetailsDraft } from "./types";
+
+interface ParentItem {
+  id?: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  address?: string;
+}
+
+function ParentEditor({
+  parents,
+  draft,
+  onChange,
+  onCancel,
+}: {
+  parents: ParentItem[];
+  draft: ChildDetailsDraft;
+  onChange: (value: ParentItem) => void;
+  onCancel: () => void;
+}) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isManualMode, setIsManualMode] = useState(false);
+  
+  const [manualFirstName, setManualFirstName] = useState(draft.parentFirstName || "");
+  const [manualLastName, setManualLastName] = useState(draft.parentLastName || "");
+  const [manualPhone, setManualPhone] = useState(draft.parentPhone || "");
+
+  const filteredParents = parents.filter(p => {
+    const query = searchQuery.toLowerCase();
+    return (
+      (p.firstName || "").toLowerCase().includes(query) ||
+      (p.lastName || "").toLowerCase().includes(query) ||
+      (p.phone || "").includes(query)
+    );
+  });
+
+  return (
+    <div className="mt-3 rounded-2xl bg-white/5 p-4 border border-white/10" onClick={(e) => e.stopPropagation()}>
+      {!isManualMode ? (
+        <>
+          <div className="relative mb-3">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Rechercher par nom ou téléphone..."
+              className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-[#00b22d] focus:ring-1 focus:ring-[#00b22d]"
+              autoFocus
+            />
+          </div>
+
+          <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1.5 custom-scrollbar mb-3">
+            {filteredParents.length === 0 ? (
+              <p className="text-xs text-white/45 text-center py-2">Aucun parent trouvé</p>
+            ) : (
+              filteredParents.map((p, idx) => (
+                <button
+                  key={p.id || idx}
+                  type="button"
+                  onClick={() => {
+                    onChange(p);
+                    onCancel();
+                  }}
+                  className="w-full text-left p-2.5 rounded-xl hover:bg-white/10 active:bg-white/15 transition-all flex items-center justify-between border border-transparent hover:border-white/5"
+                >
+                  <div className="min-w-0 flex-1 pr-2">
+                    <p className="text-sm font-semibold text-white truncate">
+                      {p.lastName} {p.firstName}
+                    </p>
+                    <p className="text-xs text-white/45 truncate">{p.phone}</p>
+                  </div>
+                  <span className="text-[10px] font-bold text-[#00b22d] bg-[#00b22d]/10 px-2 py-0.5 rounded-full border border-[#00b22d]/20 shrink-0">
+                    Choisir
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsManualMode(true);
+            }}
+            className="w-full h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/15 active:scale-[0.98] text-xs font-black text-white shadow-sm transition-all"
+          >
+            + Nouveau parent (Saisir un nom)
+          </button>
+        </>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex justify-between items-center">
+            <p className="text-xs font-bold text-white/60">Nouveau Parent</p>
+            <button
+              type="button"
+              onClick={() => setIsManualMode(false)}
+              className="text-xs text-white/45 hover:text-white/80 underline"
+            >
+              Retour à la liste
+            </button>
+          </div>
+
+          <div className="grid gap-2">
+            <input
+              type="text"
+              value={manualLastName}
+              onChange={(e) => setManualLastName(e.target.value)}
+              placeholder="Nom du parent"
+              className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-[#00b22d]"
+            />
+            <input
+              type="text"
+              value={manualFirstName}
+              onChange={(e) => setManualFirstName(e.target.value)}
+              placeholder="Prénom du parent"
+              className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-[#00b22d]"
+            />
+            <input
+              type="tel"
+              value={manualPhone}
+              onChange={(e) => setManualPhone(e.target.value)}
+              placeholder="Téléphone du parent"
+              className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-[#00b22d]"
+            />
+          </div>
+
+          <button
+            type="button"
+            disabled={!manualLastName.trim() || !manualPhone.trim()}
+            onClick={() => {
+              onChange({
+                firstName: manualFirstName.trim(),
+                lastName: manualLastName.trim(),
+                phone: manualPhone.trim(),
+              });
+              onCancel();
+            }}
+            className="w-full h-10 flex items-center justify-center rounded-xl bg-[#00b22d] hover:bg-[#008f24] disabled:bg-white/10 disabled:text-white/40 disabled:cursor-not-allowed text-xs font-black text-white shadow-sm transition-all"
+          >
+            Enregistrer
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EditableParentRow({
+  parents,
+  draft,
+  isEditing,
+  onEdit,
+  onChange,
+  onCancel,
+}: {
+  parents: ParentItem[];
+  draft: ChildDetailsDraft;
+  isEditing: boolean;
+  onEdit: () => void;
+  onChange: (value: ParentItem) => void;
+  onCancel: () => void;
+}) {
+  const parentName = (draft.parentFirstName || draft.parentLastName)
+    ? `${draft.parentFirstName} ${draft.parentLastName}`.trim()
+    : "";
+
+  return (
+    <div className="flex w-full gap-4 text-left">
+      <div className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/8 text-white/85">
+        <User className="h-6 w-6" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between">
+          <p className="text-lg font-semibold leading-tight text-white">Parent</p>
+          {isEditing && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="text-xs text-white/45 hover:text-white/80 underline"
+            >
+              Annuler
+            </button>
+          )}
+        </div>
+
+        {isEditing ? (
+          <ParentEditor
+            parents={parents}
+            draft={draft}
+            onChange={onChange}
+            onCancel={onCancel}
+          />
+        ) : (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={onEdit}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") onEdit();
+            }}
+            className="mt-1 block text-left cursor-pointer"
+          >
+            {parentName ? (
+              <>
+                <p className="text-base font-semibold leading-snug text-white/85">
+                  {parentName}
+                </p>
+                <p className="text-sm font-medium leading-snug text-white/55">
+                  {draft.parentPhone || "Pas de téléphone"}
+                </p>
+              </>
+            ) : (
+              <p className="text-base leading-snug text-white/55">Non renseigné</p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function InlineTextEditor({
   value,
@@ -269,9 +489,41 @@ export function ChildDetailsModal({
     address: child.address,
     birthDate: child.birthDate ?? "",
     notes: child.notes ?? "",
+    parentId: child.parentId,
   }));
-  const [activeField, setActiveField] = useState<keyof ChildDetailsDraft | "name" | null>(null);
+  const [activeField, setActiveField] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  const localParents = useLiveQuery(async () => {
+    const parentList = await db.parents.toArray();
+    const childrenList = await db.children.toArray();
+    
+    const parentMap = new Map<string, ParentItem>();
+    
+    parentList.forEach(p => {
+      parentMap.set(p.phone, {
+        id: p.id,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        phone: p.phone,
+        address: p.address,
+      });
+    });
+    
+    childrenList.forEach(c => {
+      if (c.parentPhone && !parentMap.has(c.parentPhone)) {
+        parentMap.set(c.parentPhone, {
+          id: c.parentId,
+          firstName: c.parentFirstName || "",
+          lastName: c.parentLastName || c.lastName || "",
+          phone: c.parentPhone,
+          address: c.address,
+        });
+      }
+    });
+    
+    return Array.from(parentMap.values());
+  }) || [];
   const isDeletion = draft.firstName.trim() === "" && draft.lastName.trim() === "" && draft.postName.trim() === "";
   const canSave = isDeletion || Boolean(draft.firstName.trim() && draft.lastName.trim() && draft.postName.trim());
 
@@ -316,6 +568,7 @@ export function ChildDetailsModal({
             address: draft.address.trim(),
             birthDate: draft.birthDate || undefined,
             notes: draft.notes.trim(),
+            parentId: draft.parentId,
             updatedAt: new Date().toISOString(),
           };
           await db.children.update(child.id, nextChild);
@@ -417,33 +670,22 @@ export function ChildDetailsModal({
             onEdit={() => setActiveField("birthDate")}
             onChange={(value) => updateDraft("birthDate", value)}
           />
-          <EditableDetailRow
-            icon={<Phone className="h-6 w-6" />}
-            title="Téléphone parent"
-            value={draft.parentPhone}
-            placeholder="Non renseigné"
-            inputType="tel"
-            isEditing={activeField === "parentPhone"}
-            onEdit={() => setActiveField("parentPhone")}
-            onChange={(value) => updateDraft("parentPhone", value)}
-          />
-          <EditableDetailRow
-            icon={<User className="h-6 w-6" />}
-            title="Nom du parent"
-            value={draft.parentLastName}
-            placeholder="Non renseigné"
-            isEditing={activeField === "parentLastName"}
-            onEdit={() => setActiveField("parentLastName")}
-            onChange={(value) => updateDraft("parentLastName", value)}
-          />
-          <EditableDetailRow
-            icon={<User className="h-6 w-6" />}
-            title="Prénom du parent"
-            value={draft.parentFirstName}
-            placeholder="Non renseigné"
-            isEditing={activeField === "parentFirstName"}
-            onEdit={() => setActiveField("parentFirstName")}
-            onChange={(value) => updateDraft("parentFirstName", value)}
+          <EditableParentRow
+            parents={localParents}
+            draft={draft}
+            isEditing={activeField === "parent"}
+            onEdit={() => setActiveField("parent")}
+            onChange={(selectedParent) => {
+              setDraft(current => ({
+                ...current,
+                parentId: selectedParent.id || undefined,
+                parentPhone: selectedParent.phone,
+                parentFirstName: selectedParent.firstName,
+                parentLastName: selectedParent.lastName,
+                address: selectedParent.address || current.address,
+              }));
+            }}
+            onCancel={() => setActiveField(null)}
           />
           <EditableDetailRow
             icon={<MapPin className="h-6 w-6" />}
