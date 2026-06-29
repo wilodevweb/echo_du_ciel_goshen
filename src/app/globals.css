@@ -5,8 +5,12 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f9fafb;
+  --foreground: #111827;
+  --input-bg: #ffffff;
+  --input-text: #111827;
+  --input-border: #d1d5db;
+  --input-placeholder: #9ca3af;
 }
 
 @theme inline {
@@ -22,6 +26,10 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --input-bg: #1f1f23;
+    --input-text: #ededed;
+    --input-border: #2d2d30;
+    --input-placeholder: #5c5c60;
   }
 }
 

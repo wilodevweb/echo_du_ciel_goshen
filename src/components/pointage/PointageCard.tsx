@@ -331,12 +331,7 @@ export function PointageCard(props: PointageCardProps) {
 
   const canAdd = Boolean(
     value.firstName.trim() &&
-      value.lastName.trim() &&
-      value.postName.trim() &&
-      value.parentPhone.trim() &&
-      value.parentFirstName.trim() &&
-      value.parentLastName.trim() &&
-      value.address.trim()
+      value.lastName.trim()
   );
 
   return (
@@ -384,10 +379,9 @@ export function PointageCard(props: PointageCardProps) {
               className="w-full border-b border-gray-100 py-1 text-center text-lg font-black uppercase text-[#111827] outline-none placeholder:text-gray-300"
             />
             <input
-              required
               value={value.postName}
               onChange={(event) => update("postName", event.target.value)}
-              placeholder="POST-NOM"
+              placeholder="POST-NOM (Optionnel)"
               className="w-full border-b border-gray-100 py-1 text-center text-lg font-black uppercase text-[#111827] outline-none placeholder:text-gray-300"
             />
             <input
@@ -401,88 +395,13 @@ export function PointageCard(props: PointageCardProps) {
         </div>
       }
       body={
-        <>
-          <div className="mb-5 space-y-3.5 rounded-[22px] bg-white/5 p-4 text-left">
-            <div className="flex items-center gap-3">
-              <User className="h-5 w-5 shrink-0 text-white/60" />
-              <select
-                value={value.gender}
-                onChange={(event) => update("gender", event.target.value as 'M' | 'F')}
-                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/30 border-none"
-                style={{ colorScheme: "dark" }}
-              >
-                <option value="M" className="text-black">Garçon (M)</option>
-                <option value="F" className="text-black">Fille (F)</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-3">
-              <Phone className="h-5 w-5 shrink-0 text-white/60" />
-              <input
-                required
-                value={value.parentPhone}
-                onChange={(event) => update("parentPhone", event.target.value)}
-                placeholder="Téléphone parent"
-                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/30"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <User className="h-5 w-5 shrink-0 text-white/60" />
-              <input
-                required
-                value={value.parentLastName}
-                onChange={(event) => update("parentLastName", event.target.value)}
-                placeholder="Nom du parent"
-                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/30"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <User className="h-5 w-5 shrink-0 text-white/60" />
-              <input
-                required
-                value={value.parentFirstName}
-                onChange={(event) => update("parentFirstName", event.target.value)}
-                placeholder="Prénom du parent"
-                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/30"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <MapPin className="h-5 w-5 shrink-0 text-white/60" />
-              <input
-                required
-                value={value.address}
-                onChange={(event) => update("address", event.target.value)}
-                placeholder="Adresse"
-                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/30"
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <Calendar className="h-5 w-5 shrink-0 text-white/60" />
-              <input
-                type="date"
-                value={value.birthDate}
-                onChange={(event) => update("birthDate", event.target.value)}
-                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/30"
-                style={{ colorScheme: "dark" }}
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <NotebookText className="h-5 w-5 shrink-0 text-white/60" />
-              <input
-                value={value.notes}
-                onChange={(event) => update("notes", event.target.value)}
-                placeholder="Notes, allergies, détails..."
-                className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/30"
-              />
-            </div>
-          </div>
-          <button
-            type="submit"
-            disabled={!canAdd || isAdding}
-            className="h-14 w-full rounded-[22px] bg-[#00b22d] text-base font-bold text-white shadow-lg transition-all hover:bg-[#009e27] active:scale-[0.98] disabled:cursor-not-allowed disabled:scale-100 disabled:bg-white/10 disabled:text-white/40"
-          >
-            {isAdding ? "Ajout en cours..." : "+ Ajouter l'enfant"}
-          </button>
-        </>
+        <button
+          type="submit"
+          disabled={!canAdd || isAdding}
+          className="h-14 w-full rounded-[22px] bg-[#00b22d] text-base font-bold text-white shadow-lg transition-all hover:bg-[#009e27] active:scale-[0.98] disabled:cursor-not-allowed disabled:scale-100 disabled:bg-white/10 disabled:text-white/40"
+        >
+          {isAdding ? "Ajout en cours..." : "+ Ajouter l'enfant"}
+        </button>
       }
     />
   );

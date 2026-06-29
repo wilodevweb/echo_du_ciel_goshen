@@ -1,130 +1,46 @@
 "use client";
 
-import React, { useState, FormEvent, useRef } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
-import { Camera, ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Card, CardContent } from '@/components/ui/Card';
-import db, { CLASS_LEVELS, type ClassLevel, generateId, markEntityForSync } from '@/lib/db';
-
-async function resizeImageFile(file: File) {
-  const bitmap = await createImageBitmap(file);
-  const maxSize = 768;
-  const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
-  const width = Math.round(bitmap.width * scale);
-  const height = Math.round(bitmap.height * scale);
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-
-  const context = canvas.getContext('2d');
-  if (!context) {
-    throw new Error('Impossible de préparer la photo.');
-  }
-
-  context.drawImage(bitmap, 0, 0, width, height);
-  bitmap.close();
-
-  return canvas.toDataURL('image/jpeg', 0.75);
-}
+import { PointageCard } from '@/components/pointage/PointageCard';
+import { NewChildForm, emptyNewChild } from '@/components/pointage/types';
+import db, { generateId, markEntityForSync } from '@/lib/db';
 
 export default function AddChildPage() {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    postName: '',
-    gender: 'M' as 'M' | 'F',
-    parentPhone: '',
-    parentFirstName: '',
-    parentLastName: '',
-    address: '',
-    classLevel: 'FIRST' as ClassLevel,
-    birthDate: '',
-    notes: '',
-  });
-  const [photoUrl, setPhotoUrl] = useState<string>('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [newChild, setNewChild] = useState<NewChildForm>(emptyNewChild);
+  const [isAdding, setIsAdding] = useState(false);
 
-  const handleChange = async (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+  const handleAddChild = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsAdding(true);
 
-    if (name === 'parentPhone') {
-      const phone = value.trim();
-      if (phone.length >= 4) {
-        const match = await db.children.where('parentPhone').equals(phone).first();
-        if (match) {
-          setFormData(prev => ({
-            ...prev,
-            parentFirstName: prev.parentFirstName || match.parentFirstName || '',
-            parentLastName: prev.parentLastName || match.parentLastName || '',
-            address: prev.address || match.address || '',
-          }));
-        }
-      }
-    }
-  };
-
-  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      resizeImageFile(file)
-        .then(setPhotoUrl)
-        .catch(() => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            setPhotoUrl(reader.result as string);
-          };
-          reader.readAsDataURL(file);
-        });
-    }
-  };
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
-    if (formData.birthDate) {
-      const today = new Date().toISOString().split('T')[0];
-      if (formData.birthDate > today) {
-        alert("La date de naissance ne peut pas être dans le futur.");
-        setIsSubmitting(false);
-        return;
-      }
-    }
-    
     try {
       const childId = generateId();
       await db.children.add({
         id: childId,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        postName: formData.postName,
-        gender: formData.gender,
-        classLevel: formData.classLevel,
-        parentPhone: formData.parentPhone,
-        parentFirstName: formData.parentFirstName,
-        parentLastName: formData.parentLastName,
-        address: formData.address,
-        birthDate: formData.birthDate || undefined,
-        notes: formData.notes,
-        photoUrl: photoUrl,
+        firstName: newChild.firstName.trim(),
+        lastName: newChild.lastName.trim(),
+        postName: newChild.postName.trim(),
+        gender: newChild.gender,
+        classLevel: newChild.classLevel,
+        parentPhone: "",
+        parentFirstName: "",
+        parentLastName: "",
+        address: "",
         createdAt: new Date().toISOString(),
       });
       await markEntityForSync('child', childId);
       
-      router.push('/enfants'); // Redirection vers la liste
+      // Redirection vers l'annuaire avec l'ID du nouvel enfant pour afficher son profil
+      router.push(`/enfants?newChildId=${childId}`);
     } catch (error) {
-      console.error("Erreur lors de l'ajout", error);
+      console.error("Erreur lors de l'enregistrement", error);
       alert("Une erreur est survenue lors de l'enregistrement.");
     } finally {
-      setIsSubmitting(false);
+      setIsAdding(false);
     }
   };
 
@@ -132,197 +48,22 @@ export default function AddChildPage() {
     <main className="flex min-h-screen flex-col bg-gray-50 pb-10">
       {/* Header Mobile */}
       <header className="bg-[#00b22d] text-white p-4 sticky top-0 z-10 flex items-center shadow-md">
-        <Link href="/" className="mr-4">
+        <Link href="/enfants" className="mr-4">
           <ArrowLeft className="w-6 h-6" />
         </Link>
         <h1 className="text-xl font-bold">Nouveau Profil</h1>
       </header>
 
-      <div className="p-4 flex-1">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          
-          {/* Photo Section */}
-          <div className="flex flex-col items-center justify-center mb-6">
-            <div 
-              className="w-32 h-32 rounded-full bg-gray-200 border-4 border-white shadow-md flex items-center justify-center overflow-hidden relative cursor-pointer"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {photoUrl ? (
-                <Image
-                  src={photoUrl}
-                  alt="Apercu"
-                  width={128}
-                  height={128}
-                  className="h-full w-full object-cover"
-                  unoptimized
-                />
-              ) : (
-                <div className="text-gray-400 flex flex-col items-center">
-                  <Camera className="w-8 h-8 mb-1" />
-                  <span className="text-xs">Photo</span>
-                </div>
-              )}
-            </div>
-            <input 
-              type="file" 
-              accept="image/*" 
-              capture="environment" 
-              className="hidden" 
-              ref={fileInputRef}
-              onChange={handlePhotoCapture}
-            />
-            <p className="text-sm text-[#00b22d] mt-3 font-medium cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-              Prendre / Choisir une photo
-            </p>
-          </div>
-
-          <Card padding="md">
-            <CardContent>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <Input
-                  label="Nom"
-                  name="lastName"
-                  required
-                  value={formData.lastName}
-                  onChange={handleChange}
-                  placeholder="Ex: Mbuyi"
-                />
-                <Input
-                  label="Post-nom"
-                  name="postName"
-                  required
-                  value={formData.postName}
-                  onChange={handleChange}
-                  placeholder="Ex: Ilunga"
-                />
-                <Input
-                  label="Prénom"
-                  name="firstName"
-                  required
-                  value={formData.firstName}
-                  onChange={handleChange}
-                  placeholder="Ex: Jean"
-                />
-              </div>
-
-              <div className="w-full flex flex-col mb-4">
-                <label htmlFor="classLevel" className="block text-sm font-medium text-gray-700 mb-1">
-                  Classe
-                </label>
-                <select
-                  id="classLevel"
-                  name="classLevel"
-                  required
-                  value={formData.classLevel}
-                  onChange={handleChange}
-                  className="flex h-11 w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b22d] focus:border-transparent"
-                >
-                  {CLASS_LEVELS.map((level) => (
-                    <option key={level.value} value={level.value}>
-                      {level.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="w-full flex flex-col mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Sexe
-                </label>
-                <div className="flex gap-6 mt-1">
-                  <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-700">
-                    <input
-                      type="radio"
-                      name="gender"
-                      value="M"
-                      checked={formData.gender === "M"}
-                      onChange={handleChange}
-                      className="h-4 w-4 border-gray-300 text-[#00b22d] focus:ring-[#00b22d]"
-                    />
-                    Masculin (M)
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-700">
-                    <input
-                      type="radio"
-                      name="gender"
-                      value="F"
-                      checked={formData.gender === "F"}
-                      onChange={handleChange}
-                      className="h-4 w-4 border-gray-300 text-[#00b22d] focus:ring-[#00b22d]"
-                    />
-                    Féminin (F)
-                  </label>
-                </div>
-              </div>
-
-              <Input 
-                label="Téléphone Parent" 
-                name="parentPhone" 
-                type="tel" 
-                required 
-                value={formData.parentPhone}
-                onChange={handleChange}
-                placeholder="Ex: 081 234 5678"
-                helperText="Pour contacter rapidement via l'application"
-              />
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-4">
-                <Input
-                  label="Nom du Parent"
-                  name="parentLastName"
-                  required
-                  value={formData.parentLastName}
-                  onChange={handleChange}
-                  placeholder="Ex: Mbuyi"
-                />
-                <Input
-                  label="Prénom du Parent"
-                  name="parentFirstName"
-                  required
-                  value={formData.parentFirstName}
-                  onChange={handleChange}
-                  placeholder="Ex: Joseph"
-                />
-              </div>
-
-              <Input 
-                label="Adresse Physique" 
-                name="address" 
-                required 
-                value={formData.address}
-                onChange={handleChange}
-                placeholder="Quartier, Rue..."
-              />
-
-              <Input 
-                label="Date de naissance (Optionnel)" 
-                name="birthDate" 
-                type="date" 
-                value={formData.birthDate}
-                onChange={handleChange}
-              />
-
-              <div className="w-full flex flex-col mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Notes médicales / Allergies
-                </label>
-                <textarea 
-                  name="notes"
-                  className="flex w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#00b22d] focus:border-transparent"
-                  rows={3}
-                  value={formData.notes}
-                  onChange={handleChange}
-                  placeholder="Remarques eventuelles..."
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Button type="submit" fullWidth size="lg" disabled={isSubmitting}>
-            {isSubmitting ? "Enregistrement..." : "Ajouter l'enfant"}
-          </Button>
-
-        </form>
+      <div className="p-4 flex-1 flex items-center justify-center">
+        <div className="w-full max-w-md">
+          <PointageCard
+            mode="add"
+            value={newChild}
+            isAdding={isAdding}
+            onChange={setNewChild}
+            onSubmit={handleAddChild}
+          />
+        </div>
       </div>
     </main>
   );

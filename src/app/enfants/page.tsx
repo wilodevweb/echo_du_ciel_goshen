@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useDeferredValue, useMemo } from 'react';
+import React, { useState, useDeferredValue, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -12,10 +13,28 @@ import { PointageCard } from '@/components/pointage/PointageCard';
 import { ChildDetailsModal } from '@/components/pointage/ChildDetailsModal';
 
 export default function ChildrenList() {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [selectedChild, setSelectedChild] = useState<Child | null>(null);
   const [detailsChild, setDetailsChild] = useState<Child | null>(null);
+
+  // Détecter un nouvel enfant ajouté pour afficher sa fiche de profil immédiatement
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URL(window.location.href).searchParams;
+      const newChildId = searchParams.get("newChildId");
+      if (newChildId) {
+        db.children.get(newChildId).then((child) => {
+          if (child) {
+            setSelectedChild(child);
+            // Nettoyer l'URL
+            router.replace("/enfants");
+          }
+        });
+      }
+    }
+  }, [router]);
 
   // Récupérer les enfants depuis IndexedDB sans dépendance sur la barre de recherche
   const allChildren = useLiveQuery(() => db.children.toArray());
