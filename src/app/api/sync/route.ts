@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../auth/[...nextauth]/route";
 
 type ChildPatch = [string, string, ...string[]];
 type AttendancePatch = [string, string, string];
@@ -116,6 +118,11 @@ function compactAttendance(attendance: {
 
 export async function POST(req: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    const userId = session ? (session.user as any).id : "anonymous";
+    const username = session ? (session.user as any)?.username || "anonymous" : "anonymous";
+    const userFullName = session ? session.user?.name || "Moniteur anonyme" : "Moniteur anonyme";
+
     const data = await req.json();
     const { mode } = data;
 
@@ -303,6 +310,17 @@ export async function POST(req: Request) {
         const isUpdatedSinceLastSync = hasValidLastSyncDate && attendance.markedAt > lastSyncDate;
 
         return !pushedAttendanceKeys.has(key) && (isMissing || isUpdatedSinceLastSync);
+      });
+
+      // Enregistrer l'activité de synchronisation v2
+      await prisma.activityLog.create({
+        data: {
+          userId,
+          username,
+          userFullName,
+          action: "SYNC_DATA",
+          details: `Synchronisation (v2) : ${childPatches.length} modifications d'enfants et ${attendancePatches.length} pointages de présence envoyés.`,
+        },
       });
 
       return NextResponse.json({
@@ -507,6 +525,17 @@ export async function POST(req: Request) {
         return !pushedAttendanceKeys.has(key) && (isMissing || isUpdatedSinceLastSync);
       });
 
+      // Enregistrer l'activité de synchronisation delta
+      await prisma.activityLog.create({
+        data: {
+          userId,
+          username,
+          userFullName,
+          action: "SYNC_DATA",
+          details: `Synchronisation (delta) : ${children.length} enfants et ${attendances.length} présences envoyés`,
+        },
+      });
+
       return NextResponse.json({
         success: true,
         message: "Synchronisation réussie",
@@ -522,6 +551,17 @@ export async function POST(req: Request) {
         })),
       });
     }
+
+    // Enregistrer l'activité de synchronisation simple
+    await prisma.activityLog.create({
+      data: {
+        userId,
+        username,
+        userFullName,
+        action: "SYNC_DATA",
+        details: `Synchronisation réussie sans envoi de modifications`,
+      },
+    });
 
     return NextResponse.json({
       success: true,

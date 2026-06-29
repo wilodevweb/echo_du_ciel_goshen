@@ -10,7 +10,7 @@ import { Lock } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -23,7 +23,7 @@ export default function LoginPage() {
     try {
       const res = await signIn("credentials", {
         redirect: false,
-        email,
+        username,
         password,
       });
 
@@ -60,12 +60,12 @@ export default function LoginPage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <Input
-                label="Adresse Email"
-                type="email"
+                label="Nom d'utilisateur / Nom"
+                type="text"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@echo.com"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="joseph.monga ou Monga Joseph"
               />
               <Input
                 label="Mot de passe"

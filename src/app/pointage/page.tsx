@@ -20,9 +20,8 @@ import {
 } from "@/components/attendance/AttendanceDateSelector";
 import { ClassSelectionScreen } from "@/components/attendance/ClassSelectionScreen";
 import { AttendanceSkeleton } from "@/components/pointage/AttendanceSkeleton";
-import { ChildAttendanceCard } from "@/components/pointage/ChildAttendanceCard";
+import { PointageCard } from "@/components/pointage/PointageCard";
 import { ChildDetailsModal } from "@/components/pointage/ChildDetailsModal";
-import { AddChildCard } from "@/components/pointage/AddChildCard";
 import {
   type ChildDetailsDraft,
   type NewChildForm,
@@ -304,7 +303,8 @@ export default function PointagePage() {
             >
               <div key={currentChild ? currentChild.id : "add-child-card"} className="attendance-card-in w-full">
                 {currentChild ? (
-                  <ChildAttendanceCard
+                  <PointageCard
+                    mode="attendance"
                     child={currentChild}
                     status={getAttendanceStatus(attendanceMap.get(currentChild.id))}
                     recentStatuses={recentStatuses}
@@ -314,7 +314,8 @@ export default function PointagePage() {
                     onSetStatus={(status) => setAttendanceStatus(currentChild.id, status)}
                   />
                 ) : (
-                  <AddChildCard
+                  <PointageCard
+                    mode="add"
                     value={newChild}
                     isAdding={isAdding}
                     onChange={setNewChild}

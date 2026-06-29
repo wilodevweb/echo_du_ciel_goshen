@@ -13,12 +13,28 @@ datasource db {
 // User = Moniteur qui peut se connecter
 model User {
   id        String   @id @default(cuid())
-  email     String   @unique
+  username  String   @unique // Nom d'utilisateur unique
   password  String   // Mot de passe hashé
   name      String?
-  role      String   @default("MONITOR")
+  role      String   @default("MONITOR") // "MONITOR" or "ADMIN"
+  title     String?  // Ex: "Directeur de l'écodim", "Second"
+  isBlocked Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Suivi des agissements des moniteurs (Activity Logs)
+model ActivityLog {
+  id           String   @id @default(cuid())
+  userId       String
+  username     String   // Nom d'utilisateur de l'auteur de l'action
+  userFullName String?  // Nom complet de l'auteur
+  action       String   // "CONNEXION", "CREATE_USER", "BLOCK_USER", "UNBLOCK_USER", "DELETE_USER", "UPLOAD_FILE", "SYNC_DATA"
+  details      String
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
 }
 
 // Enfant

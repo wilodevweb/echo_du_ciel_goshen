@@ -13,13 +13,13 @@ const prisma = new PrismaClient({ adapter });
 
 const defaultUsers = [
   {
-    email: 'admin@echo.com',
+    username: 'admin',
     name: 'Admin Echo',
     password: 'password123',
     role: 'ADMIN',
   },
   {
-    email: 'moniteur@echo.com',
+    username: 'moniteur',
     name: 'Moniteur Goshen',
     password: 'password123',
     role: 'MONITOR',
@@ -73,21 +73,21 @@ async function main() {
     const password = await bcrypt.hash(user.password, 10);
 
     const savedUser = await prisma.user.upsert({
-      where: { email: user.email },
+      where: { username: user.username },
       update: {
         name: user.name,
         password,
         role: user.role,
       },
       create: {
-        email: user.email,
+        username: user.username,
         name: user.name,
         password,
         role: user.role,
       },
     });
 
-    console.log(`Utilisateur pret : ${savedUser.email} (${savedUser.role})`);
+    console.log(`Utilisateur pret : ${savedUser.username} (${savedUser.role})`);
   }
 
   for (const child of defaultChildren) {

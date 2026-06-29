@@ -7,6 +7,8 @@ export default withAuth({
 });
 
 export const config = {
-  // Les routes protégées
-  matcher: ["/", "/enfants/:path*", "/pointage/:path*", "/api/sync/:path*"],
+  // Protéger tout le site sauf la page de connexion, les routes d'auth next-auth, et les fichiers statiques/uploads
+  matcher: [
+    "/((?!api/auth|login|_next/static|_next/image|favicon.ico|uploads).*)",
+  ],
 };

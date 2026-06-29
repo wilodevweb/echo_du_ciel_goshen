@@ -1,9 +1,20 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Bell, CalendarCheck, Users, Images } from "lucide-react";
+import { Bell, CalendarCheck, Users, Images, ShieldCheck } from "lucide-react";
 import { SyncPanel } from "@/components/SyncPanel";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "./api/auth/[...nextauth]/route";
+import { redirect } from "next/navigation";
 
-export default function Home() {
+export default async function Home() {
+  const session = await getServerSession(authOptions);
+
+  if (!session) {
+    redirect("/login");
+  }
+
+  const isAdmin = (session.user as any)?.role === "ADMIN";
+
   return (
     <main className="flex h-[100dvh] flex-col items-center overflow-hidden bg-gray-50 px-5 py-6">
       <div className="flex w-full max-w-md flex-1 flex-col">
@@ -29,6 +40,17 @@ export default function Home() {
               <CalendarCheck className="h-6 w-6" />
               Faire l&apos;appel
             </Link>
+
+            {/* Bouton Admin Dashboard si admin */}
+            {isAdmin && (
+              <Link
+                href="/dashboard"
+                className="flex h-16 w-full items-center justify-center gap-3 rounded-xl bg-purple-600 px-5 text-lg font-bold text-white shadow-md transition-all hover:bg-purple-700 active:scale-[0.98]"
+              >
+                <ShieldCheck className="h-6 w-6" />
+                Tableau de Bord Admin
+              </Link>
+            )}
 
             {/* Grille 2 colonnes pour Annuaire et Ajout */}
             <div className="grid grid-cols-2 gap-3">

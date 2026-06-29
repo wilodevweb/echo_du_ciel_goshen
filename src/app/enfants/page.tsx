@@ -5,13 +5,17 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Search, UserPlus, Phone, ArrowLeft, User } from 'lucide-react';
-import db, { getClassLabel } from '@/lib/db';
+import db, { getClassLabel, type Child } from '@/lib/db';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { PointageCard } from '@/components/pointage/PointageCard';
+import { ChildDetailsModal } from '@/components/pointage/ChildDetailsModal';
 
 export default function ChildrenList() {
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
+  const [selectedChild, setSelectedChild] = useState<Child | null>(null);
+  const [detailsChild, setDetailsChild] = useState<Child | null>(null);
 
   // Récupérer les enfants depuis IndexedDB sans dépendance sur la barre de recherche
   const allChildren = useLiveQuery(() => db.children.toArray());
@@ -79,9 +83,12 @@ export default function ChildrenList() {
         ) : (
           <div className="space-y-4 pb-10">
             {children.map(child => (
-              <Card key={child.id} padding="none" className="overflow-hidden">
+              <Card key={child.id} padding="none" className="overflow-hidden hover:shadow-md transition-shadow">
                 <CardContent className="p-0">
-                  <div className="flex items-center p-4">
+                  <div 
+                    className="flex items-center p-4 cursor-pointer"
+                    onClick={() => setSelectedChild(child)}
+                  >
                     {/* Photo/Avatar */}
                     <div className="w-14 h-14 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-300">
                       {child.photoUrl ? (
@@ -99,8 +106,8 @@ export default function ChildrenList() {
                     </div>
                     
                     {/* Infos */}
-                    <div className="ml-4 flex-1">
-                      <h3 className="font-semibold text-gray-900 text-lg leading-tight">
+                    <div className="ml-4 flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 text-lg leading-tight truncate">
                         {child.lastName} {child.postName} {child.firstName}
                       </h3>
                       <p className="text-xs font-semibold text-[#00b22d]">
@@ -114,7 +121,8 @@ export default function ChildrenList() {
                     {/* Action Appeler */}
                     <a 
                       href={`tel:${child.parentPhone}`} 
-                      className="ml-2 w-10 h-10 rounded-full bg-[#00b22d]/10 flex items-center justify-center text-[#00b22d] hover:bg-[#00b22d] hover:text-white transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                      className="ml-2 w-10 h-10 rounded-full bg-[#00b22d]/10 flex items-center justify-center text-[#00b22d] hover:bg-[#00b22d] hover:text-white transition-colors flex-shrink-0"
                       title="Appeler le parent"
                     >
                       <Phone className="w-5 h-5" />
@@ -126,6 +134,41 @@ export default function ChildrenList() {
           </div>
         )}
       </div>
+
+      {/* Affichage de la 3e carte (Profil) au clic sur un élément de l'annuaire */}
+      {selectedChild && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/65 p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md">
+            <button
+              onClick={() => setSelectedChild(null)}
+              className="absolute -top-3 -right-3 z-50 flex h-9 w-9 items-center justify-center rounded-full bg-white text-gray-900 shadow-xl font-black text-base hover:bg-gray-200 transition-transform active:scale-95"
+            >
+              ✕
+            </button>
+            <PointageCard
+              mode="profile"
+              child={selectedChild}
+              onNameClick={() => setDetailsChild(selectedChild)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Modale détail sombre */}
+      {detailsChild && (
+        <ChildDetailsModal
+          child={detailsChild}
+          onClose={() => {
+            setDetailsChild(null);
+            if (detailsChild) {
+              db.children.get(detailsChild.id).then((updated) => {
+                if (updated) setSelectedChild(updated);
+                else setSelectedChild(null);
+              });
+            }
+          }}
+        />
+      )}
     </main>
   );
 }

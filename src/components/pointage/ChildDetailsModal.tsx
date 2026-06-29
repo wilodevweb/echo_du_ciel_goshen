@@ -8,7 +8,7 @@ import {
   X,
 } from "lucide-react";
 import type { AttendanceStatus, Child, ClassLevel } from "@/lib/db";
-import { CLASS_LEVELS, getClassLabel, getClassNumber } from "@/lib/db";
+import db, { CLASS_LEVELS, getClassLabel, getClassNumber, markEntityForSync } from "@/lib/db";
 import type { ChildDetailsDraft } from "./types";
 
 function InlineTextEditor({
@@ -180,14 +180,14 @@ function EditableClassRow({
 
 export function ChildDetailsModal({
   child,
-  status,
+  status = null,
   onClose,
   onSave,
 }: {
   child: Child;
-  status: AttendanceStatus | null;
+  status?: AttendanceStatus | null;
   onClose: () => void;
-  onSave: (draft: ChildDetailsDraft) => Promise<void>;
+  onSave?: (draft: ChildDetailsDraft) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<ChildDetailsDraft>(() => ({
     firstName: child.firstName,
@@ -218,7 +218,29 @@ export function ChildDetailsModal({
 
     setIsSaving(true);
     try {
-      await onSave(draft);
+      if (onSave) {
+        await onSave(draft);
+      } else {
+        if (isDeletion) {
+          await db.children.delete(child.id);
+          await markEntityForSync('child', child.id);
+        } else {
+          const nextChild = {
+            firstName: draft.firstName.trim(),
+            lastName: draft.lastName.trim(),
+            postName: draft.postName.trim(),
+            classLevel: draft.classLevel,
+            parentPhone: draft.parentPhone.trim(),
+            address: draft.address.trim(),
+            birthDate: draft.birthDate || null,
+            notes: draft.notes.trim(),
+            updatedAt: new Date().toISOString(),
+          };
+          await db.children.update(child.id, nextChild);
+          await markEntityForSync('child', child.id);
+        }
+        onClose();
+      }
     } finally {
       setIsSaving(false);
     }
