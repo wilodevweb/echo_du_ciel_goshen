@@ -191,7 +191,7 @@ export function PointageCard(props: PointageCardProps) {
               {getClassLabel(child.classLevel)}
             </div>
             <div className="flex items-center gap-2 rounded-full bg-white/8 px-3 py-1">
-              {[2, 1, 0].map((index) => (
+              {[3, 2, 1, 0].map((index) => (
                 <span
                   key={index}
                   className={`h-2.5 w-2.5 rounded-full ${getHistoryDotClass(recentStatuses[index])}`}

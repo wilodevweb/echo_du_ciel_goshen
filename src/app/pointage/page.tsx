@@ -72,7 +72,7 @@ export default function PointagePage() {
         .where("childId")
         .equals(currentChildId)
         .toArray()
-        .then((items) => items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3));
+        .then((items) => items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4));
     },
     [currentChildId],
   );

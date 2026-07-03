@@ -98,7 +98,7 @@ export function AttendanceHistoryList({ childId }: AttendanceHistoryListProps) {
       </div>
 
       <div className="grid grid-cols-4 gap-2 mb-4">
-        {Array.from({ length: 4 }).map((_, index) => {
+        {[3, 2, 1, 0].map((index) => {
           const status = getAttendanceStatus(visibleAttendances[index]) ?? undefined;
 
           return (

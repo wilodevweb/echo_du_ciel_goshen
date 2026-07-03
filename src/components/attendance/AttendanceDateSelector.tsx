@@ -72,8 +72,10 @@ export function AttendanceDateSelector({
       </button>
 
       {isOpen && (
-        <div className="absolute left-1/2 top-14 z-20 w-[min(92vw,360px)] -translate-x-1/2 rounded-lg border border-gray-200 bg-white p-3 shadow-xl">
-          <div className="mb-3 flex items-center justify-between gap-2">
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
+          <div className="absolute left-1/2 top-14 z-20 w-[min(92vw,360px)] -translate-x-1/2 rounded-lg border border-gray-200 bg-white p-3 shadow-xl">
+            <div className="mb-3 flex items-center justify-between gap-2">
             <button
               type="button"
               onClick={() => onChange(moveByWeek(value, -1))}
@@ -94,17 +96,7 @@ export function AttendanceDateSelector({
             </button>
           </div>
 
-          <label className="mb-1 block text-xs font-semibold text-gray-500" htmlFor="attendance-date">
-            Choisir une date
-          </label>
-          <input
-            id="attendance-date"
-            type="date"
-            value={value}
-            max={maxSunday}
-            onChange={(event) => selectDate(event.target.value)}
-            className="h-11 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-fiverr"
-          />
+
           <button
             type="button"
             onClick={() => {
@@ -115,7 +107,15 @@ export function AttendanceDateSelector({
           >
             Revenir au dimanche recent
           </button>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="mt-2 h-10 w-full rounded-lg text-sm font-bold text-gray-500 hover:bg-gray-100 transition-colors"
+          >
+            Fermer
+          </button>
         </div>
+        </>
       )}
     </div>
   );
