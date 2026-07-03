@@ -1,7 +1,7 @@
 import React from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import db, { type Child, getClassLabel } from "@/lib/db";
-import { User, Loader2 } from "lucide-react";
+import { User, Loader2, Smile } from "lucide-react";
 
 interface SiblingsListProps {
   currentChildId: string;
@@ -61,7 +61,7 @@ export function SiblingsList({ currentChildId, parentId }: SiblingsListProps) {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={sibling.photoUrl} alt="Photo" className="w-full h-full object-cover" />
             ) : (
-              <User className="h-6 w-6" />
+              <Smile className="h-6 w-6 text-fiverr/60" strokeWidth={1.5} />
             )}
           </div>
           <div className="min-w-0 flex-1 text-left">

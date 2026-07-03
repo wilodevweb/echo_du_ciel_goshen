@@ -1,6 +1,6 @@
 import React, { FormEvent } from "react";
 import Image from "next/image";
-import { Crown, Phone, User } from "lucide-react";
+import { Crown, Phone, User, Smile } from "lucide-react";
 import type { AttendanceStatus, Child } from "@/lib/db";
 import db, { CLASS_LEVELS, getClassLabel, getClassNumber } from "@/lib/db";
 import { getHistoryDotClass, resizeImageFile } from "./utils";
@@ -207,7 +207,7 @@ export function PointageCard(props: PointageCardProps) {
                 <Crown className="h-8 w-8 fill-yellow-300" />
               </div>
             )}
-            <div className="h-36 w-36 overflow-hidden rounded-full bg-white/35">
+            <div className="h-36 w-36 overflow-hidden rounded-full bg-gradient-to-tr from-[#342ee8]/20 to-fiverr/30 border-[6px] border-white/10 shadow-inner flex items-center justify-center">
               {child.photoUrl ? (
                 <Image
                   src={child.photoUrl}
@@ -218,9 +218,7 @@ export function PointageCard(props: PointageCardProps) {
                   unoptimized
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <User className="h-14 w-14 text-[#1b1b1b]/45" />
-                </div>
+                <Smile className="h-16 w-16 text-[#342ee8]/40" strokeWidth={1.5} />
               )}
             </div>
             <div className="absolute bottom-2 right-2 flex h-12 w-12 items-center justify-center rounded-full bg-[#342ee8] text-2xl font-black text-white shadow-lg ring-4 ring-[#1b1b1b]">
@@ -302,7 +300,7 @@ export function PointageCard(props: PointageCardProps) {
                 }}
               />
             )}
-            <div className="h-36 w-36 overflow-hidden rounded-full bg-white/35">
+            <div className="h-36 w-36 overflow-hidden rounded-full bg-gradient-to-tr from-[#342ee8]/20 to-fiverr/30 border-[6px] border-white/10 shadow-inner flex items-center justify-center">
               {child.photoUrl ? (
                 <Image
                   src={child.photoUrl}
@@ -313,9 +311,7 @@ export function PointageCard(props: PointageCardProps) {
                   unoptimized
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <User className="h-14 w-14 text-[#1b1b1b]/45" />
-                </div>
+                <Smile className="h-16 w-16 text-[#342ee8]/40" strokeWidth={1.5} />
               )}
             </div>
             <div className="absolute bottom-2 right-2 flex h-12 w-12 items-center justify-center rounded-full bg-[#342ee8] text-2xl font-black text-white shadow-lg ring-4 ring-[#1b1b1b]">
@@ -416,7 +412,7 @@ export function PointageCard(props: PointageCardProps) {
               event.currentTarget.value = "";
             }}
           />
-          <div className="h-36 w-36 overflow-hidden rounded-full bg-white/35 flex items-center justify-center">
+          <div className="h-36 w-36 overflow-hidden rounded-full bg-gradient-to-tr from-fiverr/20 to-purple-500/20 border-4 border-[#1b1b1b]/10 flex items-center justify-center">
             {value.photoUrl ? (
               <Image
                 src={value.photoUrl}
@@ -427,7 +423,7 @@ export function PointageCard(props: PointageCardProps) {
                 unoptimized
               />
             ) : (
-              <User className="h-14 w-14 text-[#1b1b1b]/45" />
+              <Smile className="h-16 w-16 text-fiverr/60" strokeWidth={1.5} />
             )}
           </div>
           <div className="absolute bottom-2 right-2 flex h-12 w-12 items-center justify-center rounded-full bg-[#342ee8] text-2xl font-black text-white shadow-lg ring-4 ring-[#1b1b1b]">

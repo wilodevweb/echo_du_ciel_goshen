@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Search, UserPlus, Phone, ArrowLeft, User, Trash2 } from 'lucide-react';
+import { Search, UserPlus, Phone, ArrowLeft, User, Trash2, Smile } from 'lucide-react';
 import db, { getClassLabel, type Child } from '@/lib/db';
 import { Card, CardContent } from '@/components/ui/Card';
 import { MobileHeader } from '@/components/ui/MobileHeader';
@@ -112,7 +112,7 @@ export default function ChildrenList() {
                           unoptimized
                         />
                       ) : (
-                        <User className="w-6 h-6 text-gray-400" />
+                        <Smile className="w-6 h-6 text-fiverr/60" strokeWidth={1.5} />
                       )}
                     </div>
                     
