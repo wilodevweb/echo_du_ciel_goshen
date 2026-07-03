@@ -100,7 +100,7 @@ function getBirthdayMessage(birthDate: string | undefined | null, firstName: str
 
 export default function NotificationsPage() {
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === 'ADMIN';
+  const isAdmin = (session?.user as any)?.role === 'ADMIN';
 
   const allChildren = useLiveQuery(() => db.children.toArray());
   const allAttendances = useLiveQuery(() => db.attendances.toArray());
