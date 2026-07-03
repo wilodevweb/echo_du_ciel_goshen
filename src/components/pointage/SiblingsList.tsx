@@ -6,28 +6,35 @@ import { User, Loader2 } from "lucide-react";
 interface SiblingsListProps {
   currentChildId: string;
   parentId?: string;
-  parentPhone?: string;
 }
 
-export function SiblingsList({ currentChildId, parentId, parentPhone }: SiblingsListProps) {
+export function SiblingsList({ currentChildId, parentId }: SiblingsListProps) {
   const siblings = useLiveQuery(async () => {
-    if (!parentId && !parentPhone) return [];
+    if (!parentId) return null;
 
     let potentialSiblings: Child[] = [];
     
     if (parentId) {
       potentialSiblings = await db.children.where('parentId').equals(parentId).toArray();
-    } else if (parentPhone) {
-      potentialSiblings = await db.children.where('parentPhone').equals(parentPhone).toArray();
     }
     
     return potentialSiblings.filter(c => c.id !== currentChildId);
-  }, [currentChildId, parentId, parentPhone]);
+  }, [currentChildId, parentId]);
 
   if (siblings === undefined) {
     return (
       <div className="flex justify-center p-6">
         <Loader2 className="w-6 h-6 animate-spin text-white/50" />
+      </div>
+    );
+  }
+
+  if (siblings === null) {
+    return (
+      <div className="text-center p-6 border border-white/10 rounded-2xl bg-white/5 mt-4">
+        <p className="text-sm text-white/50 font-medium">
+          Veuillez assigner un parent pour voir les frères et sœurs.
+        </p>
       </div>
     );
   }

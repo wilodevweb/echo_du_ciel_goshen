@@ -38,6 +38,92 @@ function StatusButton({
   );
 }
 
+function CardActionButton({
+  label,
+  onClick,
+  disabled,
+  href,
+  isSubmitting,
+}: {
+  label: React.ReactNode;
+  onClick?: (e?: any) => void;
+  disabled?: boolean;
+  href?: string;
+  isSubmitting?: boolean;
+}) {
+  const className = `flex h-12 w-full items-center justify-center rounded-2xl px-3 text-sm font-black shadow-sm transition-all ${
+    !disabled
+      ? "bg-fiverr text-white hover:bg-fiverr-dark active:scale-[0.98]"
+      : "bg-gray-500 text-white opacity-40 cursor-not-allowed"
+  }`;
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        onClick={(e) => {
+          if (disabled) e.preventDefault();
+          else if (onClick) onClick(e);
+        }}
+        className={className}
+      >
+        {label}
+      </a>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      disabled={disabled || isSubmitting}
+      onClick={onClick}
+      className={className}
+    >
+      {isSubmitting ? "Enregistrement..." : label}
+    </button>
+  );
+}
+
+function ChildNameDisplay({
+  firstName,
+  lastName,
+  postName,
+  onClick,
+}: {
+  firstName: string;
+  lastName: string;
+  postName: string;
+  onClick?: () => void;
+}) {
+  const inner = (
+    <h2 className="flex flex-col items-center gap-0.5 text-[1.35rem] leading-[1.02] tracking-tight text-[#111827]">
+      <div className="flex flex-wrap items-center justify-center gap-1.5">
+        <span className="font-black uppercase">{lastName}</span>
+        {postName && <span className="font-black uppercase">{postName}</span>}
+      </div>
+      <span className="font-normal capitalize">{firstName}</span>
+    </h2>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="mx-auto w-full rounded-[22px] bg-white px-4 py-3 shadow-md transition-colors hover:bg-gray-100"
+      >
+        {inner}
+      </button>
+    );
+  }
+
+  return (
+    <div className="mx-auto w-full rounded-[22px] bg-white px-4 py-3 shadow-md text-[#111827]">
+      {inner}
+    </div>
+  );
+}
+
 // Composant de base partagé pour toutes les cartes de pointage
 export function BaseCardLayout({
   header,
@@ -143,19 +229,12 @@ export function PointageCard(props: PointageCardProps) {
           </div>
         }
         nameBox={
-          <button
-            type="button"
-            onClick={onNameClick}
-            className="mx-auto w-full rounded-[22px] bg-white px-4 py-3 transition-colors hover:bg-gray-100"
-          >
-            <h2 className="flex flex-col items-center gap-0.5 text-[1.35rem] leading-[1.02] tracking-tight text-[#111827]">
-              <div className="flex flex-wrap items-center justify-center gap-1.5">
-                <span className="font-black uppercase">{child.lastName}</span>
-                <span className="font-black uppercase">{child.postName}</span>
-              </div>
-              <span className="font-normal capitalize">{child.firstName}</span>
-            </h2>
-          </button>
+          <ChildNameDisplay 
+            firstName={child.firstName} 
+            lastName={child.lastName} 
+            postName={child.postName} 
+            onClick={onNameClick} 
+          />
         }
         body={
           <>
@@ -245,19 +324,12 @@ export function PointageCard(props: PointageCardProps) {
           </label>
         }
         nameBox={
-          <button
-            type="button"
-            onClick={onNameClick}
-            className="mx-auto w-full rounded-[22px] bg-white px-4 py-3 shadow-md transition-colors hover:bg-gray-100"
-          >
-            <h2 className="flex flex-col items-center gap-0.5 text-[1.35rem] leading-[1.02] tracking-tight text-[#111827]">
-              <div className="flex flex-wrap items-center justify-center gap-1.5">
-                <span className="font-black uppercase">{child.lastName}</span>
-                <span className="font-black uppercase">{child.postName}</span>
-              </div>
-              <span className="font-normal capitalize">{child.firstName}</span>
-            </h2>
-          </button>
+          <ChildNameDisplay 
+            firstName={child.firstName} 
+            lastName={child.lastName} 
+            postName={child.postName} 
+            onClick={onNameClick} 
+          />
         }
         body={
           <>
@@ -269,19 +341,11 @@ export function PointageCard(props: PointageCardProps) {
               </div>
             )}
 
-            <a
+            <CardActionButton
               href={`tel:${child.parentPhone}`}
-              onClick={(e) => {
-                if (!child.parentPhone) e.preventDefault();
-              }}
-              className={`flex h-12 w-full items-center justify-center rounded-2xl px-3 text-sm font-black shadow-sm transition-all ${
-                child.parentPhone 
-                  ? "bg-fiverr text-white hover:bg-fiverr-dark active:scale-[0.98]" 
-                  : "bg-gray-500 text-white opacity-40 cursor-not-allowed"
-              }`}
-            >
-              Appeler {parentName}
-            </a>
+              disabled={!child.parentPhone}
+              label={`Appeler ${parentName}`}
+            />
           </>
         }
       />
@@ -398,14 +462,12 @@ export function PointageCard(props: PointageCardProps) {
         </div>
       }
       body={
-        <button
-          type="button"
-          disabled={!canAdd || isAdding}
+        <CardActionButton
           onClick={onSubmit}
-          className="flex h-12 w-full items-center justify-center rounded-2xl bg-fiverr px-3 text-sm font-black text-white transition-all hover:bg-fiverr-dark active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/40"
-        >
-          {isAdding ? "Enregistrement..." : "Enregistrer"}
-        </button>
+          disabled={!canAdd}
+          isSubmitting={isAdding}
+          label="Enregistrer"
+        />
       }
     />
   );

@@ -426,9 +426,8 @@ export function ChildDetailsModal({
                 <p className="text-lg font-semibold leading-tight text-white mb-1">Frères et Sœurs</p>
                 <p className="text-xs text-white/50 mb-3">Enfants partageant le même responsable.</p>
                 <SiblingsList 
-                  currentChildId={child.id} 
+                  currentChildId={child.id}
                   parentId={draft.parentId} 
-                  parentPhone={draft.parentPhone} 
                 />
               </div>
             </div>

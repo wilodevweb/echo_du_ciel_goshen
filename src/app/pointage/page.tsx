@@ -46,11 +46,13 @@ export default function PointagePage() {
   );
 
   const sortedChildren = useMemo(() => {
-    return [...(children ?? [])].sort((a, b) =>
-      `${a.lastName} ${a.postName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.postName} ${b.firstName}`, "fr", {
-        sensitivity: "base",
-      }),
-    );
+    return [...(children ?? [])]
+      .filter((c) => !c.notes?.includes('[ARCHIVE]'))
+      .sort((a, b) =>
+        `${a.lastName} ${a.postName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.postName} ${b.firstName}`, "fr", {
+          sensitivity: "base",
+        }),
+      );
   }, [children]);
 
   const filteredChildren = useMemo(() => {
@@ -193,6 +195,11 @@ export default function PointagePage() {
   };
 
   const addChild = async () => {
+    if (!newChild.firstName.trim() || !newChild.lastName.trim()) {
+      alert("Le prénom et le nom sont obligatoires.");
+      return;
+    }
+
     if (newChild.birthDate) {
       const today = new Date().toISOString().split('T')[0];
       if (newChild.birthDate > today) {

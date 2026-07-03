@@ -3,8 +3,9 @@
 import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Bell, ArrowLeft, Gift, UserX, Phone, AlertCircle, Stethoscope } from 'lucide-react';
-import db, { getClassLabel, Child } from '@/lib/db';
+import { useSession } from 'next-auth/react';
+import { Bell, ArrowLeft, Gift, UserX, Phone, AlertCircle, Stethoscope, ArrowRightCircle, Archive, Clock } from 'lucide-react';
+import db, { getClassLabel, Child, ClassLevel, markEntityForSync } from '@/lib/db';
 import { buildAttendanceHistoryMap } from '@/components/pointage/utils';
 import { Card, CardContent } from '@/components/ui/Card';
 import { MobileHeader } from '@/components/ui/MobileHeader';
@@ -28,6 +29,37 @@ function isBirthdaySoon(birthDate: string | undefined | null) {
   const diffNextYear = Math.round((bdayNextYear.getTime() - today.getTime()) / (1000 * 3600 * 24));
   
   return (diffThisYear >= -2 && diffThisYear <= 7) || (diffNextYear >= -2 && diffNextYear <= 7);
+}
+
+function getTargetAge(birthDate: string | undefined | null) {
+  if (!birthDate) return null;
+  const parts = birthDate.split("-").map(Number);
+  if (parts.length !== 3) return null;
+  const [year, month, day] = parts;
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const bdayThisYear = new Date(today.getFullYear(), month - 1, day);
+  let diffDays = Math.round((bdayThisYear.getTime() - today.getTime()) / (1000 * 3600 * 24));
+  let targetAge = today.getFullYear() - year;
+  
+  if (diffDays < -2) {
+    const bdayNextYear = new Date(today.getFullYear() + 1, month - 1, day);
+    diffDays = Math.round((bdayNextYear.getTime() - today.getTime()) / (1000 * 3600 * 24));
+    targetAge = today.getFullYear() + 1 - year;
+  }
+  
+  return targetAge;
+}
+
+function getExpectedClass(targetAge: number | null): ClassLevel | 'ARCHIVED' | null {
+  if (targetAge === null) return null;
+  if (targetAge >= 4 && targetAge < 8) return 'FIRST';
+  if (targetAge >= 8 && targetAge < 12) return 'SECOND';
+  if (targetAge >= 12 && targetAge <= 15) return 'THIRD';
+  if (targetAge > 15) return 'ARCHIVED';
+  return null;
 }
 
 function getBirthdayMessage(birthDate: string | undefined | null, firstName: string) {
@@ -67,8 +99,24 @@ function getBirthdayMessage(birthDate: string | undefined | null, firstName: str
 }
 
 export default function NotificationsPage() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === 'ADMIN';
+
   const allChildren = useLiveQuery(() => db.children.toArray());
   const allAttendances = useLiveQuery(() => db.attendances.toArray());
+
+  const handleTransfer = async (childId: string, newClass: ClassLevel) => {
+    if (!isAdmin) return;
+    await db.children.update(childId, { classLevel: newClass });
+    await markEntityForSync('child', childId, ['classLevel']);
+  };
+
+  const handleArchive = async (child: Child) => {
+    if (!isAdmin) return;
+    const newNotes = (child.notes || "") + "\n[ARCHIVE]";
+    await db.children.update(child.id, { notes: newNotes.trim() });
+    await markEntityForSync('child', child.id, ['notes']);
+  };
 
   const notifications = useMemo(() => {
     if (!allChildren || !allAttendances) return null;
@@ -132,16 +180,66 @@ export default function NotificationsPage() {
                 <p className="text-sm text-gray-500 italic">Aucun anniversaire à venir.</p>
               ) : (
                 <div className="space-y-3">
-                  {notifications.birthdays.map(child => (
-                    <Card key={`bday-${child.id}`} padding="sm" className="border-l-4 border-l-purple-500">
-                      <CardContent className="flex justify-between items-center">
-                        <div>
-                          <p className="font-semibold text-gray-900">{getBirthdayMessage(child.birthDate, child.firstName)}</p>
-                          <p className="text-xs text-gray-500">{getClassLabel(child.classLevel)} • {child.lastName} {child.postName}</p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                  {notifications.birthdays.map(child => {
+                    const targetAge = getTargetAge(child.birthDate);
+                    const expectedClass = getExpectedClass(targetAge);
+                    const needsChange = expectedClass !== null && expectedClass !== child.classLevel && !child.notes?.includes('[ARCHIVE]');
+                    
+                    return (
+                      <Card key={`bday-${child.id}`} padding="sm" className="border-l-4 border-l-purple-500 overflow-hidden">
+                        <CardContent className="flex flex-col gap-3">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <p className="font-semibold text-gray-900">{getBirthdayMessage(child.birthDate, child.firstName)}</p>
+                              <p className="text-xs text-gray-500">{getClassLabel(child.classLevel)} • {child.lastName} {child.postName}</p>
+                            </div>
+                          </div>
+                          
+                          {needsChange && (
+                            <div className="bg-purple-50 p-3 -mx-4 -mb-4 mt-1 border-t border-purple-100">
+                              <p className="text-sm font-semibold text-purple-900 mb-2">
+                                {expectedClass === 'ARCHIVED' 
+                                  ? `Âge limite atteint (${targetAge} ans). L'enfant doit quitter l'écodim.`
+                                  : `Doit passer en ${getClassLabel(expectedClass)} (${targetAge} ans).`}
+                              </p>
+                              
+                              {isAdmin ? (
+                                <div className="flex gap-2">
+                                  {expectedClass === 'ARCHIVED' ? (
+                                    <>
+                                      <button 
+                                        onClick={() => handleArchive(child)}
+                                        className="flex-1 flex items-center justify-center gap-1.5 bg-red-100 text-red-700 py-2 rounded-xl text-xs font-bold hover:bg-red-200 transition-colors"
+                                      >
+                                        <Archive className="w-3.5 h-3.5" /> Archiver
+                                      </button>
+                                      <button 
+                                        className="flex-1 flex items-center justify-center gap-1.5 bg-gray-200 text-gray-700 py-2 rounded-xl text-xs font-bold hover:bg-gray-300 transition-colors"
+                                      >
+                                        <Clock className="w-3.5 h-3.5" /> Plus tard
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button 
+                                      onClick={() => handleTransfer(child.id, expectedClass as ClassLevel)}
+                                      className="w-full flex items-center justify-center gap-1.5 bg-purple-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-purple-700 transition-colors shadow-sm"
+                                    >
+                                      <ArrowRightCircle className="w-4 h-4" /> Transférer en {getClassLabel(expectedClass)}
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-purple-700/70 italic flex items-center gap-1">
+                                  <AlertCircle className="w-3 h-3" />
+                                  En attente de confirmation par un Administrateur
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </section>

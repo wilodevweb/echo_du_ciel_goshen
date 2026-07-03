@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Search, Pencil, Plus, Trash2, User } from "lucide-react";
+import { Search, Pencil, Plus, Trash2, User, Users } from "lucide-react";
+import { useLiveQuery } from "dexie-react-hooks";
 import db, { generateId } from "@/lib/db";
 import type { ChildDetailsDraft } from "../types";
 import type { ParentItem } from "./types";
@@ -21,6 +22,8 @@ export function ParentEditor({
   const [mode, setMode] = useState<'search' | 'edit_list' | 'new' | 'edit_form'>('search');
   const [showSearch, setShowSearch] = useState(false);
   const [editingParentId, setEditingParentId] = useState<string | undefined>(undefined);
+  
+  const allChildren = useLiveQuery(() => db.children.toArray()) || [];
   
   const [manualLastName, setManualLastName] = useState(draft.parentLastName || "");
   const [manualPhone, setManualPhone] = useState(draft.parentPhone || "");
@@ -154,8 +157,14 @@ export function ParentEditor({
                     className="w-full text-left p-2.5 rounded-xl hover:bg-white/10 active:bg-white/15 transition-all flex items-center justify-between border border-transparent hover:border-white/5"
                   >
                     <div className="min-w-0 flex-1 pr-2">
-                      <p className="text-sm font-semibold text-white truncate">
-                        {p.lastName} {p.firstName}
+                      <p className="text-sm font-semibold text-white truncate flex items-center justify-between">
+                        <span>{p.lastName} {p.firstName}</span>
+                        {p.id && (
+                          <span className="text-[10px] bg-white/10 text-white/70 px-1.5 py-0.5 rounded-md flex items-center gap-1 shrink-0 ml-2">
+                            <Users className="w-3 h-3" />
+                            {allChildren.filter(c => c.parentId === p.id).length} enfant(s)
+                          </span>
+                        )}
                       </p>
                       <p className="text-xs text-white/45 truncate">{p.phone}</p>
                     </div>

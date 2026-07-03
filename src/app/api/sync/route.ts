@@ -194,9 +194,11 @@ export async function POST(req: Request) {
 
           for (const patch of childPatches) {
             const { id, data: childData } = decodeChildPatch(patch);
-            const isDeletion = childData.firstName === "" && childData.lastName === "" && childData.postName === "";
+            
+            // On force la suppression si le prénom OU le nom est manquant
+            const isInvalid = (childData.firstName || "").trim() === "" || (childData.lastName || "").trim() === "";
 
-            if (isDeletion) {
+            if (isInvalid) {
               if (existingChildIds.has(id)) {
                 await tx.child.delete({
                   where: { id },

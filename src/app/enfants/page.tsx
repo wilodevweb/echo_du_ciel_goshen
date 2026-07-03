@@ -40,14 +40,15 @@ export default function ChildrenList() {
   // Récupérer et filtrer les enfants depuis IndexedDB
   const children = useLiveQuery(async () => {
     const allChildren = await db.children.reverse().sortBy('createdAt');
-    if (!searchQuery) return allChildren;
+    if (!searchQuery) return allChildren.filter(c => !c.notes?.includes('[ARCHIVE]'));
     
     const lowerQuery = searchQuery.toLowerCase();
-    return allChildren.filter(child => 
-      child.firstName.toLowerCase().includes(lowerQuery) || 
+    return allChildren.filter(child => {
+      if (child.notes?.includes('[ARCHIVE]')) return false;
+      return child.firstName.toLowerCase().includes(lowerQuery) || 
       child.lastName.toLowerCase().includes(lowerQuery) ||
-      child.parentPhone.includes(searchQuery)
-    );
+      child.parentPhone.includes(searchQuery);
+    });
   }, [searchQuery]);
 
   const rightAction = (
