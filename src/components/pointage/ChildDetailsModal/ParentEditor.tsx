@@ -22,23 +22,20 @@ export function ParentEditor({
   const [mode, setMode] = useState<'search' | 'edit_list' | 'new' | 'edit_form'>('search');
   const [showSearch, setShowSearch] = useState(false);
   const [editingParentId, setEditingParentId] = useState<string | undefined>(undefined);
-  
-  const allChildren = useLiveQuery(() => db.children.toArray()) || [];
-  
+
+  const allChildren = useLiveQuery(() => db.children.toArray());
   const [manualLastName, setManualLastName] = useState(draft.parentLastName || "");
   const [manualPhone, setManualPhone] = useState(draft.parentPhone || "");
 
-  React.useEffect(() => {
-    if (mode === 'edit_form' && !editingParentId) {
-      setManualLastName(draft.parentLastName || "");
-      setManualPhone(draft.parentPhone || "");
-      setEditingParentId(draft.parentId);
-    } else if (mode === 'new') {
-      setManualLastName("");
-      setManualPhone("");
-      setEditingParentId(undefined);
-    }
-  }, [mode, draft.parentLastName, draft.parentPhone, draft.parentId, editingParentId]);
+  const childCountByParent = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    (allChildren ?? []).forEach((child) => {
+      if (child.parentId) {
+        counts.set(child.parentId, (counts.get(child.parentId) ?? 0) + 1);
+      }
+    });
+    return counts;
+  }, [allChildren]);
 
   const filteredParents = React.useMemo(() => {
     let result = parents;
@@ -107,6 +104,7 @@ export function ParentEditor({
                 setShowSearch(false);
                 setManualLastName("");
                 setManualPhone("");
+                setEditingParentId(undefined);
               }
             }}
             className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all ${
@@ -162,7 +160,7 @@ export function ParentEditor({
                         {p.id && (
                           <span className="text-[10px] bg-white/10 text-white/70 px-1.5 py-0.5 rounded-md flex items-center gap-1 shrink-0 ml-2">
                             <Users className="w-3 h-3" />
-                            {allChildren.filter(c => c.parentId === p.id).length} enfant(s)
+                            {childCountByParent.get(p.id) ?? 0} enfant(s)
                           </span>
                         )}
                       </p>

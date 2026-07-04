@@ -51,15 +51,6 @@ export function AttendanceDateSelector({
   const maxSunday = getMostRecentSundayDateString(new Date());
   const isNextWeekDisabled = value >= maxSunday;
 
-  const selectDate = (date: string) => {
-    const selectedSunday = getMostRecentSundayDateString(parseDateInput(date));
-    if (selectedSunday > maxSunday) {
-      alert("Le pointage pour le dimanche prochain (" + selectedSunday + ") ou une date future est refusé car il n'est pas encore ouvert.");
-      return;
-    }
-    onChange(selectedSunday);
-  };
-
   return (
     <div className="relative">
       <button

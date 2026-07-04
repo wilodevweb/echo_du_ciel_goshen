@@ -287,7 +287,6 @@ db.version(7)
     });
   });
 
-const PENDING_CHANGES_KEY = 'pendingChanges';
 const LAST_LOCAL_CHANGE_KEY = 'lastLocalChangeAt';
 const LAST_SYNC_KEY = 'lastSyncAt';
 

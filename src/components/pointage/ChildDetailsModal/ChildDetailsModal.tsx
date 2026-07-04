@@ -16,7 +16,6 @@ import { calculateAgeLabel } from "../utils";
 
 export function ChildDetailsModal({
   child,
-  status = null,
   onClose,
   onSave,
 }: {

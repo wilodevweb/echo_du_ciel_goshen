@@ -1,6 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Search, FileText, Play, Download } from 'lucide-react';
+import { Search, FileText, Play, Download } from 'lucide-react';
 import { prisma } from "@/lib/prisma";
 import { MobileHeader } from '@/components/ui/MobileHeader';
 import { EmptyState } from '@/components/ui/EmptyState';

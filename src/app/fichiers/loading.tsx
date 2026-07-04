@@ -1,8 +1,7 @@
 "use client";
 
 import React from 'react';
-import { ArrowLeft, Search } from 'lucide-react';
-import Link from 'next/link';
+import { Search } from 'lucide-react';
 import { MobileHeader } from '@/components/ui/MobileHeader';
 
 export default function FichiersLoading() {

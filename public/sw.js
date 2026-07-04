@@ -140,7 +140,7 @@ async function trimCache(cacheName, maxItems) {
       await cache.delete(keys[0]);
       trimCache(cacheName, maxItems);
     }
-  } catch (err) {
+  } catch {
     // Ignore les erreurs de cache silencieusement
   }
 }

@@ -1,7 +1,7 @@
 import React from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import db, { type Child, getClassLabel } from "@/lib/db";
-import { User, Loader2, Smile } from "lucide-react";
+import { Loader2, Smile } from "lucide-react";
 
 interface SiblingsListProps {
   currentChildId: string;

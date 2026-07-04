@@ -16,7 +16,6 @@ export function ClassSelectionScreen({
   selectedClasses,
   onDateChange,
   onToggleClass,
-  onSelectAll,
   onStart,
 }: {
   selectedDate: string;
@@ -24,7 +23,6 @@ export function ClassSelectionScreen({
   selectedClasses: ClassLevel[];
   onDateChange: (value: string) => void;
   onToggleClass: (value: ClassLevel) => void;
-  onSelectAll: () => void;
   onStart: () => void;
 }) {
   const countByClass = CLASS_LEVELS.reduce<Record<ClassLevel, number>>(
@@ -34,7 +32,6 @@ export function ClassSelectionScreen({
     },
     { FIRST: 0, SECOND: 0, THIRD: 0 },
   );
-  const allSelected = selectedClasses.length === CLASS_LEVELS.length;
   const maxSunday = getMostRecentSundayDateString(new Date());
   const isFutureDate = selectedDate > maxSunday;
 
@@ -83,14 +80,6 @@ export function ClassSelectionScreen({
             );
           })}
         </div>
-
-        <button
-          type="button"
-          onClick={onSelectAll}
-          className="mt-4 h-11 rounded-lg border border-gray-200 text-sm font-bold text-gray-700"
-        >
-          {allSelected ? "Tout deselectionner" : "Selectionner les 3 classes"}
-        </button>
 
         {isFutureDate && (
           <div className="mt-4 rounded-xl bg-red-50 border border-red-200 p-4 text-center text-sm font-semibold text-red-600">

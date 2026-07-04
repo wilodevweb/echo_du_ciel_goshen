@@ -4,17 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { 
-  Users, 
-  History, 
-  Upload, 
-  ArrowLeft,
-  Loader2,
-  LogOut,
-} from "lucide-react";
-import { Card, CardContent } from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
-import { Button } from "@/components/ui/Button";
+import { Users, History, Upload, ArrowLeft, Loader2, LogOut } from "lucide-react";
 import dynamic from "next/dynamic";
 
 const UploadTab = dynamic(() => import("@/components/dashboard/UploadTab"), {

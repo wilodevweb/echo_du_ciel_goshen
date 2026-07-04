@@ -4,13 +4,12 @@ import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useSession } from 'next-auth/react';
-import { Bell, ArrowLeft, Gift, UserX, Phone, AlertCircle, Stethoscope, ArrowRightCircle, Archive, Clock } from 'lucide-react';
-import db, { getClassLabel, Child, ClassLevel, markEntityForSync } from '@/lib/db';
+import { Bell, Gift, UserX, Phone, AlertCircle, Stethoscope, ArrowRightCircle, Archive, Clock } from 'lucide-react';
+import db, { getClassLabel, type Child, type ClassLevel, markEntityForSync } from '@/lib/db';
 import { buildAttendanceHistoryMap } from '@/components/pointage/utils';
 import { Card, CardContent } from '@/components/ui/Card';
 import { MobileHeader } from '@/components/ui/MobileHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
-import { EmptyState } from '@/components/ui/EmptyState';
 
 function isBirthdaySoon(birthDate: string | undefined | null) {
   if (!birthDate) return false;
@@ -100,7 +99,13 @@ function getBirthdayMessage(birthDate: string | undefined | null, firstName: str
 
 export default function NotificationsPage() {
   const { data: session } = useSession();
-  const isAdmin = (session?.user as any)?.role === 'ADMIN';
+  const isAdmin = Boolean(
+    session?.user &&
+      typeof session.user === "object" &&
+      session.user !== null &&
+      "role" in session.user &&
+      session.user.role === "ADMIN"
+  );
 
   const allChildren = useLiveQuery(() => db.children.toArray());
   const allAttendances = useLiveQuery(() => db.attendances.toArray());

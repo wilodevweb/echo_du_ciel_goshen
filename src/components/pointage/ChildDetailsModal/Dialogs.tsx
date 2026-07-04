@@ -57,12 +57,3 @@ export function AlertDialog({
   );
 }
 
-type ModalTab = "infos" | "famille" | "pointages";
-
-interface ParentItem {
-  id?: string;
-  firstName: string;
-  lastName: string;
-  phone: string;
-  address?: string;
-}

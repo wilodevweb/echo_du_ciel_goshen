@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useDeferredValue, useMemo, useEffect } from 'react';
+import React, { useState, useDeferredValue, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Search, UserPlus, Phone, ArrowLeft, User, Trash2, Smile } from 'lucide-react';
+import { Search, UserPlus, Phone, Smile } from 'lucide-react';
 import db, { getClassLabel, type Child } from '@/lib/db';
 import { Card, CardContent } from '@/components/ui/Card';
 import { MobileHeader } from '@/components/ui/MobileHeader';
@@ -16,7 +16,7 @@ import { ChildDetailsModal } from '@/components/pointage/ChildDetailsModal';
 export default function ChildrenList() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const deferredSearchQuery = useDeferredValue(searchQuery);
+  useDeferredValue(searchQuery);
   const [selectedChild, setSelectedChild] = useState<Child | null>(null);
   const [detailsChild, setDetailsChild] = useState<Child | null>(null);
 

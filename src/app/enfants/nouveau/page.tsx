@@ -2,8 +2,6 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
 import { MobileHeader } from '@/components/ui/MobileHeader';
 import { PointageCard } from '@/components/pointage/PointageCard';
 import { NewChildForm, emptyNewChild } from '@/components/pointage/types';

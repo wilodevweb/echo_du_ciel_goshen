@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ArrowLeft } from "lucide-react";
 import db, {
@@ -29,9 +29,31 @@ import {
 } from "@/components/pointage/types";
 import { isBirthdayInWeek } from "@/components/pointage/utils";
 
+const STORAGE_KEY = "attendance-selected-classes";
+
+function isValidClassLevel(value: unknown): value is ClassLevel {
+  return typeof value === "string" && CLASS_LEVELS.some((level) => level.value === value);
+}
+
 export default function PointagePage() {
   const [selectedDate, setSelectedDate] = useState(() => getMostRecentSundayDateString());
-  const [selectedClasses, setSelectedClasses] = useState<ClassLevel[]>([]);
+  const [selectedClasses, setSelectedClasses] = useState<ClassLevel[]>(() => {
+    if (typeof window === "undefined") return [];
+
+    try {
+      const storedValue = window.localStorage.getItem(STORAGE_KEY);
+      if (!storedValue) return [];
+
+      const parsedValue = JSON.parse(storedValue);
+      if (Array.isArray(parsedValue) && parsedValue.every(isValidClassLevel)) {
+        return parsedValue;
+      }
+    } catch {
+      // Ignore invalid stored values and fall back to the default selection.
+    }
+
+    return [];
+  });
   const [hasStarted, setHasStarted] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
@@ -44,6 +66,11 @@ export default function PointagePage() {
     () => db.attendances.where("date").equals(selectedDate).toArray(),
     [selectedDate],
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(selectedClasses));
+  }, [selectedClasses]);
 
   const sortedChildren = useMemo(() => {
     return [...(children ?? [])]
@@ -61,7 +88,7 @@ export default function PointagePage() {
   }, [selectedClasses, sortedChildren]);
 
   const totalCards = filteredChildren.length + 1;
-  const visibleIndex = Math.min(currentIndex, totalCards - 1);
+  const visibleIndex = Math.max(0, Math.min(currentIndex, Math.max(totalCards - 1, 0)));
   const currentChild = filteredChildren[visibleIndex];
   const currentChildId = currentChild?.id;
 
@@ -263,12 +290,7 @@ export default function PointagePage() {
 
       return [...classes, classLevel];
     });
-  };
-
-  const toggleAllClasses = () => {
-    setSelectedClasses((classes) =>
-      classes.length === CLASS_LEVELS.length ? [] : CLASS_LEVELS.map((level) => level.value),
-    );
+    setCurrentIndex(0);
   };
 
   const startAttendance = () => {
@@ -299,7 +321,6 @@ export default function PointagePage() {
           resetCarousel();
         }}
         onToggleClass={toggleClass}
-        onSelectAll={toggleAllClasses}
         onStart={startAttendance}
       />
     );

@@ -1,6 +1,6 @@
-import React, { FormEvent } from "react";
+import React, { type FormEvent } from "react";
 import Image from "next/image";
-import { Crown, Phone, User, Smile } from "lucide-react";
+import { Crown, Phone, Smile } from "lucide-react";
 import type { AttendanceStatus, Child } from "@/lib/db";
 import db, { CLASS_LEVELS, getClassLabel, getClassNumber } from "@/lib/db";
 import { getHistoryDotClass, resizeImageFile } from "./utils";
@@ -46,7 +46,7 @@ function CardActionButton({
   isSubmitting,
 }: {
   label: React.ReactNode;
-  onClick?: (e?: any) => void;
+  onClick?: (e?: React.MouseEvent<HTMLElement>) => void;
   disabled?: boolean;
   href?: string;
   isSubmitting?: boolean;
