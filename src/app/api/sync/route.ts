@@ -274,17 +274,35 @@ export async function POST(req: Request) {
         });
 
         if (filteredAttendancePatches.length > 0) {
-          const attendanceKeys = filteredAttendancePatches.map((patch) => {
+          const uniqueChildIds = Array.from(new Set(filteredAttendancePatches.map(p => p[0])));
+          const validChildren = await tx.child.findMany({
+            where: { id: { in: uniqueChildIds } },
+            select: { id: true }
+          });
+          const validChildIds = new Set(validChildren.map(c => c.id));
+
+          const validAttendancePatches = filteredAttendancePatches.filter(p => validChildIds.has(p[0]));
+
+          const attendanceKeys = validAttendancePatches.map((patch) => {
             const [childId, compactDate] = patch;
             return { childId, date: decodeDate(compactDate) };
           });
 
-          const existingAttendances = await tx.attendance.findMany({
-            where: {
-              OR: attendanceKeys,
-            },
-            select: { childId: true, date: true },
-          });
+          if (attendanceKeys.length === 0) {
+             // Aucune présence valide à traiter
+             // On laisse la suite s'exécuter, elle ne fera rien car les tableaux seront vides
+          }
+
+          let existingAttendances: { childId: string; date: string }[] = [];
+          if (attendanceKeys.length > 0) {
+            existingAttendances = await tx.attendance.findMany({
+              where: {
+                OR: attendanceKeys,
+              },
+              select: { childId: true, date: true },
+            });
+          }
+
           const existingKeys = new Set(
             existingAttendances.map((a) => `${a.childId}:${a.date}`)
           );
@@ -292,7 +310,7 @@ export async function POST(req: Request) {
           const attendanceCreates: Array<{ childId: string; date: string; present: boolean; status: string; markedAt: Date }> = [];
           const attendanceUpdates: Array<{ childId: string; date: string; status: string }> = [];
 
-          for (const patch of filteredAttendancePatches) {
+          for (const patch of validAttendancePatches) {
             const [childId, compactDate, statusCode] = patch;
             const date = decodeDate(compactDate);
             const status = decodeStatus(statusCode);
