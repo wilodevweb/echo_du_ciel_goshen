@@ -19,9 +19,17 @@ export function ParentEditor({
   onRequestConfirm: (title: string, message: string, onConfirm: () => void) => void;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [mode, setMode] = useState<'search' | 'edit_list' | 'new' | 'edit_form'>('search');
   const [showSearch, setShowSearch] = useState(false);
   const [editingParentId, setEditingParentId] = useState<string | undefined>(undefined);
+
+  React.useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
 
   const allChildren = useLiveQuery(() => db.children.toArray());
   const [manualLastName, setManualLastName] = useState(draft.parentLastName || "");
@@ -39,8 +47,8 @@ export function ParentEditor({
 
   const filteredParents = React.useMemo(() => {
     let result = parents;
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
+    if (debouncedSearchQuery.trim()) {
+      const query = debouncedSearchQuery.toLowerCase();
       result = parents.filter(p => {
         return (
           (p.firstName || "").toLowerCase().includes(query) ||
@@ -50,7 +58,7 @@ export function ParentEditor({
       });
     }
     return result.slice(0, 30);
-  }, [parents, searchQuery]);
+  }, [parents, debouncedSearchQuery]);
 
   return (
     <div className="mt-3 rounded-2xl bg-white/5 p-4 border border-white/10" onClick={(e) => e.stopPropagation()}>

@@ -6,7 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { useSession } from 'next-auth/react';
 import { Bell, Gift, UserX, Phone, AlertCircle, Stethoscope, ArrowRightCircle, Archive, Clock } from 'lucide-react';
 import db, { getClassLabel, isDeletedChildRecord, type Child, type ClassLevel, markEntityForSync } from '@/lib/db';
-import { buildAttendanceHistoryMap } from '@/components/pointage/utils';
+import { buildAttendanceHistoryMapAsync } from '@/components/pointage/utils';
 import { Card, CardContent } from '@/components/ui/Card';
 import { MobileHeader } from '@/components/ui/MobileHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -108,7 +108,7 @@ export default function NotificationsPage() {
   );
 
   const allChildren = useLiveQuery(() => db.children.toArray());
-  const allAttendances = useLiveQuery(() => db.attendances.toArray());
+  const historyMap = useLiveQuery(() => buildAttendanceHistoryMapAsync());
 
   const handleTransfer = async (childId: string, newClass: ClassLevel) => {
     if (!isAdmin) return;
@@ -124,9 +124,7 @@ export default function NotificationsPage() {
   };
 
   const notifications = useMemo(() => {
-    if (!allChildren || !allAttendances) return null;
-
-    const historyMap = buildAttendanceHistoryMap(allAttendances);
+    if (!allChildren || !historyMap) return null;
 
     const birthdays: Child[] = [];
     const absences: Child[] = [];
@@ -160,7 +158,7 @@ export default function NotificationsPage() {
     }
 
     return { birthdays, absences, sick, incomplete };
-  }, [allChildren, allAttendances]);
+  }, [allChildren, historyMap]);
 
   return (
     <main className="flex min-h-screen flex-col bg-gray-50 pb-10">

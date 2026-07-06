@@ -1,5 +1,5 @@
 import type { Attendance, AttendanceStatus } from "@/lib/db";
-import { getAttendanceStatus } from "@/lib/db";
+import db, { getAttendanceStatus } from "@/lib/db";
 
 export async function resizeImageFile(file: File) {
   const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -81,6 +81,25 @@ export function buildAttendanceHistoryMap(attendances?: Attendance[]) {
   const sortedAttendances = [...(attendances ?? [])].sort((a, b) => b.date.localeCompare(a.date));
 
   sortedAttendances.forEach((attendance) => {
+    const status = getAttendanceStatus(attendance);
+    if (!status) return;
+
+    const history = map.get(attendance.childId) ?? [];
+    if (history.length >= 3) return;
+
+    history.push(status);
+    map.set(attendance.childId, history);
+  });
+
+  return map;
+}
+
+export async function buildAttendanceHistoryMapAsync() {
+  const map = new Map<string, AttendanceStatus[]>();
+  
+  // Utilisation de .each() avec un index pour éviter de charger des milliers d'objets en mémoire
+  // et éviter un tri JavaScript très coûteux.
+  await db.attendances.orderBy('date').reverse().each((attendance) => {
     const status = getAttendanceStatus(attendance);
     if (!status) return;
 
