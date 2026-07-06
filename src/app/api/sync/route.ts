@@ -238,6 +238,14 @@ export async function POST(req: Request) {
                 },
               });
               parentId = parent.id;
+            } else if (parentId) {
+              const parentExists = await tx.parent.findUnique({
+                where: { id: parentId },
+                select: { id: true }
+              });
+              if (!parentExists) {
+                parentId = null;
+              }
             }
 
             // 2. Gérer le Child
