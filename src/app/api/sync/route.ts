@@ -201,8 +201,11 @@ export async function POST(req: Request) {
           for (const patch of childPatches) {
             const { id, data: childData } = decodeChildPatch(patch);
             
-            // On force la suppression si le prénom OU le nom est manquant
-            const isInvalid = (childData.firstName || "").trim() === "" || (childData.lastName || "").trim() === "";
+            // On force la suppression UNIQUEMENT si le prénom ou le nom est explicitement vide dans le patch
+            // Si le patch ne contient pas le prénom (undefined), on ne supprime pas !
+            const explicitEmptyFirstName = childData.firstName !== undefined && (childData.firstName || "").trim() === "";
+            const explicitEmptyLastName = childData.lastName !== undefined && (childData.lastName || "").trim() === "";
+            const isInvalid = explicitEmptyFirstName || explicitEmptyLastName;
 
             if (isInvalid) {
               if (existingChildIds.has(id)) {
@@ -213,6 +216,22 @@ export async function POST(req: Request) {
               }
               continue;
             }
+
+            // Gérer les champs de l'enfant (ne mettre à jour que ce qui est fourni)
+            // On récupère les valeurs actuelles ou on les remplace par les nouvelles
+            const childUpdateFields: any = {};
+            if (childData.firstName !== undefined) childUpdateFields.firstName = normalizeName(String(childData.firstName));
+            if (childData.lastName !== undefined) childUpdateFields.lastName = normalizeName(String(childData.lastName));
+            if (childData.postName !== undefined) childUpdateFields.postName = normalizeName(String(childData.postName));
+            if (childData.gender !== undefined) childUpdateFields.gender = String(childData.gender);
+            if (childData.classLevel !== undefined) childUpdateFields.classLevel = String(childData.classLevel);
+            if (childData.parentFirstName !== undefined) childUpdateFields.parentFirstName = normalizeName(String(childData.parentFirstName));
+            if (childData.parentLastName !== undefined) childUpdateFields.parentLastName = normalizeName(String(childData.parentLastName));
+            if (childData.address !== undefined) childUpdateFields.address = String(childData.address);
+            if (childData.birthDate !== undefined) childUpdateFields.birthDate = typeof childData.birthDate === "string" ? childData.birthDate : null;
+            if (childData.notes !== undefined) childUpdateFields.notes = typeof childData.notes === "string" ? childData.notes : null;
+            if (childData.photoUrl !== undefined) childUpdateFields.photoUrl = typeof childData.photoUrl === "string" ? childData.photoUrl : null;
+
 
             // 1. Gérer le Parent
             const parentPhone = String(childData.parentPhone ?? "");
@@ -249,29 +268,35 @@ export async function POST(req: Request) {
             }
 
             // 2. Gérer le Child
-            const childFields = {
-              firstName: normalizeName(String(childData.firstName ?? "")),
-              lastName: normalizeName(String(childData.lastName ?? "")),
-              postName: normalizeName(String(childData.postName ?? "")),
-              gender: String(childData.gender ?? "M"),
-              classLevel: String(childData.classLevel ?? "FIRST"),
-              parentPhone: parentPhone,
-              parentFirstName: normalizeName(String(childData.parentFirstName ?? "")),
-              parentLastName: normalizeName(String(childData.parentLastName ?? "")),
-              address: String(childData.address ?? ""),
-              birthDate: typeof childData.birthDate === "string" ? childData.birthDate : null,
-              notes: typeof childData.notes === "string" ? childData.notes : null,
-              photoUrl: typeof childData.photoUrl === "string" ? childData.photoUrl : null,
-              parentId: parentId,
+            if (parentPhone) {
+              childUpdateFields.parentPhone = parentPhone;
+            }
+            if (parentId) {
+              childUpdateFields.parentId = parentId;
+            }
+
+            // Pour la création (nouveau child), on doit fournir toutes les valeurs obligatoires
+            const childCreateFields = {
+              id,
+              firstName: childUpdateFields.firstName || "Inconnu",
+              lastName: childUpdateFields.lastName || "Inconnu",
+              postName: childUpdateFields.postName || "",
+              gender: childUpdateFields.gender || "M",
+              classLevel: childUpdateFields.classLevel || "FIRST",
+              parentPhone: childUpdateFields.parentPhone || "",
+              parentFirstName: childUpdateFields.parentFirstName || "",
+              parentLastName: childUpdateFields.parentLastName || "",
+              address: childUpdateFields.address || "",
+              birthDate: childUpdateFields.birthDate || null,
+              notes: childUpdateFields.notes || null,
+              photoUrl: childUpdateFields.photoUrl || null,
+              parentId: childUpdateFields.parentId || null,
             };
 
             await tx.child.upsert({
               where: { id },
-              update: childFields,
-              create: {
-                id,
-                ...childFields,
-              },
+              update: childUpdateFields,
+              create: childCreateFields,
             });
           }
         }
@@ -697,8 +722,12 @@ export async function POST(req: Request) {
       message: "Synchronisation réussie",
       serverSyncedAt: serverSyncedAt.toISOString(),
     });
-  } catch (error) {
-    console.error("Erreur de synchronisation:", error);
-    return NextResponse.json({ success: false, error: "Erreur serveur" }, { status: 500 });
+  } catch (error: any) {
+    console.error("Erreur de synchronisation détaillée:", error);
+    return NextResponse.json({ 
+      success: false, 
+      error: error?.message || "Erreur serveur",
+      stack: error?.stack 
+    }, { status: 500 });
   }
 }
