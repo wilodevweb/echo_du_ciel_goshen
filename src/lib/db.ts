@@ -548,7 +548,7 @@ export async function syncWithServer() {
     const lastSyncAt = await getStateValue(LAST_SYNC_KEY);
     const kc: string[] = [];
     const ka: string[] = [];
-    const BATCH_SIZE = 50;
+    const BATCH_SIZE = 10;
     const effectivePendingItems = (await getEffectivePendingItems(pendingItems, pendingChanges)).slice(0, BATCH_SIZE);
     const childIds = effectivePendingItems.filter((item) => item.entity === 'child').map((item) => item.id);
     const attendanceIds = effectivePendingItems.filter((item) => item.entity === 'attendance').map((item) => item.id);
@@ -587,43 +587,53 @@ export async function syncWithServer() {
       }),
     });
 
-    if (response.ok) {
-      const data = (await response.json()) as SyncDeltaResponse;
-
-      if (!data.success) {
-        return {
-          success: false,
-          error: data.error ?? 'Échec de la synchronisation',
-        };
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      console.error(`Échec de synchronisation: Status ${response.status} - ${errorText}`);
+      
+      let errorMsg = 'Échec de la synchronisation';
+      if (response.status === 413) {
+        errorMsg = 'Un lot est trop volumineux (probablement trop de photos). Veuillez réessayer.';
+      } else if (response.status >= 500) {
+        errorMsg = 'Erreur interne du serveur lors du traitement des données.';
       }
 
-      const pullResult = await applyServerDelta(data);
-
-      await db.transaction('rw', db.syncState, db.pendingSync, db.children, db.parents, async () => {
-        await setStateValue(LAST_SYNC_KEY, data.serverSyncedAt ?? new Date().toISOString());
-        await db.pendingSync.bulkDelete(effectivePendingItems.map((item) => item.key));
-
-        // Supprimer définitivement de Dexie les enfants marqués pour suppression (noms vides)
-        const toDeleteIds = changedChildren
-          .filter((c) => c.firstName === "" && c.lastName === "" && c.postName === "")
-          .map((c) => c.id);
-        if (toDeleteIds.length > 0) {
-          await db.children.bulkDelete(toDeleteIds);
-        }
-      });
-
       return {
-        success: true,
-        childrenCount: changedChildren.length,
-        attendancesCount: changedAttendances.length,
-        pulledChildrenCount: pullResult.pulledChildrenCount,
-        pulledAttendancesCount: pullResult.pulledAttendancesCount,
+        success: false,
+        error: errorMsg,
       };
     }
 
+    const data = (await response.json()) as SyncDeltaResponse;
+
+    if (!data.success) {
+      return {
+        success: false,
+        error: data.error ?? 'Échec de la synchronisation',
+      };
+    }
+
+    const pullResult = await applyServerDelta(data);
+
+    await db.transaction('rw', db.syncState, db.pendingSync, db.children, db.parents, async () => {
+      await setStateValue(LAST_SYNC_KEY, data.serverSyncedAt ?? new Date().toISOString());
+      await db.pendingSync.bulkDelete(effectivePendingItems.map((item) => item.key));
+
+      // Supprimer définitivement de Dexie les enfants marqués pour suppression (noms vides)
+      const toDeleteIds = changedChildren
+        .filter((c) => c.firstName === "" && c.lastName === "" && c.postName === "")
+        .map((c) => c.id);
+      if (toDeleteIds.length > 0) {
+        await db.children.bulkDelete(toDeleteIds);
+      }
+    });
+
     return {
-      success: false,
-      error: 'Échec de la synchronisation',
+      success: true,
+      childrenCount: changedChildren.length,
+      attendancesCount: changedAttendances.length,
+      pulledChildrenCount: pullResult.pulledChildrenCount,
+      pulledAttendancesCount: pullResult.pulledAttendancesCount,
     };
   } catch (error) {
     console.error('Erreur réseau lors de la synchronisation:', error);
