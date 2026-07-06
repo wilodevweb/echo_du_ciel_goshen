@@ -548,7 +548,8 @@ export async function syncWithServer() {
     const lastSyncAt = await getStateValue(LAST_SYNC_KEY);
     const kc: string[] = [];
     const ka: string[] = [];
-    const effectivePendingItems = await getEffectivePendingItems(pendingItems, pendingChanges);
+    const BATCH_SIZE = 50;
+    const effectivePendingItems = (await getEffectivePendingItems(pendingItems, pendingChanges)).slice(0, BATCH_SIZE);
     const childIds = effectivePendingItems.filter((item) => item.entity === 'child').map((item) => item.id);
     const attendanceIds = effectivePendingItems.filter((item) => item.entity === 'attendance').map((item) => item.id);
     const pendingItemByKey = new Map(effectivePendingItems.map((item) => [item.key, item]));
@@ -600,7 +601,7 @@ export async function syncWithServer() {
 
       await db.transaction('rw', db.syncState, db.pendingSync, db.children, db.parents, async () => {
         await setStateValue(LAST_SYNC_KEY, data.serverSyncedAt ?? new Date().toISOString());
-        await db.pendingSync.bulkDelete(pendingItems.map((item) => item.key));
+        await db.pendingSync.bulkDelete(effectivePendingItems.map((item) => item.key));
 
         // Supprimer définitivement de Dexie les enfants marqués pour suppression (noms vides)
         const toDeleteIds = changedChildren

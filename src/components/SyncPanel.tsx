@@ -84,14 +84,36 @@ export function SyncPanel() {
     setMessage("");
 
     try {
-      const result = await syncWithServer();
+      let currentPending = await db.pendingSync.count();
+      let totalPulledChildren = 0;
+      let totalPulledAttendances = 0;
+      let totalChildrenCount = 0;
+      let totalAttendancesCount = 0;
+      let success = true;
+      let errorMsg = "";
 
-      if (result.success) {
+      do {
+        const result = await syncWithServer();
+
+        if (result.success) {
+          totalPulledChildren += result.pulledChildrenCount ?? 0;
+          totalPulledAttendances += result.pulledAttendancesCount ?? 0;
+          totalChildrenCount += result.childrenCount ?? 0;
+          totalAttendancesCount += result.attendancesCount ?? 0;
+          currentPending = await db.pendingSync.count();
+        } else {
+          success = false;
+          errorMsg = result.error ?? "Impossible d'envoyer les données.";
+          break;
+        }
+      } while (currentPending > 0);
+
+      if (success) {
         setMessage(
-          `${result.pulledChildrenCount} enfants / ${result.pulledAttendancesCount} pointages récupérés, ${result.childrenCount} enfants / ${result.attendancesCount} pointages envoyés.`,
+          `${totalPulledChildren} enfants / ${totalPulledAttendances} pointages récupérés, ${totalChildrenCount} enfants / ${totalAttendancesCount} pointages envoyés.`,
         );
       } else {
-        setMessage(result.error ?? "Impossible d'envoyer les données.");
+        setMessage(errorMsg);
       }
       setTimeout(() => setMessage(""), 6000);
     } finally {
