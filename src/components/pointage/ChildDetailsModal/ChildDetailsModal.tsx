@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { Camera, Save, Pencil, Trash2, X, User, GraduationCap, Calendar, MapPin, NotebookText, Loader2 } from "lucide-react";
+import { Camera, Save, Pencil, Trash2, X, User, Smile, GraduationCap, Calendar, MapPin, NotebookText, Loader2 } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { AttendanceStatus, Child } from "@/lib/db";
-import db, { markEntityForSync } from "@/lib/db";
+import db, { markEntityForSync, normalizeName } from "@/lib/db";
 import type { ChildDetailsDraft } from "../types";
 import { SiblingsList } from "../SiblingsList";
 import { AttendanceHistoryList } from "../AttendanceHistoryList";
@@ -12,7 +12,7 @@ import { ConfirmDialog, AlertDialog } from "./Dialogs";
 import { EditableParentRow } from "./ParentEditor";
 import { InlineTextEditor } from "./InlineTextEditor";
 import { EditableClassRow, EditableGenderRow, EditableDetailRow } from "./EditableRows";
-import { calculateAgeLabel } from "../utils";
+import { calculateAgeLabel, formatDisplayName } from "../utils";
 
 export function ChildDetailsModal({
   child,
@@ -169,14 +169,14 @@ export function ChildDetailsModal({
         await onSave(draft);
       } else {
         const nextChild = {
-          firstName: draft.firstName.trim(),
-          lastName: draft.lastName.trim(),
-          postName: draft.postName.trim(),
+          firstName: normalizeName(draft.firstName.trim()),
+          lastName: normalizeName(draft.lastName.trim()),
+          postName: normalizeName(draft.postName.trim()),
           gender: draft.gender,
           classLevel: draft.classLevel,
           parentPhone: draft.parentPhone.trim(),
-          parentFirstName: draft.parentFirstName.trim(),
-          parentLastName: draft.parentLastName.trim(),
+          parentFirstName: normalizeName(draft.parentFirstName.trim()),
+          parentLastName: normalizeName(draft.parentLastName.trim()),
           address: draft.address.trim(),
           birthDate: draft.birthDate || undefined,
           notes: draft.notes.trim(),
@@ -222,12 +222,12 @@ export function ChildDetailsModal({
           <div className="flex min-w-0 flex-col items-center text-center">
             {/* Avatar Photo */}
             <div className="relative shrink-0">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 text-white/85 overflow-hidden border-2 border-white/10">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-tr from-[#342ee8]/20 to-fiverr/30 overflow-hidden border-4 border-white/10 shadow-inner">
                 {draft.photoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={draft.photoUrl} alt="Profil" className="w-full h-full object-cover" />
                 ) : (
-                  <User className="h-8 w-8 text-white/50" />
+                  <Smile className="h-12 w-12 text-[#342ee8]/40" strokeWidth={1.5} />
                 )}
               </div>
               {isEditMode && (
@@ -259,25 +259,32 @@ export function ChildDetailsModal({
                     onChange={(value) => updateDraft("lastName", value)}
                     placeholder="Nom"
                     autoFocus
-                    className="text-xl md:text-2xl font-semibold"
+                    style={{ textTransform: "uppercase" }}
+                    className="text-xl md:text-2xl font-black uppercase"
                   />
                   <InlineTextEditor
                     value={draft.postName}
                     onChange={(value) => updateDraft("postName", value)}
                     placeholder="Post-nom (Optionnel)"
-                    className="text-xl md:text-2xl font-semibold"
+                    style={{ textTransform: "uppercase" }}
+                    className="text-xl md:text-2xl font-black uppercase"
                   />
                   <InlineTextEditor
                     value={draft.firstName}
                     onChange={(value) => updateDraft("firstName", value)}
                     placeholder="Prénom"
-                    className="text-xl md:text-2xl font-semibold"
+                    style={{ textTransform: "capitalize" }}
+                    className="text-xl md:text-2xl font-light capitalize"
                   />
                 </div>
               ) : (
-                <h2 className="mt-2 text-xl md:text-2xl font-semibold leading-tight break-words">
-                  {draft.lastName || "Nom"} {draft.postName || ""} {draft.firstName || "Prénom"}
-                </h2>
+                <div className="mt-2 flex flex-col items-center gap-0.5 text-xl md:text-2xl leading-tight tracking-tight text-white">
+                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                    <span className="font-black uppercase">{formatDisplayName(draft.lastName || "nom", "upper")}</span>
+                    {draft.postName && <span className="font-black uppercase">{formatDisplayName(draft.postName, "upper")}</span>}
+                  </div>
+                  <span className="font-light capitalize">{formatDisplayName(draft.firstName || "prénom", "first")}</span>
+                </div>
               )}
             </div>
           </div>

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Search, UserPlus, Phone, Smile } from 'lucide-react';
-import db, { getClassLabel, type Child } from '@/lib/db';
+import db, { getClassLabel, isDeletedChildRecord, type Child } from '@/lib/db';
 import { Card, CardContent } from '@/components/ui/Card';
 import { MobileHeader } from '@/components/ui/MobileHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -40,11 +40,11 @@ export default function ChildrenList() {
   // Récupérer et filtrer les enfants depuis IndexedDB
   const children = useLiveQuery(async () => {
     const allChildren = await db.children.reverse().sortBy('createdAt');
-    if (!searchQuery) return allChildren.filter(c => !c.notes?.includes('[ARCHIVE]'));
+    if (!searchQuery) return allChildren.filter((c) => !isDeletedChildRecord(c) && !c.notes?.includes('[ARCHIVE]'));
     
     const lowerQuery = searchQuery.toLowerCase();
     return allChildren.filter(child => {
-      if (child.notes?.includes('[ARCHIVE]')) return false;
+      if (isDeletedChildRecord(child) || child.notes?.includes('[ARCHIVE]')) return false;
       return child.firstName.toLowerCase().includes(lowerQuery) || 
       child.lastName.toLowerCase().includes(lowerQuery) ||
       child.parentPhone.includes(searchQuery);

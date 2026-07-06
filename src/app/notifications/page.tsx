@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useSession } from 'next-auth/react';
 import { Bell, Gift, UserX, Phone, AlertCircle, Stethoscope, ArrowRightCircle, Archive, Clock } from 'lucide-react';
-import db, { getClassLabel, type Child, type ClassLevel, markEntityForSync } from '@/lib/db';
+import db, { getClassLabel, isDeletedChildRecord, type Child, type ClassLevel, markEntityForSync } from '@/lib/db';
 import { buildAttendanceHistoryMap } from '@/components/pointage/utils';
 import { Card, CardContent } from '@/components/ui/Card';
 import { MobileHeader } from '@/components/ui/MobileHeader';
@@ -134,6 +134,8 @@ export default function NotificationsPage() {
     const incomplete: Child[] = [];
 
     for (const child of allChildren) {
+      if (isDeletedChildRecord(child)) continue;
+
       // 1. Anniversaires (dans les 7 prochains jours)
       if (isBirthdaySoon(child.birthDate)) {
         birthdays.push(child);

@@ -3,7 +3,7 @@ import Image from "next/image";
 import { Crown, Phone, Smile } from "lucide-react";
 import type { AttendanceStatus, Child } from "@/lib/db";
 import db, { CLASS_LEVELS, getClassLabel, getClassNumber } from "@/lib/db";
-import { getHistoryDotClass, resizeImageFile } from "./utils";
+import { formatDisplayName, getHistoryDotClass, resizeImageFile } from "./utils";
 import { Card, CardContent } from "@/components/ui/Card";
 import type { NewChildForm } from "./types";
 import { SelectionButtonGroup } from "./SelectionButtonGroup";
@@ -84,7 +84,7 @@ function CardActionButton({
   );
 }
 
-function ChildNameDisplay({
+export function ChildNameDisplay({
   firstName,
   lastName,
   postName,
@@ -95,13 +95,17 @@ function ChildNameDisplay({
   postName: string;
   onClick?: () => void;
 }) {
+  const displayLastName = formatDisplayName(lastName, "upper");
+  const displayPostName = formatDisplayName(postName, "upper");
+  const displayFirstName = formatDisplayName(firstName, "first");
+
   const inner = (
     <h2 className="flex flex-col items-center gap-0.5 text-[1.35rem] leading-[1.02] tracking-tight text-[#111827]">
       <div className="flex flex-wrap items-center justify-center gap-1.5">
-        <span className="font-black uppercase">{lastName}</span>
-        {postName && <span className="font-black uppercase">{postName}</span>}
+        <span className="font-black uppercase">{displayLastName || "NOM"}</span>
+        {displayPostName && <span className="font-black uppercase">{displayPostName}</span>}
       </div>
-      <span className="font-normal capitalize">{firstName}</span>
+      <span className="font-light capitalize">{displayFirstName || "Prénom"}</span>
     </h2>
   );
 

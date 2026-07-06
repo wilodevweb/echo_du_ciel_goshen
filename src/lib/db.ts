@@ -59,6 +59,33 @@ export interface PendingSyncItem {
   fields?: ChildSyncField[];
 }
 
+export function isDeletedChildRecord(child: Pick<Child, "firstName" | "lastName" | "postName">) {
+  return !child.firstName?.trim() && !child.lastName?.trim() && !child.postName?.trim();
+}
+
+export function normalizeName(value?: string | null) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+export function normalizeChildNameFields(child: Partial<Pick<Child, "firstName" | "lastName" | "postName" | "parentFirstName" | "parentLastName">>) {
+  return {
+    ...child,
+    firstName: normalizeName(child.firstName),
+    lastName: normalizeName(child.lastName),
+    postName: normalizeName(child.postName),
+    parentFirstName: normalizeName(child.parentFirstName),
+    parentLastName: normalizeName(child.parentLastName),
+  };
+}
+
+export function normalizeParentNameFields(parent: Partial<Pick<Parent, "firstName" | "lastName">>) {
+  return {
+    ...parent,
+    firstName: normalizeName(parent.firstName),
+    lastName: normalizeName(parent.lastName),
+  };
+}
+
 interface SyncDeltaResponse {
   success: boolean;
   children?: Child[];
@@ -67,6 +94,7 @@ interface SyncDeltaResponse {
   c?: CompactServerChild[];
   p?: CompactServerParent[];
   a?: CompactServerAttendance[];
+  d?: string[];
   serverSyncedAt?: string;
   error?: string;
 }
@@ -339,11 +367,13 @@ export async function getSyncStatus() {
 function normalizeServerChild(child: Child): Child {
   return {
     ...child,
-    postName: child.postName ?? '',
+    firstName: normalizeName(child.firstName),
+    lastName: normalizeName(child.lastName),
+    postName: normalizeName(child.postName),
+    parentFirstName: normalizeName(child.parentFirstName || ''),
+    parentLastName: normalizeName(child.parentLastName || ''),
     classLevel: normalizeClassLevel(child.classLevel),
     parentPhone: child.parentPhone ?? '',
-    parentFirstName: child.parentFirstName ?? '',
-    parentLastName: child.parentLastName ?? '',
     address: child.address ?? '',
     createdAt: child.createdAt,
     gender: child.gender ?? 'M',
@@ -373,7 +403,11 @@ function decodeCompactServerChild(child: CompactServerChild): Child {
 }
 
 function normalizeServerParent(parent: Parent): Parent {
-  return parent;
+  return {
+    ...parent,
+    firstName: normalizeName(parent.firstName),
+    lastName: normalizeName(parent.lastName),
+  };
 }
 
 function decodeCompactServerParent(parent: CompactServerParent): Parent {
@@ -469,6 +503,11 @@ async function applyServerDelta(data: SyncDeltaResponse) {
   await db.transaction('rw', db.children, db.parents, db.attendances, async () => {
     if (deltaChildren.length > 0) {
       await db.children.bulkPut(deltaChildren);
+    }
+
+    const deletedChildIds = data.d?.filter(Boolean) ?? [];
+    if (deletedChildIds.length > 0) {
+      await db.children.bulkDelete(deletedChildIds);
     }
 
     if (deltaParents.length > 0) {

@@ -36,6 +36,10 @@ const childFieldByCode: Record<string, string> = {
   p: "parentId",
 };
 
+function normalizeName(value?: string | null) {
+  return (value ?? "").trim().toLowerCase();
+}
+
 function decodeDate(value?: string | null) {
   if (!value) return "";
   if (value.includes("-")) return value;
@@ -183,6 +187,8 @@ export async function POST(req: Request) {
       const hasValidLastSyncDate = lastSyncDate instanceof Date && !Number.isNaN(lastSyncDate.getTime());
       const serverSyncedAt = new Date();
 
+      const deletedChildIds = new Set<string>();
+
       await prisma.$transaction(async (tx) => {
         if (childPatches.length > 0) {
           const childIds = childPatches.map((patch) => patch[0]);
@@ -203,6 +209,7 @@ export async function POST(req: Request) {
                 await tx.child.delete({
                   where: { id },
                 });
+                deletedChildIds.add(id);
               }
               continue;
             }
@@ -212,8 +219,8 @@ export async function POST(req: Request) {
             let parentId = childData.parentId ? String(childData.parentId) : null;
 
             if (parentPhone) {
-              const parentFirstName = String(childData.parentFirstName ?? "Parent");
-              const parentLastName = String(childData.parentLastName ?? childData.lastName ?? "Parent");
+              const parentFirstName = normalizeName(String(childData.parentFirstName ?? "Parent"));
+              const parentLastName = normalizeName(String(childData.parentLastName ?? childData.lastName ?? "Parent"));
               const address = String(childData.address ?? "");
 
               const parent = await tx.parent.upsert({
@@ -235,14 +242,14 @@ export async function POST(req: Request) {
 
             // 2. Gérer le Child
             const childFields = {
-              firstName: String(childData.firstName ?? ""),
-              lastName: String(childData.lastName ?? ""),
-              postName: String(childData.postName ?? ""),
+              firstName: normalizeName(String(childData.firstName ?? "")),
+              lastName: normalizeName(String(childData.lastName ?? "")),
+              postName: normalizeName(String(childData.postName ?? "")),
               gender: String(childData.gender ?? "M"),
               classLevel: String(childData.classLevel ?? "FIRST"),
               parentPhone: parentPhone,
-              parentFirstName: String(childData.parentFirstName ?? ""),
-              parentLastName: String(childData.parentLastName ?? ""),
+              parentFirstName: normalizeName(String(childData.parentFirstName ?? "")),
+              parentLastName: normalizeName(String(childData.parentLastName ?? "")),
               address: String(childData.address ?? ""),
               birthDate: typeof childData.birthDate === "string" ? childData.birthDate : null,
               notes: typeof childData.notes === "string" ? childData.notes : null,
@@ -398,6 +405,7 @@ export async function POST(req: Request) {
         success: true,
         serverSyncedAt: serverSyncedAt.toISOString(),
         c: deltaChildren.map(compactChild),
+        d: Array.from(deletedChildIds),
         p: serverParents.map(compactParent),
         a: deltaAttendances.map(compactAttendance),
       });
@@ -463,14 +471,14 @@ export async function POST(req: Request) {
           }
 
           const childFields = {
-            firstName: child.firstName,
-            lastName: child.lastName,
-            postName: child.postName ?? "",
+            firstName: normalizeName(child.firstName),
+            lastName: normalizeName(child.lastName),
+            postName: normalizeName(child.postName ?? ""),
             gender: child.gender ?? "M",
             classLevel: child.classLevel ?? "FIRST",
             parentPhone: parentPhone,
-            parentFirstName: child.parentFirstName ?? "",
-            parentLastName: child.parentLastName ?? "",
+            parentFirstName: normalizeName(child.parentFirstName ?? ""),
+            parentLastName: normalizeName(child.parentLastName ?? ""),
             address: child.address,
             birthDate: child.birthDate,
             notes: child.notes,

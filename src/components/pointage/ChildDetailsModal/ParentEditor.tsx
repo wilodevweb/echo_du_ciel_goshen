@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Search, Pencil, Plus, Trash2, User, Users } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
-import db, { generateId } from "@/lib/db";
+import db, { generateId, normalizeName } from "@/lib/db";
 import type { ChildDetailsDraft } from "../types";
 import type { ParentItem } from "./types";
 
@@ -205,8 +205,8 @@ export function ParentEditor({
                 const pId = mode === 'edit_form' && editingParentId ? editingParentId : generateId();
                 const savedParent = {
                   id: pId,
-                  firstName: "", 
-                  lastName: manualLastName.trim(),
+                  firstName: "",
+                  lastName: normalizeName(manualLastName.trim()),
                   phone: manualPhone.trim(),
                   address: draft.address || "",
                   createdAt: new Date().toISOString(),

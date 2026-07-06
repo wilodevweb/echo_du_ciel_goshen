@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { MobileHeader } from '@/components/ui/MobileHeader';
 import { PointageCard } from '@/components/pointage/PointageCard';
 import { NewChildForm, emptyNewChild } from '@/components/pointage/types';
-import db, { generateId, markEntityForSync } from '@/lib/db';
+import db, { generateId, markEntityForSync, normalizeName } from '@/lib/db';
 
 export default function AddChildPage() {
   const router = useRouter();
@@ -23,9 +23,9 @@ export default function AddChildPage() {
       const childId = generateId();
       await db.children.add({
         id: childId,
-        firstName: newChild.firstName.trim(),
-        lastName: newChild.lastName.trim(),
-        postName: newChild.postName.trim(),
+        firstName: normalizeName(newChild.firstName.trim()),
+        lastName: normalizeName(newChild.lastName.trim()),
+        postName: normalizeName(newChild.postName.trim()),
         gender: newChild.gender,
         classLevel: newChild.classLevel,
         parentPhone: "",

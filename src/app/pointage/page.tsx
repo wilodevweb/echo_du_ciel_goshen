@@ -12,7 +12,9 @@ import db, {
   generateId,
   getAttendanceStatus,
   getClassLabel,
+  isDeletedChildRecord,
   markEntityForSync,
+  normalizeName,
 } from "@/lib/db";
 import {
   AttendanceDateSelector,
@@ -74,7 +76,7 @@ export default function PointagePage() {
 
   const sortedChildren = useMemo(() => {
     return [...(children ?? [])]
-      .filter((c) => !c.notes?.includes('[ARCHIVE]'))
+      .filter((c) => !isDeletedChildRecord(c) && !c.notes?.includes('[ARCHIVE]'))
       .sort((a, b) =>
         `${a.lastName} ${a.postName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.postName} ${b.firstName}`, "fr", {
           sensitivity: "base",
@@ -168,9 +170,9 @@ export default function PointagePage() {
 
   const saveChildDetails = async (childId: string, draft: ChildDetailsDraft) => {
     const existingChild = await db.children.get(childId);
-    const firstName = draft.firstName.trim();
-    const lastName = draft.lastName.trim();
-    const postName = draft.postName.trim();
+    const firstName = normalizeName(draft.firstName.trim());
+    const lastName = normalizeName(draft.lastName.trim());
+    const postName = normalizeName(draft.postName.trim());
 
     const isDeletion = firstName === "" && lastName === "" && postName === "";
 
@@ -203,8 +205,8 @@ export default function PointagePage() {
       gender: draft.gender,
       classLevel: draft.classLevel,
       parentPhone: draft.parentPhone.trim(),
-      parentFirstName: draft.parentFirstName.trim(),
-      parentLastName: draft.parentLastName.trim(),
+      parentFirstName: normalizeName(draft.parentFirstName.trim()),
+      parentLastName: normalizeName(draft.parentLastName.trim()),
       address: draft.address.trim(),
       birthDate: draft.birthDate || undefined,
       notes: draft.notes.trim(),
@@ -241,14 +243,14 @@ export default function PointagePage() {
       const childId = generateId();
       await db.children.add({
         id: childId,
-        firstName: newChild.firstName.trim(),
-        lastName: newChild.lastName.trim(),
-        postName: newChild.postName.trim(),
+        firstName: normalizeName(newChild.firstName.trim()),
+        lastName: normalizeName(newChild.lastName.trim()),
+        postName: normalizeName(newChild.postName.trim()),
         gender: newChild.gender,
         classLevel: newChild.classLevel,
         parentPhone: newChild.parentPhone.trim(),
-        parentFirstName: newChild.parentFirstName.trim(),
-        parentLastName: newChild.parentLastName.trim(),
+        parentFirstName: normalizeName(newChild.parentFirstName.trim()),
+        parentLastName: normalizeName(newChild.parentLastName.trim()),
         address: newChild.address.trim(),
         birthDate: newChild.birthDate || undefined,
         notes: newChild.notes.trim(),

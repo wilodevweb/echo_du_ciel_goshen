@@ -50,6 +50,17 @@ export function getHistoryDotClass(status?: AttendanceStatus) {
   return "bg-white/25";
 }
 
+export function formatDisplayName(value?: string | null, variant: "first" | "upper" = "upper") {
+  const normalized = (value ?? "").trim();
+  if (!normalized) return "";
+
+  if (variant === "first") {
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
+  }
+
+  return normalized.toUpperCase();
+}
+
 export function calculateAgeLabel(birthDate?: string | null, referenceDate = new Date()) {
   const birthday = parseDateString(birthDate);
   if (!birthday) return "Non renseigné";
