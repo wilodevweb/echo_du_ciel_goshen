@@ -73,29 +73,6 @@ export function getChildIdentityKey(child: Pick<Child, "firstName" | "lastName" 
   ].join("|");
 }
 
-export function deduplicateChildrenByIdentity<T extends Child>(children: T[]) {
-  const childByIdentity = new Map<string, T>();
-
-  for (const child of children) {
-    const key = getChildIdentityKey(child);
-    const existingChild = childByIdentity.get(key);
-
-    if (!existingChild) {
-      childByIdentity.set(key, child);
-      continue;
-    }
-
-    const existingUpdatedAt = existingChild.updatedAt ?? existingChild.createdAt;
-    const childUpdatedAt = child.updatedAt ?? child.createdAt;
-
-    if (childUpdatedAt > existingUpdatedAt) {
-      childByIdentity.set(key, child);
-    }
-  }
-
-  return Array.from(childByIdentity.values());
-}
-
 export function normalizeName(value?: string | null) {
   return (value ?? "").trim().toLowerCase();
 }
@@ -382,6 +359,131 @@ export async function markEntityForSync(entity: SyncEntity, id: string, fields?:
   await markPendingChange();
 }
 
+function childRecordScore(child: Child) {
+  return [
+    child.birthDate,
+    child.parentPhone,
+    child.parentFirstName,
+    child.parentLastName,
+    child.address,
+    child.notes,
+    child.photoUrl,
+    child.parentId,
+  ].filter((value) => Boolean(String(value ?? '').trim())).length;
+}
+
+function pickCanonicalChild(children: Child[]) {
+  return [...children].sort((a, b) => {
+    const scoreDiff = childRecordScore(b) - childRecordScore(a);
+    if (scoreDiff !== 0) return scoreDiff;
+
+    const aDate = a.createdAt || '';
+    const bDate = b.createdAt || '';
+    return aDate.localeCompare(bDate) || a.id.localeCompare(b.id);
+  })[0];
+}
+
+function mergeChildData(canonical: Child, duplicate: Child) {
+  return {
+    gender: canonical.gender || duplicate.gender || 'M',
+    classLevel: canonical.classLevel || duplicate.classLevel || 'FIRST',
+    parentPhone: canonical.parentPhone || duplicate.parentPhone || '',
+    parentFirstName: canonical.parentFirstName || duplicate.parentFirstName || '',
+    parentLastName: canonical.parentLastName || duplicate.parentLastName || '',
+    address: canonical.address || duplicate.address || '',
+    birthDate: canonical.birthDate || duplicate.birthDate || undefined,
+    notes: canonical.notes || duplicate.notes || '',
+    photoUrl: canonical.photoUrl || duplicate.photoUrl || undefined,
+    parentId: canonical.parentId || duplicate.parentId || undefined,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+export async function cleanupLocalDuplicateChildren() {
+  const allChildren = await db.children.toArray();
+  const activeChildren = allChildren.filter((child) => !isDeletedChildRecord(child));
+  const childrenByIdentity = new Map<string, Child[]>();
+
+  for (const child of activeChildren) {
+    const key = getChildIdentityKey(child);
+    const group = childrenByIdentity.get(key) ?? [];
+    group.push(child);
+    childrenByIdentity.set(key, group);
+  }
+
+  const deletedChildIds: string[] = [];
+  const changedAttendanceIds = new Set<string>();
+  const changedCanonicalChildIds = new Set<string>();
+
+  await db.transaction('rw', db.children, db.attendances, async () => {
+    for (const group of childrenByIdentity.values()) {
+      if (group.length < 2) continue;
+
+      const canonical = pickCanonicalChild(group);
+      const duplicates = group.filter((child) => child.id !== canonical.id);
+
+      for (const duplicate of duplicates) {
+        const mergedData = mergeChildData(canonical, duplicate);
+        await db.children.update(canonical.id, mergedData);
+        changedCanonicalChildIds.add(canonical.id);
+
+        const canonicalAttendances = await db.attendances.where('childId').equals(canonical.id).toArray();
+        const canonicalAttendanceByDate = new Map(canonicalAttendances.map((attendance) => [attendance.date, attendance]));
+        const duplicateAttendances = await db.attendances.where('childId').equals(duplicate.id).toArray();
+
+        for (const attendance of duplicateAttendances) {
+          const existingAttendance = canonicalAttendanceByDate.get(attendance.date);
+
+          if (existingAttendance) {
+            if (attendance.markedAt > existingAttendance.markedAt) {
+              await db.attendances.update(existingAttendance.id, {
+                present: attendance.present,
+                status: attendance.status,
+                markedAt: attendance.markedAt,
+              });
+              changedAttendanceIds.add(existingAttendance.id);
+            }
+            await db.attendances.delete(attendance.id);
+          } else {
+            await db.attendances.update(attendance.id, {
+              childId: canonical.id,
+            });
+            changedAttendanceIds.add(attendance.id);
+            canonicalAttendanceByDate.set(attendance.date, {
+              ...attendance,
+              childId: canonical.id,
+            });
+          }
+        }
+
+        await db.children.update(duplicate.id, {
+          firstName: '',
+          lastName: '',
+          postName: '',
+          updatedAt: new Date().toISOString(),
+        });
+        deletedChildIds.push(duplicate.id);
+      }
+    }
+  });
+
+  for (const childId of changedCanonicalChildIds) {
+    await markEntityForSync('child', childId);
+  }
+
+  for (const attendanceId of changedAttendanceIds) {
+    await markEntityForSync('attendance', attendanceId);
+  }
+
+  for (const childId of deletedChildIds) {
+    await markEntityForSync('child', childId, ['firstName', 'lastName', 'postName']);
+  }
+
+  return {
+    deletedChildrenCount: deletedChildIds.length,
+  };
+}
+
 export async function getSyncStatus() {
   const [pendingChanges, lastLocalChangeAt, lastSyncAt] = await Promise.all([
     db.pendingSync.count(),
@@ -643,6 +745,8 @@ async function applyServerDelta(data: SyncDeltaResponse) {
 // Fonction de synchronisation avec le serveur
 export async function syncWithServer() {
   try {
+    await cleanupLocalDuplicateChildren();
+
     const pendingItems = await db.pendingSync.toArray();
     const lastSyncAt = await getStateValue(LAST_SYNC_KEY);
     const kc: string[] = [];
@@ -746,6 +850,16 @@ export async function syncWithServer() {
 // Nettoyage automatique des présences locales antérieures au premier jour (28 juin 2026)
 if (typeof window !== 'undefined') {
   db.on('ready', () => {
+    cleanupLocalDuplicateChildren()
+      .then((result) => {
+        if (result.deletedChildrenCount > 0) {
+          console.log(`[Dexie] Nettoyage : ${result.deletedChildrenCount} doublon(s) enfant fusionné(s).`);
+        }
+      })
+      .catch((err) => {
+        console.error('[Dexie] Erreur nettoyage doublons enfants:', err);
+      });
+
     db.attendances.where('date').below(SYNC_ATTENDANCE_MIN_DATE).delete()
       .then((count) => {
         if (count > 0) {

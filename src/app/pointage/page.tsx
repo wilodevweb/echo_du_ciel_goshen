@@ -12,7 +12,6 @@ import db, {
   generateId,
   getAttendanceStatus,
   getClassLabel,
-  deduplicateChildrenByIdentity,
   isDeletedChildRecord,
   markEntityForSync,
   normalizeName,
@@ -83,9 +82,8 @@ export default function PointagePage() {
   }, [selectedClasses]);
 
   const sortedChildren = useMemo(() => {
-    return deduplicateChildrenByIdentity(
-      [...(children ?? [])].filter((c) => !isDeletedChildRecord(c) && !c.notes?.includes('[ARCHIVE]')),
-    )
+    return [...(children ?? [])]
+      .filter((c) => !isDeletedChildRecord(c) && !c.notes?.includes('[ARCHIVE]'))
       .sort((a, b) =>
         `${a.lastName} ${a.postName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.postName} ${b.firstName}`, "fr", {
           sensitivity: "base",
