@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ArrowLeft } from "lucide-react";
 import db, {
@@ -12,6 +12,7 @@ import db, {
   generateId,
   getAttendanceStatus,
   getClassLabel,
+  deduplicateChildrenByIdentity,
   isDeletedChildRecord,
   markEntityForSync,
   normalizeName,
@@ -39,29 +40,14 @@ function isValidClassLevel(value: unknown): value is ClassLevel {
 
 export default function PointagePage() {
   const [selectedDate, setSelectedDate] = useState(() => getMostRecentSundayDateString());
-  const [selectedClasses, setSelectedClasses] = useState<ClassLevel[]>(() => {
-    if (typeof window === "undefined") return [];
-
-    try {
-      const storedValue = window.localStorage.getItem(STORAGE_KEY);
-      if (!storedValue) return [];
-
-      const parsedValue = JSON.parse(storedValue);
-      if (Array.isArray(parsedValue) && parsedValue.every(isValidClassLevel)) {
-        return parsedValue;
-      }
-    } catch {
-      // Ignore invalid stored values and fall back to the default selection.
-    }
-
-    return [];
-  });
+  const [selectedClasses, setSelectedClasses] = useState<ClassLevel[]>([]);
   const [hasStarted, setHasStarted] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [detailsChild, setDetailsChild] = useState<Child | null>(null);
   const [newChild, setNewChild] = useState<NewChildForm>(emptyNewChild);
   const [isAdding, setIsAdding] = useState(false);
+  const hasLoadedStoredClasses = useRef(false);
 
   const children = useLiveQuery(() => db.children.toArray());
   const attendances = useLiveQuery(
@@ -70,13 +56,36 @@ export default function PointagePage() {
   );
 
   useEffect(() => {
+    try {
+      const storedValue = window.localStorage.getItem(STORAGE_KEY);
+      if (!storedValue) return;
+
+      const parsedValue = JSON.parse(storedValue);
+      if (Array.isArray(parsedValue) && parsedValue.every(isValidClassLevel)) {
+        queueMicrotask(() => {
+          hasLoadedStoredClasses.current = true;
+          setSelectedClasses(parsedValue);
+        });
+        return;
+      }
+    } catch {
+      // Ignore invalid stored values and keep the default selection.
+    }
+
+    hasLoadedStoredClasses.current = true;
+  }, []);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
+    if (!hasLoadedStoredClasses.current) return;
+
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(selectedClasses));
   }, [selectedClasses]);
 
   const sortedChildren = useMemo(() => {
-    return [...(children ?? [])]
-      .filter((c) => !isDeletedChildRecord(c) && !c.notes?.includes('[ARCHIVE]'))
+    return deduplicateChildrenByIdentity(
+      [...(children ?? [])].filter((c) => !isDeletedChildRecord(c) && !c.notes?.includes('[ARCHIVE]')),
+    )
       .sort((a, b) =>
         `${a.lastName} ${a.postName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.postName} ${b.firstName}`, "fr", {
           sensitivity: "base",
@@ -224,6 +233,8 @@ export default function PointagePage() {
   };
 
   const addChild = async () => {
+    if (isAdding) return;
+
     if (!newChild.firstName.trim() || !newChild.lastName.trim()) {
       alert("Le prénom et le nom sont obligatoires.");
       return;

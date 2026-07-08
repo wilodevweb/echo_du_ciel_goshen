@@ -13,6 +13,8 @@ export default function AddChildPage() {
   const [isAdding, setIsAdding] = useState(false);
 
   const handleAddChild = async () => {
+    if (isAdding) return;
+
     if (!newChild.firstName.trim() || !newChild.lastName.trim()) {
       alert("Le prénom et le nom sont obligatoires.");
       return;

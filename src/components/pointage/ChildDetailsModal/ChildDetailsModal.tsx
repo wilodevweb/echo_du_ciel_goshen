@@ -12,7 +12,7 @@ import { ConfirmDialog, AlertDialog } from "./Dialogs";
 import { EditableParentRow } from "./ParentEditor";
 import { InlineTextEditor } from "./InlineTextEditor";
 import { EditableClassRow, EditableGenderRow, EditableDetailRow } from "./EditableRows";
-import { calculateAgeLabel, formatDisplayName } from "../utils";
+import { calculateAgeLabel, formatDisplayName, uploadChildPhoto } from "../utils";
 
 export function ChildDetailsModal({
   child,
@@ -43,6 +43,7 @@ export function ChildDetailsModal({
   const [activeTab, setActiveTab] = useState<ModalTab>("infos");
   const [isEditMode, setIsEditMode] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPhotoUploading, setIsPhotoUploading] = useState(false);
   
   const [confirmConfig, setConfirmConfig] = useState<{ title: string, message: string, action: () => void } | null>(null);
   const [alertConfig, setAlertConfig] = useState<{ title: string, message: string } | null>(null);
@@ -101,17 +102,25 @@ export function ChildDetailsModal({
   const isDeletion = draft.firstName.trim() === "" && draft.lastName.trim() === "" && draft.postName.trim() === "";
   const canSave = isDeletion || Boolean(draft.firstName.trim() && draft.lastName.trim());
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!isEditMode) return;
 
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        updateDraft("photoUrl", base64String);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    setIsPhotoUploading(true);
+    try {
+      const photoUrl = await uploadChildPhoto(file);
+      updateDraft("photoUrl", photoUrl);
+    } catch (error) {
+      console.error("Erreur lors du téléversement de la photo", error);
+      setAlertConfig({
+        title: "Photo non enregistrée",
+        message: error instanceof Error ? error.message : "Le téléversement de la photo a échoué.",
+      });
+    } finally {
+      setIsPhotoUploading(false);
+      e.currentTarget.value = "";
     }
   };
 
@@ -237,8 +246,8 @@ export function ChildDetailsModal({
               </div>
               {isEditMode && (
                 <label className="absolute -bottom-2 -right-2 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-fiverr text-white shadow-lg hover:bg-fiverr-dark transition">
-                  <Camera className="h-4 w-4" />
-                  <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
+                  {isPhotoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                  <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={isPhotoUploading} />
                 </label>
               )}
             </div>

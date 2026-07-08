@@ -64,6 +64,38 @@ export function isDeletedChildRecord(child: Pick<Child, "firstName" | "lastName"
   return !child.firstName?.trim() && !child.lastName?.trim() && !child.postName?.trim();
 }
 
+export function getChildIdentityKey(child: Pick<Child, "firstName" | "lastName" | "postName" | "classLevel">) {
+  return [
+    normalizeName(child.lastName),
+    normalizeName(child.postName),
+    normalizeName(child.firstName),
+    normalizeClassLevel(child.classLevel),
+  ].join("|");
+}
+
+export function deduplicateChildrenByIdentity<T extends Child>(children: T[]) {
+  const childByIdentity = new Map<string, T>();
+
+  for (const child of children) {
+    const key = getChildIdentityKey(child);
+    const existingChild = childByIdentity.get(key);
+
+    if (!existingChild) {
+      childByIdentity.set(key, child);
+      continue;
+    }
+
+    const existingUpdatedAt = existingChild.updatedAt ?? existingChild.createdAt;
+    const childUpdatedAt = child.updatedAt ?? child.createdAt;
+
+    if (childUpdatedAt > existingUpdatedAt) {
+      childByIdentity.set(key, child);
+    }
+  }
+
+  return Array.from(childByIdentity.values());
+}
+
 export function normalizeName(value?: string | null) {
   return (value ?? "").trim().toLowerCase();
 }
@@ -491,8 +523,6 @@ function buildSyncBatch(
     c: compactChildren,
     a: compactAttendances,
   };
-  let currentSize = estimateJsonBytes(baseRequest);
-
   for (const item of pendingItems) {
     if (selectedItems.length >= batchSize) break;
 
@@ -530,7 +560,6 @@ function buildSyncBatch(
     } else {
       compactAttendances.push(patch as CompactAttendancePatch);
     }
-    currentSize = nextSize;
   }
 
   if (selectedItems.length === 0 && pendingItems.length > 0) {
@@ -576,6 +605,9 @@ async function applyServerDelta(data: SyncDeltaResponse) {
     const deletedChildIds = data.d?.filter(Boolean) ?? [];
     if (deletedChildIds.length > 0) {
       await db.children.bulkDelete(deletedChildIds);
+      for (const childId of deletedChildIds) {
+        await db.attendances.where('childId').equals(childId).delete();
+      }
     }
 
     if (deltaParents.length > 0) {
@@ -612,7 +644,6 @@ async function applyServerDelta(data: SyncDeltaResponse) {
 export async function syncWithServer() {
   try {
     const pendingItems = await db.pendingSync.toArray();
-    const pendingChanges = pendingItems.length;
     const lastSyncAt = await getStateValue(LAST_SYNC_KEY);
     const kc: string[] = [];
     const ka: string[] = [];

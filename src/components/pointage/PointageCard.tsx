@@ -3,7 +3,7 @@ import Image from "next/image";
 import { Crown, Phone, Smile } from "lucide-react";
 import type { AttendanceStatus, Child } from "@/lib/db";
 import db, { CLASS_LEVELS, getClassLabel, getClassNumber } from "@/lib/db";
-import { formatDisplayName, getHistoryDotClass, resizeImageFile } from "./utils";
+import { formatDisplayName, getHistoryDotClass, uploadChildPhoto } from "./utils";
 import { Card, CardContent } from "@/components/ui/Card";
 import type { NewChildForm } from "./types";
 import { SelectionButtonGroup } from "./SelectionButtonGroup";
@@ -410,8 +410,13 @@ export function PointageCard(props: PointageCardProps) {
             onChange={async (event) => {
               const file = event.target.files?.[0];
               if (file) {
-                const photoUrl = await resizeImageFile(file);
-                onChange({ ...value, photoUrl });
+                try {
+                  const photoUrl = await uploadChildPhoto(file);
+                  onChange({ ...value, photoUrl });
+                } catch (error) {
+                  console.error("Erreur lors du téléversement de la photo", error);
+                  alert(error instanceof Error ? error.message : "Le téléversement de la photo a échoué.");
+                }
               }
               event.currentTarget.value = "";
             }}
