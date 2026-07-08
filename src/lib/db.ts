@@ -50,7 +50,7 @@ export interface SyncState {
 }
 
 export type SyncEntity = 'child' | 'attendance';
-type ChildSyncField = 'firstName' | 'lastName' | 'postName' | 'classLevel' | 'parentPhone' | 'address' | 'birthDate' | 'notes' | 'photoUrl' | 'gender' | 'parentFirstName' | 'parentLastName' | 'parentId';
+export type ChildSyncField = 'firstName' | 'lastName' | 'postName' | 'classLevel' | 'parentPhone' | 'address' | 'birthDate' | 'notes' | 'photoUrl' | 'gender' | 'parentFirstName' | 'parentLastName' | 'parentId';
 
 export interface PendingSyncItem {
   key: string;
@@ -463,31 +463,98 @@ function encodeAttendancePatch(attendance: Attendance): CompactAttendancePatch {
   return [attendance.childId, encodeDate(attendance.date), encodeStatus(status)];
 }
 
-async function getEffectivePendingItems(pendingItems: PendingSyncItem[], pendingChanges: number) {
-  if (pendingItems.length > 0 || pendingChanges === 0) {
-    return pendingItems;
+function estimateJsonBytes(data: unknown) {
+  return new TextEncoder().encode(JSON.stringify(data)).length;
+}
+
+function buildSyncBatch(
+  pendingItems: PendingSyncItem[],
+  pendingItemByKey: Map<string, PendingSyncItem>,
+  changedChildren: Child[],
+  changedAttendances: Attendance[],
+  lastSyncAt: string | null,
+  batchSize = 10,
+  maxBytes = 1_500_000,
+) {
+  const changedChildById = new Map(changedChildren.map((child) => [child.id, child]));
+  const changedAttendanceById = new Map(changedAttendances.map((attendance) => [attendance.id, attendance]));
+
+  const selectedItems: PendingSyncItem[] = [];
+  const compactChildren: CompactChildPatch[] = [];
+  const compactAttendances: CompactAttendancePatch[] = [];
+
+  const baseRequest = {
+    mode: 'sync-v2',
+    l: lastSyncAt,
+    kc: [] as string[],
+    ka: [] as string[],
+    c: compactChildren,
+    a: compactAttendances,
+  };
+  let currentSize = estimateJsonBytes(baseRequest);
+
+  for (const item of pendingItems) {
+    if (selectedItems.length >= batchSize) break;
+
+    let patch: CompactChildPatch | CompactAttendancePatch | undefined;
+    if (item.entity === 'child') {
+      const child = changedChildById.get(item.id);
+      if (child) {
+        patch = encodeChildPatch(child, pendingItemByKey.get(item.key));
+      }
+    } else {
+      const attendance = changedAttendanceById.get(item.id);
+      if (attendance) {
+        patch = encodeAttendancePatch(attendance);
+      }
+    }
+
+    if (!patch) continue;
+
+    const nextChildren = item.entity === 'child' ? [...compactChildren, patch] : compactChildren;
+    const nextAttendances = item.entity === 'attendance' ? [...compactAttendances, patch] : compactAttendances;
+    const nextRequest = {
+      ...baseRequest,
+      c: nextChildren,
+      a: nextAttendances,
+    };
+    const nextSize = estimateJsonBytes(nextRequest);
+
+    if (nextSize > maxBytes && selectedItems.length > 0) {
+      break;
+    }
+
+    selectedItems.push(item);
+    if (item.entity === 'child') {
+      compactChildren.push(patch as CompactChildPatch);
+    } else {
+      compactAttendances.push(patch as CompactAttendancePatch);
+    }
+    currentSize = nextSize;
   }
 
-  const [children, attendances] = await Promise.all([
-    db.children.toArray(),
-    db.attendances.toArray(),
-  ]);
-  const now = new Date().toISOString();
+  if (selectedItems.length === 0 && pendingItems.length > 0) {
+    const firstItem = pendingItems[0];
+    if (firstItem.entity === 'child') {
+      const child = changedChildById.get(firstItem.id);
+      if (child) {
+        selectedItems.push(firstItem);
+        compactChildren.push(encodeChildPatch(child, pendingItemByKey.get(firstItem.key)));
+      }
+    } else {
+      const attendance = changedAttendanceById.get(firstItem.id);
+      if (attendance) {
+        selectedItems.push(firstItem);
+        compactAttendances.push(encodeAttendancePatch(attendance));
+      }
+    }
+  }
 
-  return [
-    ...children.map((child) => ({
-      key: `child:${child.id}`,
-      entity: 'child' as const,
-      id: child.id,
-      updatedAt: now,
-    })),
-    ...attendances.map((attendance) => ({
-      key: `attendance:${attendance.id}`,
-      entity: 'attendance' as const,
-      id: attendance.id,
-      updatedAt: now,
-    })),
-  ];
+  return {
+    selectedItems,
+    compactChildren,
+    compactAttendances,
+  };
 }
 
 async function applyServerDelta(data: SyncDeltaResponse) {
@@ -550,10 +617,9 @@ export async function syncWithServer() {
     const kc: string[] = [];
     const ka: string[] = [];
     const BATCH_SIZE = 10;
-    const effectivePendingItems = (await getEffectivePendingItems(pendingItems, pendingChanges)).slice(0, BATCH_SIZE);
-    const childIds = effectivePendingItems.filter((item) => item.entity === 'child').map((item) => item.id);
-    const attendanceIds = effectivePendingItems.filter((item) => item.entity === 'attendance').map((item) => item.id);
-    const pendingItemByKey = new Map(effectivePendingItems.map((item) => [item.key, item]));
+    const pendingItemByKey = new Map(pendingItems.map((item) => [item.key, item]));
+    const childIds = pendingItems.filter((item) => item.entity === 'child').map((item) => item.id);
+    const attendanceIds = pendingItems.filter((item) => item.entity === 'attendance').map((item) => item.id);
     const children = childIds.length > 0
       ? await db.children.bulkGet(childIds)
       : [];
@@ -570,10 +636,11 @@ export async function syncWithServer() {
         present: status === 'PRESENT',
       };
     });
-    const compactChildren = changedChildren.map((child) =>
-      encodeChildPatch(child, pendingItemByKey.get(`child:${child.id}`)),
-    );
-    const compactAttendances = changedAttendances.map(encodeAttendancePatch);
+    const {
+      selectedItems: effectivePendingItems,
+      compactChildren,
+      compactAttendances,
+    } = buildSyncBatch(pendingItems, pendingItemByKey, changedChildren, changedAttendances, lastSyncAt ?? null, BATCH_SIZE);
 
     const response = await fetch('/api/sync', {
       method: 'POST',

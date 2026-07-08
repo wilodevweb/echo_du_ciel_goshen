@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Camera, Save, Pencil, Trash2, X, User, Smile, GraduationCap, Calendar, MapPin, NotebookText, Loader2 } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
-import type { AttendanceStatus, Child } from "@/lib/db";
+import type { AttendanceStatus, Child, ChildSyncField } from "@/lib/db";
 import db, { markEntityForSync, normalizeName } from "@/lib/db";
 import type { ChildDetailsDraft } from "../types";
 import { SiblingsList } from "../SiblingsList";
@@ -151,7 +151,7 @@ export function ChildDetailsModal({
               await onSave(draft);
             } else {
               await db.children.delete(child.id);
-              await markEntityForSync('child', child.id);
+              await markEntityForSync('child', child.id, ['firstName', 'lastName', 'postName']);
               onClose();
             }
           } finally {
@@ -185,7 +185,12 @@ export function ChildDetailsModal({
           updatedAt: new Date().toISOString(),
         };
         await db.children.update(child.id, nextChild);
-        await markEntityForSync('child', child.id);
+        const changedFields = (Object.keys(nextChild) as Array<keyof typeof nextChild>)
+          .filter((field) => field !== 'updatedAt')
+          .filter((field) => child[field] !== nextChild[field]) as ChildSyncField[];
+        if (changedFields.length > 0) {
+          await markEntityForSync('child', child.id, changedFields);
+        }
         onClose();
       }
     } finally {

@@ -257,7 +257,21 @@ export default function PointagePage() {
         photoUrl: newChild.photoUrl,
         createdAt: new Date().toISOString(),
       });
-      await markEntityForSync('child', childId);
+      await markEntityForSync('child', childId, [
+        'firstName',
+        'lastName',
+        'postName',
+        'gender',
+        'classLevel',
+        'parentPhone',
+        'parentFirstName',
+        'parentLastName',
+        'address',
+        'birthDate',
+        'notes',
+        'photoUrl',
+        'parentId',
+      ]);
 
       // Enregistrer le statut de pointage pour ce jour (Présent par défaut)
       const payload = {
