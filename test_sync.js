@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const http = require('http');
 const req = http.request('http://localhost:3000/api/sync', {
   method: 'POST',

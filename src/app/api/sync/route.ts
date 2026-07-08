@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
+import { SYNC_ATTENDANCE_MIN_DATE } from "@/lib/constants";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]/route";
 
@@ -217,21 +219,31 @@ export async function POST(req: Request) {
               continue;
             }
 
-            // Gérer les champs de l'enfant (ne mettre à jour que ce qui est fourni)
-            // On récupère les valeurs actuelles ou on les remplace par les nouvelles
-            const childUpdateFields: any = {};
-            if (childData.firstName !== undefined) childUpdateFields.firstName = normalizeName(String(childData.firstName));
-            if (childData.lastName !== undefined) childUpdateFields.lastName = normalizeName(String(childData.lastName));
-            if (childData.postName !== undefined) childUpdateFields.postName = normalizeName(String(childData.postName));
-            if (childData.gender !== undefined) childUpdateFields.gender = String(childData.gender);
-            if (childData.classLevel !== undefined) childUpdateFields.classLevel = String(childData.classLevel);
-            if (childData.parentFirstName !== undefined) childUpdateFields.parentFirstName = normalizeName(String(childData.parentFirstName));
-            if (childData.parentLastName !== undefined) childUpdateFields.parentLastName = normalizeName(String(childData.parentLastName));
-            if (childData.address !== undefined) childUpdateFields.address = String(childData.address);
-            if (childData.birthDate !== undefined) childUpdateFields.birthDate = typeof childData.birthDate === "string" ? childData.birthDate : null;
-            if (childData.notes !== undefined) childUpdateFields.notes = typeof childData.notes === "string" ? childData.notes : null;
-            if (childData.photoUrl !== undefined) childUpdateFields.photoUrl = typeof childData.photoUrl === "string" ? childData.photoUrl : null;
+            const childUpdateFields: Prisma.ChildUpdateInput = {};
+            const createFirstName = childData.firstName !== undefined ? normalizeName(String(childData.firstName)) : "Inconnu";
+            const createLastName = childData.lastName !== undefined ? normalizeName(String(childData.lastName)) : "Inconnu";
+            const createPostName = childData.postName !== undefined ? normalizeName(String(childData.postName)) : "";
+            const createGender = childData.gender !== undefined ? String(childData.gender) : "M";
+            const createClassLevel = childData.classLevel !== undefined ? String(childData.classLevel) : "FIRST";
+            const createParentPhone = childData.parentPhone !== undefined ? String(childData.parentPhone) : "";
+            const createParentFirstName = childData.parentFirstName !== undefined ? normalizeName(String(childData.parentFirstName)) : "";
+            const createParentLastName = childData.parentLastName !== undefined ? normalizeName(String(childData.parentLastName)) : normalizeName(String(childData.lastName ?? ""));
+            const createAddress = childData.address !== undefined ? String(childData.address) : "";
+            const createBirthDate = childData.birthDate !== undefined ? (typeof childData.birthDate === "string" ? childData.birthDate : null) : null;
+            const createNotes = childData.notes !== undefined ? (typeof childData.notes === "string" ? childData.notes : null) : null;
+            const createPhotoUrl = childData.photoUrl !== undefined ? (typeof childData.photoUrl === "string" ? childData.photoUrl : null) : null;
 
+            if (childData.firstName !== undefined) childUpdateFields.firstName = createFirstName;
+            if (childData.lastName !== undefined) childUpdateFields.lastName = createLastName;
+            if (childData.postName !== undefined) childUpdateFields.postName = createPostName;
+            if (childData.gender !== undefined) childUpdateFields.gender = createGender;
+            if (childData.classLevel !== undefined) childUpdateFields.classLevel = createClassLevel;
+            if (childData.parentFirstName !== undefined) childUpdateFields.parentFirstName = createParentFirstName;
+            if (childData.parentLastName !== undefined) childUpdateFields.parentLastName = createParentLastName;
+            if (childData.address !== undefined) childUpdateFields.address = createAddress;
+            if (childData.birthDate !== undefined) childUpdateFields.birthDate = createBirthDate;
+            if (childData.notes !== undefined) childUpdateFields.notes = createNotes;
+            if (childData.photoUrl !== undefined) childUpdateFields.photoUrl = createPhotoUrl;
 
             // 1. Gérer le Parent
             const parentPhone = String(childData.parentPhone ?? "");
@@ -269,28 +281,28 @@ export async function POST(req: Request) {
 
             // 2. Gérer le Child
             if (parentPhone) {
-              childUpdateFields.parentPhone = parentPhone;
+              childUpdateFields.parentPhone = createParentPhone;
             }
             if (parentId) {
-              childUpdateFields.parentId = parentId;
+              childUpdateFields.parent = { connect: { id: parentId } };
             }
 
             // Pour la création (nouveau child), on doit fournir toutes les valeurs obligatoires
-            const childCreateFields = {
+              const childCreateFields = {
               id,
-              firstName: childUpdateFields.firstName || "Inconnu",
-              lastName: childUpdateFields.lastName || "Inconnu",
-              postName: childUpdateFields.postName || "",
-              gender: childUpdateFields.gender || "M",
-              classLevel: childUpdateFields.classLevel || "FIRST",
-              parentPhone: childUpdateFields.parentPhone || "",
-              parentFirstName: childUpdateFields.parentFirstName || "",
-              parentLastName: childUpdateFields.parentLastName || "",
-              address: childUpdateFields.address || "",
-              birthDate: childUpdateFields.birthDate || null,
-              notes: childUpdateFields.notes || null,
-              photoUrl: childUpdateFields.photoUrl || null,
-              parentId: childUpdateFields.parentId || null,
+              firstName: createFirstName,
+              lastName: createLastName,
+              postName: createPostName,
+              gender: createGender,
+              classLevel: createClassLevel,
+              parentPhone: createParentPhone,
+              parentFirstName: createParentFirstName,
+              parentLastName: createParentLastName,
+              address: createAddress,
+              birthDate: createBirthDate,
+              notes: createNotes,
+              photoUrl: createPhotoUrl,
+              parentId: parentId || null,
             };
 
             await tx.child.upsert({
@@ -303,7 +315,7 @@ export async function POST(req: Request) {
 
         const filteredAttendancePatches = attendancePatches.filter((patch) => {
           const date = decodeDate(patch[1]);
-          return date >= "2026-06-28";
+          return date >= SYNC_ATTENDANCE_MIN_DATE;
         });
 
         if (filteredAttendancePatches.length > 0) {
@@ -424,8 +436,8 @@ export async function POST(req: Request) {
         }),
         prisma.attendance.findMany({
           where: hasValidLastSyncDate
-            ? { markedAt: { gt: lastSyncDate }, date: { gte: "2026-06-28" } }
-            : { date: { gte: "2026-06-28" } },
+            ? { markedAt: { gt: lastSyncDate }, date: { gte: SYNC_ATTENDANCE_MIN_DATE } }
+            : { date: { gte: SYNC_ATTENDANCE_MIN_DATE } },
           orderBy: [
             { date: "asc" },
             { childId: "asc" },
@@ -549,7 +561,7 @@ export async function POST(req: Request) {
       }
 
       // 2. Synchronisation des présences (Optimisée)
-      const filteredAttendances = (attendances as SyncAttendance[]).filter((att) => att.date >= "2026-06-28");
+      const filteredAttendances = (attendances as SyncAttendance[]).filter((att) => att.date >= SYNC_ATTENDANCE_MIN_DATE);
       if (filteredAttendances.length > 0) {
         const attendanceKeys = filteredAttendances.map((att) => ({
           childId: att.childId,
@@ -657,8 +669,8 @@ export async function POST(req: Request) {
         }),
         prisma.attendance.findMany({
           where: hasValidLastSyncDate
-            ? { markedAt: { gt: lastSyncDate }, date: { gte: "2026-06-28" } }
-            : { date: { gte: "2026-06-28" } },
+            ? { markedAt: { gt: lastSyncDate }, date: { gte: SYNC_ATTENDANCE_MIN_DATE } }
+            : { date: { gte: SYNC_ATTENDANCE_MIN_DATE } },
           orderBy: [
             { date: "asc" },
             { childId: "asc" },
@@ -722,12 +734,14 @@ export async function POST(req: Request) {
       message: "Synchronisation réussie",
       serverSyncedAt: serverSyncedAt.toISOString(),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Erreur de synchronisation détaillée:", error);
-    return NextResponse.json({ 
-      success: false, 
-      error: error?.message || "Erreur serveur",
-      stack: error?.stack 
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    return NextResponse.json({
+      success: false,
+      error: errorMessage || "Erreur serveur",
+      stack: errorStack,
     }, { status: 500 });
   }
 }

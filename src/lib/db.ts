@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
+import { SYNC_ATTENDANCE_MIN_DATE } from '@/lib/constants';
 
 export type ClassLevel = 'FIRST' | 'SECOND' | 'THIRD';
 export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'SICK';
@@ -647,10 +648,10 @@ export async function syncWithServer() {
 // Nettoyage automatique des présences locales antérieures au premier jour (28 juin 2026)
 if (typeof window !== 'undefined') {
   db.on('ready', () => {
-    db.attendances.where('date').below('2026-06-28').delete()
+    db.attendances.where('date').below(SYNC_ATTENDANCE_MIN_DATE).delete()
       .then((count) => {
         if (count > 0) {
-          console.log(`[Dexie] Nettoyage : ${count} présences antérieures au 2026-06-28 supprimées.`);
+          console.log(`[Dexie] Nettoyage : ${count} présences antérieures au ${SYNC_ATTENDANCE_MIN_DATE} supprimées.`);
         }
       })
       .catch((err) => {

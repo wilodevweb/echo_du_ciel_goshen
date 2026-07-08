@@ -1,0 +1,1 @@
+export const SYNC_ATTENDANCE_MIN_DATE = "2026-06-28";
