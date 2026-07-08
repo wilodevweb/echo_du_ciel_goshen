@@ -170,6 +170,9 @@ const CHILD_FIELD_CODES: Record<ChildSyncField, string> = {
   parentLastName: 'v',
   parentId: 'p',
 };
+const SYNC_BATCH_SIZE = 5;
+const MAX_SYNC_BATCH_BYTES = 700_000;
+const MAX_SYNC_STRING_VALUE_LENGTH = 100_000;
 
 // Générateur basique d'ID unique (fallback simple pour mode hors-ligne)
 export const generateId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -357,6 +360,42 @@ export async function markEntityForSync(entity: SyncEntity, id: string, fields?:
     fields: nextFields,
   });
   await markPendingChange();
+}
+
+function isInlineDataUrl(value?: string | null) {
+  return Boolean(value?.startsWith('data:'));
+}
+
+function getSyncStringValue(field: ChildSyncField, value: unknown) {
+  if (field === 'photoUrl' && isInlineDataUrl(String(value ?? ''))) {
+    return '';
+  }
+
+  const stringValue = String(value ?? '');
+
+  if (stringValue.length > MAX_SYNC_STRING_VALUE_LENGTH) {
+    return stringValue.slice(0, MAX_SYNC_STRING_VALUE_LENGTH);
+  }
+
+  return stringValue;
+}
+
+export async function cleanupInlinePhotoPayloads() {
+  const childrenWithInlinePhotos = await db.children
+    .filter((child) => isInlineDataUrl(child.photoUrl))
+    .toArray();
+
+  for (const child of childrenWithInlinePhotos) {
+    await db.children.update(child.id, {
+      photoUrl: undefined,
+      updatedAt: new Date().toISOString(),
+    });
+    await markEntityForSync('child', child.id, ['photoUrl']);
+  }
+
+  return {
+    cleanedPhotosCount: childrenWithInlinePhotos.length,
+  };
 }
 
 function childRecordScore(child: Child) {
@@ -586,7 +625,7 @@ function encodeChildPatch(child: Child, pendingItem?: PendingSyncItem): CompactC
   const codes = fields.map((field) => CHILD_FIELD_CODES[field]).join('');
   const values = fields.map((field) => {
     if (field === 'classLevel') return encodeClassLevel(child.classLevel);
-    return String(child[field] ?? '');
+    return getSyncStringValue(field, child[field]);
   });
 
   return [child.id, codes, ...values];
@@ -608,7 +647,7 @@ function buildSyncBatch(
   changedAttendances: Attendance[],
   lastSyncAt: string | null,
   batchSize = 10,
-  maxBytes = 1_500_000,
+  maxBytes = MAX_SYNC_BATCH_BYTES,
 ) {
   const changedChildById = new Map(changedChildren.map((child) => [child.id, child]));
   const changedAttendanceById = new Map(changedAttendances.map((attendance) => [attendance.id, attendance]));
@@ -652,7 +691,7 @@ function buildSyncBatch(
     };
     const nextSize = estimateJsonBytes(nextRequest);
 
-    if (nextSize > maxBytes && selectedItems.length > 0) {
+    if (nextSize > maxBytes) {
       break;
     }
 
@@ -669,8 +708,17 @@ function buildSyncBatch(
     if (firstItem.entity === 'child') {
       const child = changedChildById.get(firstItem.id);
       if (child) {
-        selectedItems.push(firstItem);
-        compactChildren.push(encodeChildPatch(child, pendingItemByKey.get(firstItem.key)));
+        const patch = encodeChildPatch(child, pendingItemByKey.get(firstItem.key));
+        const request = {
+          ...baseRequest,
+          c: [patch],
+          a: compactAttendances,
+        };
+
+        if (estimateJsonBytes(request) <= maxBytes) {
+          selectedItems.push(firstItem);
+          compactChildren.push(patch);
+        }
       }
     } else {
       const attendance = changedAttendanceById.get(firstItem.id);
@@ -746,12 +794,12 @@ async function applyServerDelta(data: SyncDeltaResponse) {
 export async function syncWithServer() {
   try {
     await cleanupLocalDuplicateChildren();
+    await cleanupInlinePhotoPayloads();
 
     const pendingItems = await db.pendingSync.toArray();
     const lastSyncAt = await getStateValue(LAST_SYNC_KEY);
     const kc: string[] = [];
     const ka: string[] = [];
-    const BATCH_SIZE = 10;
     const pendingItemByKey = new Map(pendingItems.map((item) => [item.key, item]));
     const childIds = pendingItems.filter((item) => item.entity === 'child').map((item) => item.id);
     const attendanceIds = pendingItems.filter((item) => item.entity === 'attendance').map((item) => item.id);
@@ -775,7 +823,17 @@ export async function syncWithServer() {
       selectedItems: effectivePendingItems,
       compactChildren,
       compactAttendances,
-    } = buildSyncBatch(pendingItems, pendingItemByKey, changedChildren, changedAttendances, lastSyncAt ?? null, BATCH_SIZE);
+    } = buildSyncBatch(pendingItems, pendingItemByKey, changedChildren, changedAttendances, lastSyncAt ?? null, SYNC_BATCH_SIZE);
+
+    if (effectivePendingItems.length === 0 && pendingItems.length > 0) {
+      await db.pendingSync.delete(pendingItems[0].key);
+      await markPendingChange();
+
+      return {
+        success: false,
+        error: 'Une modification locale trop volumineuse a été ignorée. Relancez la synchronisation.',
+      };
+    }
 
     const response = await fetch('/api/sync', {
       method: 'POST',
@@ -796,7 +854,8 @@ export async function syncWithServer() {
       
       let errorMsg = 'Échec de la synchronisation';
       if (response.status === 413) {
-        errorMsg = 'Un lot est trop volumineux (probablement trop de photos). Veuillez réessayer.';
+        await cleanupInlinePhotoPayloads();
+        errorMsg = 'Des anciennes photos intégrées ont été nettoyées. Relancez la synchronisation.';
       } else if (response.status >= 500) {
         errorMsg = 'Erreur interne du serveur lors du traitement des données.';
       }
@@ -850,6 +909,16 @@ export async function syncWithServer() {
 // Nettoyage automatique des présences locales antérieures au premier jour (28 juin 2026)
 if (typeof window !== 'undefined') {
   db.on('ready', () => {
+    cleanupInlinePhotoPayloads()
+      .then((result) => {
+        if (result.cleanedPhotosCount > 0) {
+          console.log(`[Dexie] Nettoyage : ${result.cleanedPhotosCount} ancienne(s) photo(s) intégrée(s) supprimée(s).`);
+        }
+      })
+      .catch((err) => {
+        console.error('[Dexie] Erreur nettoyage anciennes photos:', err);
+      });
+
     cleanupLocalDuplicateChildren()
       .then((result) => {
         if (result.deletedChildrenCount > 0) {
