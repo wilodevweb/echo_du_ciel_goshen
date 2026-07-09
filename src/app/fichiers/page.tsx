@@ -4,6 +4,7 @@ import { Search, FileText, Play, Download } from 'lucide-react';
 import { prisma } from "@/lib/prisma";
 import { MobileHeader } from '@/components/ui/MobileHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { SearchFilterHeader } from '@/components/ui/SearchFilterHeader';
 
 interface PageProps {
   searchParams: Promise<{ q?: string; type?: string }>;
@@ -29,24 +30,14 @@ export default async function FichiersPage({ searchParams }: PageProps) {
     orderBy: { createdAt: "desc" }
   });
 
-  // Mock files si la BDD est vide, pour ne pas avoir un écran vide au départ
-  const mockFiles = [
-    { id: 'mock-1', type: 'image', title: 'Culte des enfants - Pâques', url: '#', thumbnail: '', aspectRatio: 'tall' },
-    { id: 'mock-2', type: 'video', title: 'Chorale des petits', url: '#', thumbnail: '', aspectRatio: 'wide' },
-    { id: 'mock-3', type: 'pdf', title: 'Programme de l\'année', url: '#', thumbnail: '', aspectRatio: 'square' },
-    { id: 'mock-4', type: 'image', title: 'Sortie au parc', url: '#', thumbnail: '', aspectRatio: 'square' },
-    { id: 'mock-5', type: 'image', title: 'Activité manuelle', url: '#', thumbnail: '', aspectRatio: 'tall' },
-    { id: 'mock-6', type: 'pdf', title: 'Règlement intérieur', url: '#', thumbnail: '', aspectRatio: 'tall' },
-  ];
-
-  const files = dbFiles.length > 0 ? dbFiles.map(file => ({
+  const files = dbFiles.map(file => ({
     id: file.id,
     type: file.type,
     title: file.title,
     url: file.url,
     thumbnail: file.thumbnail || '',
     aspectRatio: file.aspectRatio
-  })) : mockFiles;
+  }));
 
   function getAspectRatioClass(ratio: string) {
     if (ratio === 'tall') return 'aspect-[3/4]';
@@ -58,50 +49,16 @@ export default async function FichiersPage({ searchParams }: PageProps) {
     <main className="flex min-h-screen flex-col bg-gray-50 pb-10">
       <MobileHeader title="Ressources" />
       
-      <div className="bg-fiverr px-4 pb-4 sticky top-[60px] z-20 shadow-md">
-        {/* Formulaire de recherche */}
-        <form method="GET" action="/fichiers" className="relative">
-          <input type="hidden" name="type" value={filterType} />
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-gray-400" />
-          </div>
-          <input
-            type="text"
-            name="q"
-            defaultValue={q}
-            className="block w-full pl-10 pr-3 py-2 border border-transparent rounded-xl leading-5 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white focus:border-white sm:text-sm"
-            placeholder="Rechercher des fichiers, leçons..."
-          />
-        </form>
-      </div>
-
-      {/* Filtres rapides */}
-      <div className="px-4 py-3 flex gap-2 overflow-x-auto no-scrollbar">
-        <Link 
-          href={`/fichiers?type=all${q ? `&q=${q}` : ''}`}
-          className={`whitespace-nowrap px-4 py-1.5 text-sm font-semibold rounded-full transition ${filterType === 'all' ? 'bg-gray-950 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-        >
-          Tous
-        </Link>
-        <Link 
-          href={`/fichiers?type=image${q ? `&q=${q}` : ''}`}
-          className={`whitespace-nowrap px-4 py-1.5 text-sm font-semibold rounded-full transition ${filterType === 'image' ? 'bg-gray-950 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-        >
-          Images
-        </Link>
-        <Link 
-          href={`/fichiers?type=video${q ? `&q=${q}` : ''}`}
-          className={`whitespace-nowrap px-4 py-1.5 text-sm font-semibold rounded-full transition ${filterType === 'video' ? 'bg-gray-950 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-        >
-          Vidéos
-        </Link>
-        <Link 
-          href={`/fichiers?type=pdf${q ? `&q=${q}` : ''}`}
-          className={`whitespace-nowrap px-4 py-1.5 text-sm font-semibold rounded-full transition ${filterType === 'pdf' ? 'bg-gray-950 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
-        >
-          Documents
-        </Link>
-      </div>
+      <SearchFilterHeader 
+        serverMode={true}
+        placeholder="Rechercher des fichiers, leçons..."
+        filters={[
+          { label: "Tous", value: "all" },
+          { label: "Images", value: "image" },
+          { label: "Vidéos", value: "video" },
+          { label: "Documents", value: "pdf" },
+        ]}
+      />
 
       {/* Grid */}
       <div className="px-4 mt-2">

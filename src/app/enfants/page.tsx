@@ -12,11 +12,13 @@ import { MobileHeader } from '@/components/ui/MobileHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { PointageCard } from '@/components/pointage/PointageCard';
 import { ChildDetailsModal } from '@/components/pointage/ChildDetailsModal';
+import { SearchFilterHeader } from '@/components/ui/SearchFilterHeader';
 
 export default function ChildrenList() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
+  const [activeFilter, setActiveFilter] = useState('all');
   const [selectedChild, setSelectedChild] = useState<Child | null>(null);
   const [detailsChild, setDetailsChild] = useState<Child | null>(null);
 
@@ -41,7 +43,11 @@ export default function ChildrenList() {
   const children = useLiveQuery(async () => {
     // orderBy est beaucoup plus rapide que sortBy car il utilise l'index de la base de données
     const allChildren = await db.children.orderBy('createdAt').reverse().toArray();
-    const visibleChildren = allChildren.filter((c) => !isDeletedChildRecord(c) && !c.notes?.includes('[ARCHIVE]'));
+    let visibleChildren = allChildren.filter((c) => !isDeletedChildRecord(c) && !c.notes?.includes('[ARCHIVE]'));
+
+    if (activeFilter !== 'all') {
+      visibleChildren = visibleChildren.filter(child => child.classLevel === activeFilter);
+    }
 
     if (!deferredSearchQuery) return visibleChildren;
     
@@ -51,7 +57,7 @@ export default function ChildrenList() {
       child.lastName.toLowerCase().includes(lowerQuery) ||
       child.parentPhone.includes(deferredSearchQuery);
     });
-  }, [deferredSearchQuery]);
+  }, [deferredSearchQuery, activeFilter]);
 
   const rightAction = (
     <Link href="/enfants/nouveau" className="bg-white/20 p-2 rounded-full hover:bg-white/30 transition">
@@ -63,21 +69,20 @@ export default function ChildrenList() {
     <main className="flex min-h-screen flex-col bg-gray-50">
       <MobileHeader title="Annuaire" rightElement={rightAction} />
       
-      <div className="bg-fiverr px-4 pb-4 sticky top-[60px] z-10 shadow-md">
-        {/* Barre de recherche */}
-        <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-gray-400" />
-          </div>
-          <input
-            type="text"
-            className="block w-full pl-10 pr-3 py-2 border border-transparent rounded-xl leading-5 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white focus:border-white sm:text-sm"
-            placeholder="Rechercher un enfant..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </div>
+      <SearchFilterHeader 
+        serverMode={false}
+        placeholder="Rechercher un enfant..."
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        activeFilter={activeFilter}
+        onFilterChange={setActiveFilter}
+        filters={[
+          { label: "Toutes", value: "all" },
+          { label: "1ère Classe", value: "FIRST" },
+          { label: "2ème Classe", value: "SECOND" },
+          { label: "3ème Classe", value: "THIRD" },
+        ]}
+      />
 
       <div className="p-4 flex-1 overflow-y-auto">
         {children === undefined ? (
