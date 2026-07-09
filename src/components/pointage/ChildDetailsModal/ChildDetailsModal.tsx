@@ -133,6 +133,28 @@ export function ChildDetailsModal({
     setDraft((currentDraft) => ({ ...currentDraft, [field]: value }));
   };
 
+  const handleDeleteClick = () => {
+    setConfirmConfig({
+      title: "Suppression de l'enfant",
+      message: "Êtes-vous sûr de vouloir supprimer définitivement cet enfant ?",
+      action: async () => {
+        setIsSaving(true);
+        try {
+          if (onSave) {
+            await onSave({ ...draft, firstName: "", lastName: "", postName: "" });
+          } else {
+            await db.children.delete(child.id);
+            await markEntityForSync('child', child.id, ['firstName', 'lastName', 'postName']);
+            onClose();
+          }
+        } finally {
+          setIsSaving(false);
+          setConfirmConfig(null);
+        }
+      }
+    });
+  };
+
   const handleSave = async () => {
     if (!isEditMode) {
       setIsEditMode(true);
@@ -468,6 +490,19 @@ export function ChildDetailsModal({
             </div>
           )}
         </div>
+
+        {isEditMode && !isDeletion && (
+          <button
+            type="button"
+            onClick={handleDeleteClick}
+            disabled={isSaving}
+            title="Supprimer l'enfant"
+            aria-label="Supprimer l'enfant"
+            className="absolute bottom-6 right-20 flex h-12 w-12 items-center justify-center rounded-full shadow-sm bg-red-600 text-white hover:bg-red-700 transition-all active:scale-90 disabled:opacity-45"
+          >
+            <Trash2 className="h-5 w-5" />
+          </button>
+        )}
 
         <button
           type="button"
