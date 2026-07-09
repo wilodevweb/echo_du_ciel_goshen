@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Search, UserPlus, Phone, Smile } from 'lucide-react';
+import { Search, UserPlus, Smile } from 'lucide-react';
 import db, { getClassLabel, isDeletedChildRecord, type Child } from '@/lib/db';
 import { Card, CardContent } from '@/components/ui/Card';
 import { MobileHeader } from '@/components/ui/MobileHeader';
@@ -135,16 +135,6 @@ export default function ChildrenList() {
                         {child.parentPhone}
                       </p>
                     </div>
-
-                    {/* Action Appeler */}
-                    <a 
-                      href={`tel:${child.parentPhone}`} 
-                      onClick={(e) => e.stopPropagation()}
-                      className="ml-2 w-10 h-10 rounded-full bg-fiverr/10 flex items-center justify-center text-fiverr hover:bg-fiverr hover:text-white transition-colors flex-shrink-0"
-                      title="Appeler le parent"
-                    >
-                      <Phone className="w-5 h-5" />
-                    </a>
                   </div>
                 </CardContent>
               </Card>
