@@ -4,6 +4,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { SYNC_ATTENDANCE_MIN_DATE } from "@/lib/constants";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]/route";
+import { uploadBase64ToVercelBlob } from "@/lib/blob";
 
 type ChildPatch = [string, string, ...string[]];
 type AttendancePatch = [string, string, string];
@@ -501,7 +502,6 @@ export async function POST(req: Request) {
             if (childData.address !== undefined) childUpdateFields.address = createAddress;
             if (childData.birthDate !== undefined) childUpdateFields.birthDate = createBirthDate;
             if (childData.notes !== undefined) childUpdateFields.notes = createNotes;
-            if (childData.photoUrl !== undefined) childUpdateFields.photoUrl = createPhotoUrl;
 
             // 1. Gérer le Parent
             const parentPhone = String(childData.parentPhone ?? "");
@@ -571,6 +571,16 @@ export async function POST(req: Request) {
               remappedChildIds.add(duplicateChild.id);
             }
 
+            let createPhotoUrl = childData.photoUrl !== undefined ? (typeof childData.photoUrl === "string" ? childData.photoUrl : null) : null;
+            
+            // Si la photo est un Base64 envoyé par le téléphone hors-ligne
+            if (createPhotoUrl && createPhotoUrl.startsWith('data:image/')) {
+               const blobUrl = await uploadBase64ToVercelBlob(createPhotoUrl, targetChildId);
+               if (blobUrl) {
+                  createPhotoUrl = blobUrl;
+               }
+            }
+
             // Pour la création (nouveau child), on doit fournir toutes les valeurs obligatoires
               const childCreateFields = {
               id: targetChildId,
@@ -588,6 +598,11 @@ export async function POST(req: Request) {
               photoUrl: createPhotoUrl,
               parentId: parentId || null,
             };
+
+            // Mise à jour si c'est un patch
+            if (childData.photoUrl !== undefined) {
+               childUpdateFields.photoUrl = createPhotoUrl;
+            }
 
             await tx.child.upsert({
               where: { id: targetChildId },
