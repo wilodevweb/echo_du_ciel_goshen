@@ -388,67 +388,8 @@ function getSyncStringValue(field: ChildSyncField, value: unknown) {
   return stringValue;
 }
 
-export async function cleanupInlinePhotoPayloads() {
-  const childrenWithInlinePhotos = await db.children
-    .filter((child) => isInlineDataUrl(child.photoUrl))
-    .toArray();
 
-  for (const child of childrenWithInlinePhotos) {
-    await db.children.update(child.id, {
-      photoUrl: undefined,
-      updatedAt: new Date().toISOString(),
-    });
-    await markEntityForSync('child', child.id, ['photoUrl']);
-  }
-
-  return {
-    cleanedPhotosCount: childrenWithInlinePhotos.length,
-  };
-}
-
-              changedAttendanceIds.add(existingAttendance.id);
-            }
-            await db.attendances.delete(attendance.id);
-          } else {
-            await db.attendances.update(attendance.id, {
-              childId: canonical.id,
-            });
-            changedAttendanceIds.add(attendance.id);
-            canonicalAttendanceByDate.set(attendance.date, {
-              ...attendance,
-              childId: canonical.id,
-            });
-          }
-        }
-
-        await db.children.update(duplicate.id, {
-          firstName: '',
-          lastName: '',
-          postName: '',
-          updatedAt: new Date().toISOString(),
-        });
-        deletedChildIds.push(duplicate.id);
-      }
-    }
-  });
-
-  for (const childId of changedCanonicalChildIds) {
-    await markEntityForSync('child', childId);
-  }
-
-  for (const attendanceId of changedAttendanceIds) {
-    await markEntityForSync('attendance', attendanceId);
-  }
-
-  for (const childId of deletedChildIds) {
-    await markEntityForSync('child', childId, ['firstName', 'lastName', 'postName']);
-  }
-
-  return {
-    deletedChildrenCount: deletedChildIds.length,
-  };
-}
-
+// Suppression complète du système de doublons devenu obsolète
 export async function getSyncStatus() {
   const [pendingChanges, lastLocalChangeAt, lastSyncAt] = await Promise.all([
     db.pendingSync.count(),
@@ -831,26 +772,6 @@ export async function syncWithServer() {
 // Nettoyage automatique des présences locales antérieures au premier jour (28 juin 2026)
 if (typeof window !== 'undefined') {
   db.on('ready', () => {
-    cleanupInlinePhotoPayloads()
-      .then((result) => {
-        if (result.cleanedPhotosCount > 0) {
-          console.log(`[Dexie] Nettoyage : ${result.cleanedPhotosCount} ancienne(s) photo(s) intégrée(s) supprimée(s).`);
-        }
-      })
-      .catch((err) => {
-        console.error('[Dexie] Erreur nettoyage anciennes photos:', err);
-      });
-
-    cleanupLocalDuplicateChildren()
-      .then((result) => {
-        if (result.deletedChildrenCount > 0) {
-          console.log(`[Dexie] Nettoyage : ${result.deletedChildrenCount} doublon(s) enfant fusionné(s).`);
-        }
-      })
-      .catch((err) => {
-        console.error('[Dexie] Erreur nettoyage doublons enfants:', err);
-      });
-
     db.attendances.where('date').below(SYNC_ATTENDANCE_MIN_DATE).delete()
       .then((count) => {
         if (count > 0) {

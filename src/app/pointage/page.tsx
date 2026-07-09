@@ -15,6 +15,7 @@ import db, {
   isDeletedChildRecord,
   markEntityForSync,
   normalizeName,
+  type ChildSyncField,
 } from "@/lib/db";
 import {
   AttendanceDateSelector,
