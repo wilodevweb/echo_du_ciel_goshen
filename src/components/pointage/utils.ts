@@ -15,7 +15,8 @@ async function resizeImageFile(file: File) {
     img.onerror = reject;
     img.src = dataUrl;
   });
-  const maxSize = 720;
+  // Optimisation drastique pour Turso : on réduit la taille de 720px à 360px (suffisant pour un avatar)
+  const maxSize = 360;
   const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(image.width * scale);
@@ -25,7 +26,8 @@ async function resizeImageFile(file: File) {
   if (!context) return dataUrl;
 
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/jpeg", 0.82);
+  // Qualité réduite à 0.7 pour des fichiers ultra-légers (environ 15-20 Ko)
+  return canvas.toDataURL("image/jpeg", 0.7);
 }
 
 export async function uploadChildPhoto(file: File) {
