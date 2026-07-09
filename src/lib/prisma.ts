@@ -1,7 +1,6 @@
 import { PrismaClient } from '../generated/prisma/client';
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
-import { createClient } from '@libsql/client';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 
 // Configurer le proxy pour les requêtes sortantes de fetch (ex: Turso) si présent dans l'environnement
@@ -21,7 +20,7 @@ const globalForPrisma = global as unknown as { prisma: PrismaClient };
 const url = process.env.DATABASE_URL || 'file:./dev.db';
 
 const adapter = url.startsWith('libsql://') || url.startsWith('https://')
-  ? new PrismaLibSql(createClient({ url, authToken: process.env.DATABASE_AUTH_TOKEN }))
+  ? new PrismaLibSql({ url, authToken: process.env.DATABASE_AUTH_TOKEN })
   : new PrismaBetterSqlite3({ url });
 
 export const prisma =
