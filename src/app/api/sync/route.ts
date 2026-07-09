@@ -4,7 +4,6 @@ import type { Prisma } from "@/generated/prisma/client";
 import { SYNC_ATTENDANCE_MIN_DATE } from "@/lib/constants";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]/route";
-import { uploadBase64ToVercelBlob } from "@/lib/blob";
 
 type ChildPatch = [string, string, ...string[]];
 type AttendancePatch = [string, string, string];
@@ -571,14 +570,6 @@ export async function POST(req: Request) {
             }
 
             let createPhotoUrl = childData.photoUrl !== undefined ? (typeof childData.photoUrl === "string" ? childData.photoUrl : null) : null;
-            
-            // Si la photo est un Base64 envoyé par le téléphone hors-ligne
-            if (createPhotoUrl && createPhotoUrl.startsWith('data:image/')) {
-               const blobUrl = await uploadBase64ToVercelBlob(createPhotoUrl, targetChildId);
-               if (blobUrl) {
-                  createPhotoUrl = blobUrl;
-               }
-            }
 
             // Pour la création (nouveau child), on doit fournir toutes les valeurs obligatoires
               const childCreateFields = {
