@@ -490,7 +490,6 @@ export async function POST(req: Request) {
             const createAddress = childData.address !== undefined ? String(childData.address) : "";
             const createBirthDate = childData.birthDate !== undefined ? (typeof childData.birthDate === "string" ? childData.birthDate : null) : null;
             const createNotes = childData.notes !== undefined ? (typeof childData.notes === "string" ? childData.notes : null) : null;
-            const createPhotoUrl = childData.photoUrl !== undefined ? (typeof childData.photoUrl === "string" ? childData.photoUrl : null) : null;
 
             if (childData.firstName !== undefined) childUpdateFields.firstName = createFirstName;
             if (childData.lastName !== undefined) childUpdateFields.lastName = createLastName;
