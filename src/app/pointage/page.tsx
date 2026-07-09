@@ -105,10 +105,11 @@ export default function PointagePage() {
     async () => {
       if (!currentChildId) return [];
       return db.attendances
-        .where("childId")
-        .equals(currentChildId)
-        .toArray()
-        .then((items) => items.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4));
+        .where("[childId+date]")
+        .between([currentChildId, ""], [currentChildId, "\uffff"])
+        .reverse()
+        .limit(4)
+        .toArray();
     },
     [currentChildId],
   );

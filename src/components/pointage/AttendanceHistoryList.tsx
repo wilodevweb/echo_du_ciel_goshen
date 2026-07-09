@@ -12,13 +12,15 @@ export function AttendanceHistoryList({ childId }: AttendanceHistoryListProps) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const attendances = useLiveQuery(async () => {
-    // Fetch all attendances for this child, sorted by date descending
+    // Fetch attendances for this child, using the compound index [childId+date]
+    // The index allows us to get the records sorted by date descending naturally, without in-memory sorting
     const records = await db.attendances
-      .where('childId')
-      .equals(childId)
+      .where('[childId+date]')
+      .between([childId, ''], [childId, '\uffff'])
+      .reverse()
       .toArray();
       
-    return records.sort((a, b) => b.date.localeCompare(a.date));
+    return records;
   }, [childId]);
 
   const visibleMonth = useMemo(() => {
