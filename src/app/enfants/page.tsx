@@ -16,7 +16,7 @@ import { ChildDetailsModal } from '@/components/pointage/ChildDetailsModal';
 export default function ChildrenList() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  useDeferredValue(searchQuery);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [selectedChild, setSelectedChild] = useState<Child | null>(null);
   const [detailsChild, setDetailsChild] = useState<Child | null>(null);
 
@@ -43,15 +43,15 @@ export default function ChildrenList() {
     const allChildren = await db.children.orderBy('createdAt').reverse().toArray();
     const visibleChildren = allChildren.filter((c) => !isDeletedChildRecord(c) && !c.notes?.includes('[ARCHIVE]'));
 
-    if (!searchQuery) return visibleChildren;
+    if (!deferredSearchQuery) return visibleChildren;
     
-    const lowerQuery = searchQuery.toLowerCase();
+    const lowerQuery = deferredSearchQuery.toLowerCase();
     return visibleChildren.filter(child => {
       return child.firstName.toLowerCase().includes(lowerQuery) || 
       child.lastName.toLowerCase().includes(lowerQuery) ||
-      child.parentPhone.includes(searchQuery);
+      child.parentPhone.includes(deferredSearchQuery);
     });
-  }, [searchQuery]);
+  }, [deferredSearchQuery]);
 
   const rightAction = (
     <Link href="/enfants/nouveau" className="bg-white/20 p-2 rounded-full hover:bg-white/30 transition">
