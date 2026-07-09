@@ -30,13 +30,30 @@ export default function AddChildPage() {
         postName: normalizeName(newChild.postName.trim()),
         gender: newChild.gender,
         classLevel: newChild.classLevel,
-        parentPhone: "",
-        parentFirstName: "",
-        parentLastName: "",
-        address: "",
+        parentPhone: newChild.parentPhone.trim(),
+        parentFirstName: normalizeName(newChild.parentFirstName.trim()),
+        parentLastName: normalizeName(newChild.parentLastName.trim()),
+        address: newChild.address.trim(),
+        birthDate: newChild.birthDate || undefined,
+        notes: newChild.notes.trim(),
+        photoUrl: newChild.photoUrl,
         createdAt: new Date().toISOString(),
       });
-      await markEntityForSync('child', childId);
+      await markEntityForSync('child', childId, [
+        'firstName',
+        'lastName',
+        'postName',
+        'gender',
+        'classLevel',
+        'parentPhone',
+        'parentFirstName',
+        'parentLastName',
+        'address',
+        'birthDate',
+        'notes',
+        'photoUrl',
+        'parentId',
+      ]);
       
       // Redirection vers l'annuaire avec l'ID du nouvel enfant pour afficher son profil
       router.push(`/enfants?newChildId=${childId}`);

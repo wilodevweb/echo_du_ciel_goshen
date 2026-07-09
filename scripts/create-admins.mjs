@@ -30,7 +30,7 @@ async function main() {
       password: 'SergeEcodim2026!',
       role: 'ADMIN',
     },
-  ];
+  ]; 
 
   for (const admin of admins) {
     const hashedPassword = await bcrypt.hash(admin.password, 10);

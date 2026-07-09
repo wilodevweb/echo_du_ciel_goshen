@@ -28,43 +28,13 @@ async function resizeImageFile(file: File) {
   return canvas.toDataURL("image/jpeg", 0.82);
 }
 
-function dataUrlToFile(dataUrl: string, filename: string) {
-  const [metadata, base64Data] = dataUrl.split(",");
-  const mimeType = metadata.match(/data:(.*);base64/)?.[1] ?? "image/jpeg";
-  const binary = atob(base64Data);
-  const bytes = new Uint8Array(binary.length);
-
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-
-  return new File([bytes], filename, { type: mimeType });
-}
-
 export async function uploadChildPhoto(file: File) {
+  // Redimensionne l'image en Base64 (max 720px)
   const resizedDataUrl = await resizeImageFile(file);
-  const uploadFile = dataUrlToFile(resizedDataUrl, "photo-enfant.jpg");
-  const formData = new FormData();
-
-  formData.append("file", uploadFile);
-
-  const response = await fetch("/api/enfants/photo", {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const data = await response.json().catch(() => null) as { error?: string } | null;
-    throw new Error(data?.error ?? "Le téléversement de la photo a échoué.");
-  }
-
-  const data = await response.json() as { url?: string };
-
-  if (!data.url) {
-    throw new Error("Le serveur n'a pas renvoyé de chemin pour la photo.");
-  }
-
-  return data.url;
+  
+  // On retourne directement la chaîne Base64 pour la sauvegarder dans IndexedDB (Hors-ligne).
+  // La synchronisation se chargera de l'envoyer au serveur plus tard.
+  return resizedDataUrl;
 }
 
 export function isBirthdayInWeek(birthDate: string | undefined, weekStartDate: string) {
