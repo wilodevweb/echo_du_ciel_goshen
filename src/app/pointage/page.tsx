@@ -151,6 +151,12 @@ export default function PointagePage() {
       .where({ childId, date: selectedDate })
       .first();
 
+    if (existingRecord && existingRecord.status === status) {
+      // Évite de déclencher une synchronisation inutile si le statut n'a pas changé
+      moveCard(1);
+      return;
+    }
+
     const payload = {
       present: status === "PRESENT",
       status,
@@ -223,10 +229,13 @@ export default function PointagePage() {
       return existingChild?.[field] !== nextChild[field];
     });
 
-    await db.children.update(childId, nextChild);
-    if (changedFields.length > 0) {
-      await markEntityForSync('child', childId, changedFields);
+    if (changedFields.length === 0) {
+      setDetailsChild(null);
+      return;
     }
+
+    await db.children.update(childId, nextChild);
+    await markEntityForSync('child', childId, changedFields as ChildSyncField[]);
     setDetailsChild(null);
   };
 
