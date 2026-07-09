@@ -376,9 +376,8 @@ function isInlineDataUrl(value?: string | null) {
 }
 
 function getSyncStringValue(field: ChildSyncField, value: unknown) {
-  if (field === 'photoUrl' && isInlineDataUrl(String(value ?? ''))) {
-    return '';
-  }
+  // Les photos Base64 sont maintenant autorisées car on les upload sur Vercel Blob côté serveur
+
 
   const stringValue = String(value ?? '');
 
