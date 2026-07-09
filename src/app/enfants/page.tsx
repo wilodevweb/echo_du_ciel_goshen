@@ -37,9 +37,10 @@ export default function ChildrenList() {
     }
   }, [router]);
 
-  // Récupérer et filtrer les enfants depuis IndexedDB
+  // Récupérer et filtrer les enfants depuis IndexedDB en utilisant l'index createdAt
   const children = useLiveQuery(async () => {
-    const allChildren = await db.children.reverse().sortBy('createdAt');
+    // orderBy est beaucoup plus rapide que sortBy car il utilise l'index de la base de données
+    const allChildren = await db.children.orderBy('createdAt').reverse().toArray();
     const visibleChildren = allChildren.filter((c) => !isDeletedChildRecord(c) && !c.notes?.includes('[ARCHIVE]'));
 
     if (!searchQuery) return visibleChildren;

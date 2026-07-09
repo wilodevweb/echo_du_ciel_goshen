@@ -328,6 +328,15 @@ db.version(7)
     });
   });
 
+db.version(8)
+  .stores({
+    children: 'id, firstName, lastName, postName, parentPhone, classLevel, gender, parentId, createdAt',
+    parents: 'id, phone, firstName, lastName',
+    attendances: 'id, childId, date, status, [childId+date]',
+    syncState: 'key',
+    pendingSync: 'key, entity, id, updatedAt',
+  });
+
 const LAST_LOCAL_CHANGE_KEY = 'lastLocalChangeAt';
 const LAST_SYNC_KEY = 'lastSyncAt';
 

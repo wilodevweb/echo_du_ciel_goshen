@@ -183,7 +183,7 @@ export type PointageCardProps =
       onSubmit: () => void;
     };
 
-export function PointageCard(props: PointageCardProps) {
+export const PointageCard = React.memo(function PointageCard(props: PointageCardProps) {
   if (props.mode === "attendance") {
     const { child, status, recentStatuses, hasBirthdayThisWeek, onNameClick, onSetStatus } = props;
 
@@ -476,4 +476,4 @@ export function PointageCard(props: PointageCardProps) {
       }
     />
   );
-}
+});
