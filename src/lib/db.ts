@@ -802,7 +802,6 @@ async function applyServerDelta(data: SyncDeltaResponse) {
 export async function syncWithServer() {
   try {
     await cleanupLocalDuplicateChildren();
-    await cleanupInlinePhotoPayloads();
 
     const pendingItems = await db.pendingSync.toArray();
     const lastSyncAt = await getStateValue(LAST_SYNC_KEY);
@@ -862,8 +861,7 @@ export async function syncWithServer() {
       
       let errorMsg = 'Échec de la synchronisation';
       if (response.status === 413) {
-        await cleanupInlinePhotoPayloads();
-        errorMsg = 'Des anciennes photos intégrées ont été nettoyées. Relancez la synchronisation.';
+        errorMsg = 'Fichier trop lourd. Relancez la synchronisation.';
       } else if (response.status >= 500) {
         errorMsg = 'Erreur interne du serveur lors du traitement des données.';
       }

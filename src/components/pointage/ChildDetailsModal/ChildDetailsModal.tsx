@@ -105,7 +105,8 @@ export function ChildDetailsModal({
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!isEditMode) return;
 
-    const file = e.target.files?.[0];
+    const target = e.target;
+    const file = target.files?.[0];
     if (!file) return;
 
     setIsPhotoUploading(true);
@@ -120,7 +121,9 @@ export function ChildDetailsModal({
       });
     } finally {
       setIsPhotoUploading(false);
-      e.currentTarget.value = "";
+      if (target) {
+        target.value = "";
+      }
     }
   };
 

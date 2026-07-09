@@ -408,7 +408,8 @@ export const PointageCard = React.memo(function PointageCard(props: PointageCard
             capture="environment"
             className="sr-only"
             onChange={async (event) => {
-              const file = event.target.files?.[0];
+              const target = event.target;
+              const file = target.files?.[0];
               if (file) {
                 try {
                   const photoUrl = await uploadChildPhoto(file);
@@ -418,7 +419,9 @@ export const PointageCard = React.memo(function PointageCard(props: PointageCard
                   alert(error instanceof Error ? error.message : "Le téléversement de la photo a échoué.");
                 }
               }
-              event.currentTarget.value = "";
+              if (target) {
+                target.value = "";
+              }
             }}
           />
           <div className="h-36 w-36 overflow-hidden rounded-full bg-gradient-to-tr from-fiverr/20 to-purple-500/20 border-4 border-[#1b1b1b]/10 flex items-center justify-center">
