@@ -27,11 +27,9 @@ function StatusButton({
       aria-label={label}
       onClick={onClick}
       disabled={disabled}
-      className={`h-12 rounded-2xl px-3 text-sm font-black shadow-sm transition-all ${colorClass} ${
-        active ? "scale-[1.02] opacity-100 ring-2 ring-white/80" : "opacity-55"
-      } ${
-        disabled ? "opacity-20 cursor-not-allowed scale-100 pointer-events-none" : ""
-      }`}
+      className={`h-12 rounded-2xl px-3 text-sm font-black shadow-sm transition-all ${colorClass} ${active ? "scale-[1.02] opacity-100 ring-2 ring-white/80" : "opacity-55"
+        } ${disabled ? "opacity-20 cursor-not-allowed scale-100 pointer-events-none" : ""
+        }`}
     >
       {label}
     </button>
@@ -51,11 +49,10 @@ function CardActionButton({
   href?: string;
   isSubmitting?: boolean;
 }) {
-  const className = `flex h-12 w-full items-center justify-center rounded-2xl px-3 text-sm font-black shadow-sm transition-all ${
-    !disabled
-      ? "bg-fiverr text-white hover:bg-fiverr-dark active:scale-[0.98]"
-      : "bg-gray-500 text-white opacity-40 cursor-not-allowed"
-  }`;
+  const className = `flex h-12 w-full items-center justify-center rounded-2xl px-3 text-sm font-black shadow-sm transition-all ${!disabled
+    ? "bg-fiverr text-white hover:bg-fiverr-dark active:scale-[0.98]"
+    : "bg-gray-500 text-white opacity-40 cursor-not-allowed"
+    }`;
 
   if (href) {
     return (
@@ -161,27 +158,27 @@ export function BaseCardLayout({
 
 export type PointageCardProps =
   | {
-      mode: "attendance";
-      child: Child;
-      status: AttendanceStatus | null;
-      recentStatuses: AttendanceStatus[];
-      hasBirthdayThisWeek: boolean;
-      onNameClick: () => void;
-      onSetStatus: (status: AttendanceStatus) => void;
-    }
+    mode: "attendance";
+    child: Child;
+    status: AttendanceStatus | null;
+    recentStatuses: AttendanceStatus[];
+    hasBirthdayThisWeek: boolean;
+    onNameClick: () => void;
+    onSetStatus: (status: AttendanceStatus) => void;
+  }
   | {
-      mode: "profile";
-      child: Child;
-      onNameClick: () => void;
-      onPhotoChange?: (file: File) => Promise<void>;
-    }
+    mode: "profile";
+    child: Child;
+    onNameClick: () => void;
+    onPhotoChange?: (file: File) => Promise<void>;
+  }
   | {
-      mode: "add";
-      value: NewChildForm;
-      isAdding: boolean;
-      onChange: (value: NewChildForm) => void;
-      onSubmit: () => void;
-    };
+    mode: "add";
+    value: NewChildForm;
+    isAdding: boolean;
+    onChange: (value: NewChildForm) => void;
+    onSubmit: () => void;
+  };
 
 export const PointageCard = React.memo(function PointageCard(props: PointageCardProps) {
   if (props.mode === "attendance") {
@@ -231,11 +228,11 @@ export const PointageCard = React.memo(function PointageCard(props: PointageCard
           </div>
         }
         nameBox={
-          <ChildNameDisplay 
-            firstName={child.firstName} 
-            lastName={child.lastName} 
-            postName={child.postName} 
-            onClick={onNameClick} 
+          <ChildNameDisplay
+            firstName={child.firstName}
+            lastName={child.lastName}
+            postName={child.postName}
+            onClick={onNameClick}
           />
         }
         body={
@@ -271,7 +268,7 @@ export const PointageCard = React.memo(function PointageCard(props: PointageCard
         }
       />
     );
-  }  if (props.mode === "profile") {
+  } if (props.mode === "profile") {
     const { child, onNameClick, onPhotoChange } = props;
     const parentName = (child.parentFirstName || child.parentLastName)
       ? `${child.parentFirstName} ${child.parentLastName}`.trim()
@@ -304,7 +301,7 @@ export const PointageCard = React.memo(function PointageCard(props: PointageCard
                 }}
               />
             )}
-            <div className="h-36 w-36 overflow-hidden rounded-full bg-gradient-to-tr from-[#342ee8]/20 to-fiverr/30 border-[6px] border-white/10 shadow-inner flex items-center justify-center">
+            <div className="h-36 w-36 overflow-hidden rounded-full bg-gradient-to-tr from-[#342ee8]/20 to-fiverr/30 flex items-center justify-center">
               {child.photoUrl ? (
                 <Image
                   src={child.photoUrl}
@@ -318,17 +315,17 @@ export const PointageCard = React.memo(function PointageCard(props: PointageCard
                 <Smile className="h-16 w-16 text-[#342ee8]/40" strokeWidth={1.5} />
               )}
             </div>
-            <div className="absolute bottom-2 right-2 flex h-12 w-12 items-center justify-center rounded-full bg-[#342ee8] text-2xl font-black text-white shadow-lg ring-4 ring-[#1b1b1b]">
+            <div className="absolute bottom-2 right-2 flex h-12 w-12 items-center justify-center rounded-full bg-[#342ee8] text-2xl font-black text-white ring-4 ring-[#1b1b1b]">
               {getClassNumber(child.classLevel)}
             </div>
           </label>
         }
         nameBox={
-          <ChildNameDisplay 
-            firstName={child.firstName} 
-            lastName={child.lastName} 
-            postName={child.postName} 
-            onClick={onNameClick} 
+          <ChildNameDisplay
+            firstName={child.firstName}
+            lastName={child.lastName}
+            postName={child.postName}
+            onClick={onNameClick}
           />
         }
         body={
@@ -356,7 +353,7 @@ export const PointageCard = React.memo(function PointageCard(props: PointageCard
   const { value, isAdding, onChange, onSubmit } = props;
   const update = async (field: keyof NewChildForm, fieldValue: string) => {
     let nextValue = { ...value, [field]: fieldValue };
-    
+
     if (field === 'parentPhone') {
       const phone = fieldValue.trim();
       if (phone.length >= 4) {
@@ -376,7 +373,7 @@ export const PointageCard = React.memo(function PointageCard(props: PointageCard
 
   const canAdd = Boolean(
     value.firstName.trim() &&
-      value.lastName.trim()
+    value.lastName.trim()
   );
 
   return (

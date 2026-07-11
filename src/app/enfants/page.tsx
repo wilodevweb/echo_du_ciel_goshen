@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Search, UserPlus, Smile } from 'lucide-react';
+import { Search, UserPlus, Smile, Archive } from 'lucide-react';
 import db, { getClassLabel, isDeletedChildRecord, type Child } from '@/lib/db';
 import { Card, CardContent } from '@/components/ui/Card';
 import { MobileHeader } from '@/components/ui/MobileHeader';
@@ -13,12 +13,16 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { PointageCard } from '@/components/pointage/PointageCard';
 import { ChildDetailsModal } from '@/components/pointage/ChildDetailsModal';
 import { SearchFilterHeader } from '@/components/ui/SearchFilterHeader';
+import { ActionGroup } from '@/components/ui/ActionGroup';
+import { Suspense } from 'react';
 
 export default function ChildrenList() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [activeFilter, setActiveFilter] = useState('all');
+  const [showSearch, setShowSearch] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const [selectedChild, setSelectedChild] = useState<Child | null>(null);
   const [detailsChild, setDetailsChild] = useState<Child | null>(null);
 
@@ -43,7 +47,11 @@ export default function ChildrenList() {
   const children = useLiveQuery(async () => {
     // orderBy est beaucoup plus rapide que sortBy car il utilise l'index de la base de données
     const allChildren = await db.children.orderBy('createdAt').reverse().toArray();
-    let visibleChildren = allChildren.filter((c) => !isDeletedChildRecord(c) && !c.notes?.includes('[ARCHIVE]'));
+    let visibleChildren = allChildren.filter((c) => {
+      const isArchived = Boolean(c.notes?.includes('[ARCHIVE]'));
+      if (showArchived) return !isDeletedChildRecord(c) && isArchived;
+      return !isDeletedChildRecord(c) && !isArchived;
+    });
 
     if (activeFilter !== 'all') {
       visibleChildren = visibleChildren.filter(child => child.classLevel === activeFilter);
@@ -57,32 +65,54 @@ export default function ChildrenList() {
       child.lastName.toLowerCase().includes(lowerQuery) ||
       child.parentPhone.includes(deferredSearchQuery);
     });
-  }, [deferredSearchQuery, activeFilter]);
+  }, [deferredSearchQuery, activeFilter, showArchived]);
 
   const rightAction = (
-    <Link href="/enfants/nouveau" className="bg-white/20 p-2 rounded-full hover:bg-white/30 transition">
-      <UserPlus className="w-5 h-5" />
-    </Link>
+    <ActionGroup
+      buttons={[
+        {
+          id: "search",
+          icon: Search,
+          isActive: showSearch,
+          onClick: () => setShowSearch(!showSearch)
+        },
+        {
+          id: "archive",
+          icon: Archive,
+          isActive: showArchived,
+          onClick: () => setShowArchived(!showArchived),
+          title: "Afficher les enfants archivés"
+        },
+        {
+          id: "new",
+          icon: UserPlus,
+          onClick: () => router.push("/enfants/nouveau")
+        }
+      ]}
+    />
   );
 
   return (
     <main className="flex min-h-screen flex-col bg-gray-50">
-      <MobileHeader title="Annuaire" rightElement={rightAction} />
+      <MobileHeader title={showArchived ? "Archives" : "Annuaire"} rightElement={rightAction} />
       
-      <SearchFilterHeader 
-        serverMode={false}
-        placeholder="Rechercher un enfant..."
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        activeFilter={activeFilter}
-        onFilterChange={setActiveFilter}
-        filters={[
-          { label: "Toutes", value: "all" },
-          { label: "1ère Classe", value: "FIRST" },
-          { label: "2ème Classe", value: "SECOND" },
-          { label: "3ème Classe", value: "THIRD" },
-        ]}
-      />
+      <Suspense fallback={<div className="h-[60px]" />}>
+        <SearchFilterHeader 
+          showSearchBar={showSearch}
+          serverMode={false}
+          placeholder="Rechercher un enfant..."
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          activeFilter={activeFilter}
+          onFilterChange={setActiveFilter}
+          filters={[
+            { label: "Toutes", value: "all" },
+            { label: "1ère Classe", value: "FIRST" },
+            { label: "2ème Classe", value: "SECOND" },
+            { label: "3ème Classe", value: "THIRD" },
+          ]}
+        />
+      </Suspense>
 
       <div className="p-4 flex-1 overflow-y-auto">
         {children === undefined ? (

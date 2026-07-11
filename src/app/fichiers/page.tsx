@@ -1,10 +1,11 @@
 import React from 'react';
 import Link from 'next/link';
-import { Search, FileText, Play, Download } from 'lucide-react';
+import { Search, FileText, Play, Download, Plus } from 'lucide-react';
 import { prisma } from "@/lib/prisma";
 import { MobileHeader } from '@/components/ui/MobileHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SearchFilterHeader } from '@/components/ui/SearchFilterHeader';
+import { ActionGroup } from '@/components/ui/ActionGroup';
 
 interface PageProps {
   searchParams: Promise<{ q?: string; type?: string }>;
@@ -45,9 +46,26 @@ export default async function FichiersPage({ searchParams }: PageProps) {
     return 'aspect-square';
   }
 
+  const rightAction = (
+    <ActionGroup
+      buttons={[
+        {
+          id: "search",
+          icon: Search,
+          href: "?search=toggle", // Placeholder, since we can't easily toggle state in SC
+        },
+        {
+          id: "new",
+          icon: Plus,
+          href: "/fichiers/nouveau"
+        }
+      ]}
+    />
+  );
+
   return (
     <main className="flex min-h-screen flex-col bg-gray-50 pb-10">
-      <MobileHeader title="Ressources" />
+      <MobileHeader title="Ressources" rightElement={rightAction} />
       
       <SearchFilterHeader 
         serverMode={true}

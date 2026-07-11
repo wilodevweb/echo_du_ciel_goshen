@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Search, Pencil, Plus, Trash2, User, Users } from "lucide-react";
+import { ActionGroup } from "@/components/ui/ActionGroup";
 import { useLiveQuery } from "dexie-react-hooks";
 import db, { generateId, normalizeName } from "@/lib/db";
 import type { ChildDetailsDraft } from "../types";
@@ -68,60 +69,54 @@ export function ParentEditor({
            mode === 'edit_form' ? "Modifier le parent" : 
            mode === 'edit_list' ? "Choisir à modifier" : "Sélectionner un parent"}
         </p>
-        <div className="flex bg-white/10 rounded-xl p-1">
-          <button
-            type="button"
-            onClick={() => {
-              if (mode !== 'search') {
-                setMode('search');
-                setShowSearch(true);
-              } else {
-                setShowSearch(!showSearch);
+        <ActionGroup
+          buttons={[
+            {
+              id: "search",
+              icon: Search,
+              isActive: mode === 'search' && showSearch,
+              onClick: () => {
+                if (mode !== 'search') {
+                  setMode('search');
+                  setShowSearch(true);
+                } else {
+                  setShowSearch(!showSearch);
+                }
               }
-            }}
-            className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all ${
-              (mode === 'search' && showSearch) ? "bg-fiverr text-white shadow-sm" : "text-white/50 hover:text-white"
-            }`}
-          >
-            <Search className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (mode === 'edit_list' || mode === 'edit_form') {
-                setMode('search');
-                setShowSearch(false);
-              } else {
-                setMode('edit_list');
-                setShowSearch(true);
+            },
+            {
+              id: "edit",
+              icon: Pencil,
+              isActive: mode === 'edit_list' || mode === 'edit_form',
+              onClick: () => {
+                if (mode === 'edit_list' || mode === 'edit_form') {
+                  setMode('search');
+                  setShowSearch(false);
+                } else {
+                  setMode('edit_list');
+                  setShowSearch(true);
+                }
               }
-            }}
-            className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all ${
-              mode === 'edit_list' || mode === 'edit_form' ? "bg-fiverr text-white shadow-sm" : "text-white/50 hover:text-white"
-            }`}
-          >
-            <Pencil className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (mode === 'new') {
-                setMode('search');
-              } else {
-                setMode('new');
-                setShowSearch(false);
-                setManualLastName("");
-                setManualPhone("");
-                setEditingParentId(undefined);
+            },
+            {
+              id: "new",
+              icon: Plus,
+              isActive: mode === 'new',
+              onClick: () => {
+                if (mode === 'new') {
+                  setMode('search');
+                  setShowSearch(false);
+                } else {
+                  setMode('new');
+                  setShowSearch(false);
+                  setManualLastName("");
+                  setManualPhone("");
+                  setEditingParentId(undefined);
+                }
               }
-            }}
-            className={`flex items-center justify-center w-8 h-8 rounded-lg transition-all ${
-              mode === 'new' ? "bg-fiverr text-white shadow-sm" : "text-white/50 hover:text-white"
-            }`}
-          >
-            <Plus className="w-4 h-4" />
-          </button>
-        </div>
+            }
+          ]}
+        />
       </div>
 
       {(mode === 'search' || mode === 'edit_list') ? (

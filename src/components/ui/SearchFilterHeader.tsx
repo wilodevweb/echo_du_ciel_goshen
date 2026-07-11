@@ -13,6 +13,7 @@ export interface FilterOption {
 interface SearchFilterHeaderProps {
   placeholder?: string;
   filters: FilterOption[];
+  showSearchBar?: boolean;
   
   // Si serverMode est true, le composant utilise les paramètres de l'URL (?q=...&type=...)
   // Sinon, il utilise les callbacks fournis (pour l'annuaire hors-ligne)
@@ -39,6 +40,7 @@ export function SearchFilterHeader({
   onFilterChange,
   searchParamName = "q",
   filterParamName = "type",
+  showSearchBar = true,
 }: SearchFilterHeaderProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -61,37 +63,39 @@ export function SearchFilterHeader({
 
   return (
     <>
-      <div className="bg-fiverr px-4 pb-4 sticky top-[60px] z-10 shadow-md">
-        {/* Barre de recherche */}
-        {serverMode ? (
-          <form method="GET" action={pathname} className="relative">
-            <input type="hidden" name={filterParamName} value={currentFilter} />
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-gray-400" />
+      {showSearchBar && (
+        <div className="bg-fiverr px-4 pb-4 sticky top-[60px] z-10 shadow-md">
+          {/* Barre de recherche */}
+          {serverMode ? (
+            <form method="GET" action={pathname} className="relative">
+              <input type="hidden" name={filterParamName} value={currentFilter} />
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                name={searchParamName}
+                defaultValue={currentSearch}
+                className="block w-full pl-10 pr-3 py-2 border border-transparent rounded-xl leading-5 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white focus:border-white sm:text-sm"
+                placeholder={placeholder}
+              />
+            </form>
+          ) : (
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                value={currentSearch}
+                onChange={handleSearchChange}
+                className="block w-full pl-10 pr-3 py-2 border border-transparent rounded-xl leading-5 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white focus:border-white sm:text-sm"
+                placeholder={placeholder}
+              />
             </div>
-            <input
-              type="text"
-              name={searchParamName}
-              defaultValue={currentSearch}
-              className="block w-full pl-10 pr-3 py-2 border border-transparent rounded-xl leading-5 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white focus:border-white sm:text-sm"
-              placeholder={placeholder}
-            />
-          </form>
-        ) : (
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-gray-400" />
-            </div>
-            <input
-              type="text"
-              value={currentSearch}
-              onChange={handleSearchChange}
-              className="block w-full pl-10 pr-3 py-2 border border-transparent rounded-xl leading-5 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white focus:border-white sm:text-sm"
-              placeholder={placeholder}
-            />
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Filtres rapides (sous le header, sur fond clair comme dans Ressources) */}
       {filters.length > 0 && (
