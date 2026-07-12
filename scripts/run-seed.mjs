@@ -28,38 +28,7 @@ const defaultUsers = [
   },
 ];
 
-const defaultChildren = [
-  { lastName: 'Mbuyi', postName: 'Kabongo', firstName: 'Plamedi', classLevel: 'SECOND', birthDate: '2015-03-14' },
-  { lastName: 'Kabasele', postName: 'Tshimanga', firstName: 'Ethan', classLevel: 'FIRST', birthDate: '2018-08-22' },
-  { lastName: 'Ilunga', postName: 'Mwamba', firstName: 'Divine', classLevel: 'THIRD', birthDate: '2014-11-05' },
-  { lastName: 'Ngoy', postName: 'Kalonji', firstName: 'Exaucé', classLevel: 'SECOND', birthDate: '2017-01-30' },
-  { lastName: 'Kanyinda', postName: 'Mutombo', firstName: 'Grâce', classLevel: 'FIRST', birthDate: '2020-07-11' },
-  { lastName: 'Mbakadi', postName: 'Tshilumba', firstName: 'Merdie', classLevel: 'THIRD', birthDate: '2016-09-19' },
-  { lastName: 'Kapinga', postName: 'Mukendi', firstName: 'Priscille', classLevel: 'SECOND', birthDate: '2021-05-02' },
-  { lastName: 'Kazadi', postName: 'Nyembwe', firstName: 'Christian', classLevel: 'FIRST', birthDate: '2019-12-27' },
-  { lastName: 'Ngalula', postName: 'Kasonga', firstName: 'Dorcas', classLevel: 'THIRD', birthDate: '2015-06-14' },
-  { lastName: 'Boketshu', postName: 'Mpoko', firstName: 'Nathan', classLevel: 'SECOND', birthDate: '2022-02-08' },
-  { lastName: 'Mbala', postName: 'Kimvula', firstName: 'Gloire', classLevel: 'FIRST', birthDate: '2014-10-17' },
-  { lastName: 'Nsenga', postName: 'Nsapo', firstName: 'Jaden', classLevel: 'THIRD', birthDate: '2023-04-25' },
-  { lastName: 'Mavungu', postName: 'Phuati', firstName: 'Blessing', classLevel: 'SECOND', birthDate: '2017-11-09' },
-  { lastName: 'Makoso', postName: 'Ndombasi', firstName: 'Samuel', classLevel: 'FIRST', birthDate: '2016-01-03' },
-  { lastName: 'Luvualu', postName: 'Diakiese', firstName: 'Davina', classLevel: 'THIRD', birthDate: '2020-08-12' },
-  { lastName: 'Nsimba', postName: 'Kiala', firstName: 'Emmanuel', classLevel: 'SECOND', birthDate: '2015-05-21' },
-  { lastName: 'Nzuzi', postName: 'Matondo', firstName: 'Israël', classLevel: 'FIRST', birthDate: '2019-07-30' },
-  { lastName: 'Malasi', postName: 'Amisi', firstName: 'Sarah', classLevel: 'THIRD', birthDate: '2018-03-06' },
-  { lastName: 'Kavira', postName: 'Muhindo', firstName: 'Joyce', classLevel: 'SECOND', birthDate: '2021-10-18' },
-  { lastName: 'Masika', postName: 'Kakule', firstName: 'David', classLevel: 'FIRST', birthDate: '2014-12-29' },
-  { lastName: 'Kambale', postName: 'Paluku', firstName: 'Justin', classLevel: 'THIRD', birthDate: '2016-04-14' },
-  { lastName: 'Kahindo', postName: 'Tsongo', firstName: 'Rachel', classLevel: 'SECOND', birthDate: '2022-09-07' },
-  { lastName: 'Manya', postName: 'Ondekane', firstName: 'Jonathan', classLevel: 'FIRST', birthDate: '2017-02-23' },
-  { lastName: 'Kitenge', postName: 'Lomami', firstName: 'Benjamin', classLevel: 'THIRD', birthDate: '2015-05-11' },
-  { lastName: 'Wembonyama', postName: 'Shako', firstName: 'Daniel', classLevel: 'SECOND', birthDate: '2019-07-19' },
-  { lastName: 'Lola', postName: 'Pene', firstName: 'Christ-En-Vie', classLevel: 'FIRST', birthDate: '2024-11-01' },
-  { lastName: 'Katamea', postName: 'Tshabola', firstName: 'Gabriel', classLevel: 'THIRD', birthDate: '2018-06-08' },
-  { lastName: 'Mutoni', postName: 'Kanyamahanga', firstName: 'Alice', classLevel: 'SECOND', birthDate: '2020-03-15' },
-  { lastName: 'Bahati', postName: 'Miruho', firstName: 'Prince', classLevel: 'FIRST', birthDate: '2016-08-26' },
-  { lastName: 'Ndaye', postName: 'Kalala', firstName: 'Caleb', classLevel: 'THIRD', birthDate: '2015-10-04' },
-];
+const defaultChildren = [];
 
 function childSeedId(child) {
   return `child-${child.lastName}-${child.postName}-${child.firstName}`
@@ -125,6 +94,17 @@ async function runSeedOnClient(client, dbName) {
       });
     }
   }
+
+  // 3. Cleanup old default seed children (whose ID starts with 'child-')
+  console.log('Cleaning up old default seed children...');
+  await client.execute({
+    sql: "DELETE FROM Attendance WHERE childId LIKE 'child-%'"
+  });
+  const deleteRes = await client.execute({
+    sql: "DELETE FROM Child WHERE id LIKE 'child-%'"
+  });
+  console.log(`Deleted ${deleteRes.rowsAffected} old default seed children.`);
+
   console.log(`Seeding completed successfully for ${dbName} (${defaultChildren.length} children processed).`);
 }
 
