@@ -31,8 +31,7 @@ export function ChildDetailsModal({
     gender: child.gender ?? "M",
     classLevel: child.classLevel,
     parentPhone: child.parentPhone,
-    parentFirstName: child.parentFirstName ?? "",
-    parentLastName: child.parentLastName ?? "",
+    parentName: child.parentName ?? "",
     address: child.address,
     birthDate: child.birthDate ?? "",
     notes: child.notes ?? "",
@@ -62,8 +61,7 @@ export function ChildDetailsModal({
       // On utilise l'ID réel du parent comme clé unique principale
       parentMap.set(p.id, {
         id: p.id,
-        firstName: p.firstName,
-        lastName: p.lastName,
+        name: p.name,
         phone: p.phone,
         address: p.address,
       });
@@ -75,21 +73,19 @@ export function ChildDetailsModal({
         if (!parentMap.has(c.parentId)) {
           parentMap.set(c.parentId, {
             id: c.parentId,
-            firstName: c.parentFirstName || "",
-            lastName: c.parentLastName || c.lastName || "",
+            name: c.parentName || c.lastName || "",
             phone: c.parentPhone || "",
             address: c.address,
           });
         }
       } 
       // Sinon, s'il a des informations parentales "legacy" (sans ID), on déduplique par nom
-      else if (c.parentLastName || c.parentFirstName) {
-        const nameKey = `legacy-name:${(c.parentLastName || "").toLowerCase()}-${(c.parentFirstName || "").toLowerCase()}`;
+      else if (c.parentName) {
+        const nameKey = `legacy-name:${c.parentName.toLowerCase()}`;
         if (!parentMap.has(nameKey)) {
           parentMap.set(nameKey, {
             id: undefined, // Pas d'ID réel car c'est un parent legacy
-            firstName: c.parentFirstName || "",
-            lastName: c.parentLastName || c.lastName || "",
+            name: c.parentName,
             phone: c.parentPhone || "",
             address: c.address,
           });
@@ -187,8 +183,7 @@ export function ChildDetailsModal({
           gender: draft.gender,
           classLevel: draft.classLevel,
           parentPhone: draft.parentPhone.trim(),
-          parentFirstName: normalizeName(draft.parentFirstName.trim()),
-          parentLastName: normalizeName(draft.parentLastName.trim()),
+          parentName: normalizeName(draft.parentName.trim()),
           address: draft.address.trim(),
           birthDate: draft.birthDate || undefined,
           notes: draft.notes.trim(),
@@ -437,8 +432,7 @@ export function ChildDetailsModal({
                       ...current,
                       parentId: selectedParent.id || undefined,
                       parentPhone: selectedParent.phone,
-                      parentFirstName: selectedParent.firstName,
-                      parentLastName: selectedParent.lastName,
+                      parentName: selectedParent.name,
                       address: selectedParent.address || current.address,
                     }));
                   }}

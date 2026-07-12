@@ -1,3 +1,4 @@
+// Trigger reload of Prisma Client after schema change
 import { PrismaClient } from '../generated/prisma/client';
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 import { PrismaLibSql } from '@prisma/adapter-libsql';

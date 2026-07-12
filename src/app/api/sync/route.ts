@@ -22,35 +22,7 @@ interface SyncAttendance {
   markedAt: string | Date;
 }
 
-type ChildIdentityInput = {
-  id?: string | null;
-  firstName?: string | null;
-  lastName?: string | null;
-  postName?: string | null;
-  classLevel?: string | null;
-  parentPhone?: string | null;
-  parentId?: string | null;
-  birthDate?: string | null;
-};
 
-type MergeChildRecord = {
-  id: string;
-  firstName: string;
-  lastName: string;
-  postName: string;
-  gender: string;
-  classLevel: string;
-  parentPhone: string;
-  parentFirstName: string;
-  parentLastName: string;
-  address: string;
-  birthDate: string | null;
-  notes: string | null;
-  photoUrl: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  parentId: string | null;
-};
 
 const childFieldByCode: Record<string, string> = {
   f: "firstName",
@@ -63,8 +35,7 @@ const childFieldByCode: Record<string, string> = {
   n: "notes",
   h: "photoUrl",
   g: "gender",
-  u: "parentFirstName",
-  v: "parentLastName",
+  u: "parentName",
   p: "parentId",
 };
 
@@ -72,204 +43,7 @@ function normalizeName(value?: string | null) {
   return (value ?? "").trim().toLowerCase();
 }
 
-function normalizeOptional(value?: string | null) {
-  return (value ?? "").trim();
-}
 
-function hasCompleteChildName(child: ChildIdentityInput) {
-  return Boolean(normalizeName(child.firstName) && normalizeName(child.lastName));
-}
-
-function getChildIdentityKey(child: Pick<MergeChildRecord, "firstName" | "lastName" | "postName" | "classLevel">) {
-  return [
-    normalizeName(child.lastName),
-    normalizeName(child.postName),
-    normalizeName(child.firstName),
-    normalizeOptional(child.classLevel) || "FIRST",
-  ].join("|");
-}
-
-function pickMergeValue(primary?: string | null, fallback?: string | null) {
-  return normalizeOptional(primary) || normalizeOptional(fallback) || primary || fallback || "";
-}
-
-async function mergeDuplicateChildren(tx: Prisma.TransactionClient, targetIdentityKeys?: Set<string>) {
-  if (targetIdentityKeys && targetIdentityKeys.size === 0) {
-    return {
-      deletedIds: new Set<string>(),
-      canonicalIds: new Set<string>(),
-      canonicalIdByDuplicateId: new Map<string, string>(),
-    };
-  }
-
-  const children = await tx.child.findMany({
-    where: {
-      NOT: [
-        { firstName: "" },
-        { lastName: "" },
-      ],
-    },
-    orderBy: [
-      { lastName: "asc" },
-      { postName: "asc" },
-      { firstName: "asc" },
-      { classLevel: "asc" },
-      { createdAt: "asc" },
-    ],
-  }) as MergeChildRecord[];
-  const childrenByIdentity = new Map<string, MergeChildRecord[]>();
-  const deletedIds = new Set<string>();
-  const canonicalIds = new Set<string>();
-  const canonicalIdByDuplicateId = new Map<string, string>();
-
-  for (const child of children) {
-    const key = getChildIdentityKey(child);
-    if (targetIdentityKeys && !targetIdentityKeys.has(key)) continue;
-
-    const group = childrenByIdentity.get(key) ?? [];
-    group.push(child);
-    childrenByIdentity.set(key, group);
-  }
-
-  for (const group of childrenByIdentity.values()) {
-    if (group.length < 2) continue;
-
-    const [canonical, ...duplicates] = group.sort((a, b) => {
-      const createdAtDiff = a.createdAt.getTime() - b.createdAt.getTime();
-      return createdAtDiff || a.id.localeCompare(b.id);
-    });
-
-    canonicalIds.add(canonical.id);
-
-    for (const duplicate of duplicates) {
-      canonicalIdByDuplicateId.set(duplicate.id, canonical.id);
-      deletedIds.add(duplicate.id);
-
-      const canonicalAttendances = await tx.attendance.findMany({
-        where: { childId: canonical.id },
-        select: { id: true, date: true, markedAt: true },
-      });
-      const canonicalAttendanceByDate = new Map(canonicalAttendances.map((attendance) => [attendance.date, attendance]));
-      const duplicateAttendances = await tx.attendance.findMany({
-        where: { childId: duplicate.id },
-      });
-
-      for (const attendance of duplicateAttendances) {
-        const existingAttendance = canonicalAttendanceByDate.get(attendance.date);
-
-        if (existingAttendance) {
-          if (attendance.markedAt > existingAttendance.markedAt) {
-            await tx.attendance.update({
-              where: { id: existingAttendance.id },
-              data: {
-                present: attendance.present,
-                status: attendance.status,
-                markedAt: attendance.markedAt,
-              },
-            });
-          }
-
-          await tx.attendance.delete({ where: { id: attendance.id } });
-        } else {
-          await tx.attendance.update({
-            where: { id: attendance.id },
-            data: { childId: canonical.id },
-          });
-          canonicalAttendanceByDate.set(attendance.date, {
-            id: attendance.id,
-            date: attendance.date,
-            markedAt: attendance.markedAt,
-          });
-        }
-      }
-    }
-
-    const mergedData = duplicates.reduce((data, duplicate) => ({
-      ...data,
-      gender: pickMergeValue(data.gender, duplicate.gender),
-      classLevel: pickMergeValue(data.classLevel, duplicate.classLevel),
-      parentPhone: pickMergeValue(data.parentPhone, duplicate.parentPhone),
-      parentFirstName: pickMergeValue(data.parentFirstName, duplicate.parentFirstName),
-      parentLastName: pickMergeValue(data.parentLastName, duplicate.parentLastName),
-      address: pickMergeValue(data.address, duplicate.address),
-      birthDate: pickMergeValue(data.birthDate, duplicate.birthDate) || null,
-      notes: pickMergeValue(data.notes, duplicate.notes) || null,
-      photoUrl: pickMergeValue(data.photoUrl, duplicate.photoUrl) || null,
-      parentId: pickMergeValue(data.parentId, duplicate.parentId) || null,
-    }), canonical);
-
-    await tx.child.update({
-      where: { id: canonical.id },
-      data: {
-        gender: mergedData.gender,
-        classLevel: mergedData.classLevel,
-        parentPhone: mergedData.parentPhone,
-        parentFirstName: mergedData.parentFirstName,
-        parentLastName: mergedData.parentLastName,
-        address: mergedData.address,
-        birthDate: mergedData.birthDate,
-        notes: mergedData.notes,
-        photoUrl: mergedData.photoUrl,
-        parentId: mergedData.parentId,
-      },
-    });
-
-    await tx.child.deleteMany({
-      where: { id: { in: duplicates.map((duplicate) => duplicate.id) } },
-    });
-  }
-
-  return {
-    deletedIds,
-    canonicalIds,
-    canonicalIdByDuplicateId,
-  };
-}
-
-async function findDuplicateChild(
-  tx: Prisma.TransactionClient,
-  child: ChildIdentityInput,
-) {
-  if (!hasCompleteChildName(child)) return null;
-
-  const firstName = normalizeName(child.firstName);
-  const lastName = normalizeName(child.lastName);
-  const postName = normalizeName(child.postName);
-  const birthDate = normalizeOptional(child.birthDate);
-  const parentPhone = normalizeOptional(child.parentPhone);
-  const parentId = normalizeOptional(child.parentId);
-  const classLevel = normalizeOptional(child.classLevel) || "FIRST";
-
-  const candidates = await tx.child.findMany({
-    where: {
-      id: child.id ? { not: child.id } : undefined,
-      firstName,
-      lastName,
-      postName,
-    },
-    select: {
-      id: true,
-      birthDate: true,
-      parentPhone: true,
-      parentId: true,
-      classLevel: true,
-      createdAt: true,
-    },
-    orderBy: { createdAt: "asc" },
-  });
-
-  return candidates.find((candidate) => {
-    if (birthDate && candidate.birthDate === birthDate) return true;
-    if (parentPhone && candidate.parentPhone === parentPhone) return true;
-    if (parentId && candidate.parentId === parentId) return true;
-    if (candidate.classLevel === classLevel) return true;
-
-    const hasIncomingStrongIdentity = Boolean(birthDate || parentPhone || parentId);
-    const hasCandidateStrongIdentity = Boolean(candidate.birthDate || candidate.parentPhone || candidate.parentId);
-
-    return (!hasIncomingStrongIdentity || !hasCandidateStrongIdentity) && candidate.classLevel === classLevel;
-  }) ?? null;
-}
 
 function decodeDate(value?: string | null) {
   if (!value) return "";
@@ -356,8 +130,7 @@ function compactChild(child: {
   postName: string;
   classLevel: string;
   parentPhone: string;
-  parentFirstName: string;
-  parentLastName: string;
+  parentName: string;
   address: string;
   birthDate: string | null;
   notes: string | null;
@@ -381,16 +154,14 @@ function compactChild(child: {
     child.createdAt.toISOString(),
     child.updatedAt.toISOString(),
     child.gender,
-    child.parentFirstName,
-    child.parentLastName,
+    child.parentName,
     child.parentId ?? "",
   ];
 }
 
 function compactParent(parent: {
   id: string;
-  firstName: string;
-  lastName: string;
+  name: string;
   phone: string;
   address: string;
   createdAt: Date;
@@ -398,8 +169,7 @@ function compactParent(parent: {
 }) {
   return [
     parent.id,
-    parent.firstName,
-    parent.lastName,
+    parent.name,
     parent.phone,
     parent.address,
     parent.createdAt.toISOString(),
@@ -433,6 +203,17 @@ export async function POST(req: Request) {
     const data = await req.json();
     const { mode } = data;
 
+    if (mode === "delete-parent") {
+      const { parentId } = data;
+      if (!parentId) {
+        return NextResponse.json({ success: false, error: "ID parent manquant" }, { status: 400 });
+      }
+      await prisma.parent.delete({
+        where: { id: parentId }
+      });
+      return NextResponse.json({ success: true });
+    }
+
     if (mode === "sync-v2") {
       const childPatches = Array.isArray(data.c) ? data.c as ChildPatch[] : [];
       const attendancePatches = Array.isArray(data.a) ? data.a as AttendancePatch[] : [];
@@ -447,7 +228,7 @@ export async function POST(req: Request) {
       const deletedChildIds = new Set<string>();
       const remappedChildIds = new Set<string>();
       const canonicalChildIdByClientId = new Map<string, string>();
-      const touchedChildIdentityKeys = new Set<string>();
+
 
       await prisma.$transaction(async (tx) => {
         if (childPatches.length > 0) {
@@ -484,8 +265,7 @@ export async function POST(req: Request) {
             const createGender = childData.gender !== undefined ? String(childData.gender) : "M";
             const createClassLevel = childData.classLevel !== undefined ? String(childData.classLevel) : "FIRST";
             const createParentPhone = childData.parentPhone !== undefined ? String(childData.parentPhone) : "";
-            const createParentFirstName = childData.parentFirstName !== undefined ? normalizeName(String(childData.parentFirstName)) : "";
-            const createParentLastName = childData.parentLastName !== undefined ? normalizeName(String(childData.parentLastName)) : normalizeName(String(childData.lastName ?? ""));
+            const createParentName = childData.parentName !== undefined ? normalizeName(String(childData.parentName)) : normalizeName(String(childData.lastName ?? ""));
             const createAddress = childData.address !== undefined ? String(childData.address) : "";
             const createBirthDate = childData.birthDate !== undefined ? (typeof childData.birthDate === "string" ? childData.birthDate : null) : null;
             const createNotes = childData.notes !== undefined ? (typeof childData.notes === "string" ? childData.notes : null) : null;
@@ -495,8 +275,7 @@ export async function POST(req: Request) {
             if (childData.postName !== undefined) childUpdateFields.postName = createPostName;
             if (childData.gender !== undefined) childUpdateFields.gender = createGender;
             if (childData.classLevel !== undefined) childUpdateFields.classLevel = createClassLevel;
-            if (childData.parentFirstName !== undefined) childUpdateFields.parentFirstName = createParentFirstName;
-            if (childData.parentLastName !== undefined) childUpdateFields.parentLastName = createParentLastName;
+            if (childData.parentName !== undefined) childUpdateFields.parentName = createParentName;
             if (childData.address !== undefined) childUpdateFields.address = createAddress;
             if (childData.birthDate !== undefined) childUpdateFields.birthDate = createBirthDate;
             if (childData.notes !== undefined) childUpdateFields.notes = createNotes;
@@ -506,20 +285,20 @@ export async function POST(req: Request) {
             let parentId = childData.parentId ? String(childData.parentId) : null;
 
             if (parentPhone) {
-              const parentFirstName = normalizeName(String(childData.parentFirstName ?? "Parent"));
-              const parentLastName = normalizeName(String(childData.parentLastName ?? childData.lastName ?? "Parent"));
-              const address = String(childData.address ?? "");
+              const hasParentName = childData.parentName !== undefined;
+              const hasAddress = childData.address !== undefined;
+
+              const parentName = hasParentName ? normalizeName(String(childData.parentName)) : normalizeName(String(childData.lastName ?? ""));
+              const address = hasAddress ? String(childData.address) : "";
 
               const parent = await tx.parent.upsert({
                 where: { phone: parentPhone },
                 update: {
-                  firstName: parentFirstName || undefined,
-                  lastName: parentLastName || undefined,
-                  address: address || undefined,
+                  name: hasParentName ? parentName : undefined,
+                  address: hasAddress ? address : undefined,
                 },
                 create: {
-                  firstName: parentFirstName || "Parent",
-                  lastName: parentLastName || "Parent",
+                  name: parentName || "Parent",
                   phone: parentPhone,
                   address: address || "",
                 },
@@ -543,31 +322,7 @@ export async function POST(req: Request) {
               childUpdateFields.parent = { connect: { id: parentId } };
             }
 
-            const duplicateChild = existingChildIds.has(id)
-              ? null
-              : await findDuplicateChild(tx, {
-                  id,
-                  firstName: createFirstName,
-                  lastName: createLastName,
-                  postName: createPostName,
-                  classLevel: createClassLevel,
-                  parentPhone: createParentPhone,
-                  parentId,
-                  birthDate: createBirthDate,
-                });
-            const targetChildId = duplicateChild?.id ?? id;
-            touchedChildIdentityKeys.add(getChildIdentityKey({
-              firstName: createFirstName,
-              lastName: createLastName,
-              postName: createPostName,
-              classLevel: createClassLevel,
-            }));
-
-            if (duplicateChild) {
-              canonicalChildIdByClientId.set(id, duplicateChild.id);
-              deletedChildIds.add(id);
-              remappedChildIds.add(duplicateChild.id);
-            }
+            const targetChildId = id;
 
             let createPhotoUrl = childData.photoUrl !== undefined ? (typeof childData.photoUrl === "string" ? childData.photoUrl : null) : null;
 
@@ -580,8 +335,7 @@ export async function POST(req: Request) {
               gender: createGender,
               classLevel: createClassLevel,
               parentPhone: createParentPhone,
-              parentFirstName: createParentFirstName,
-              parentLastName: createParentLastName,
+              parentName: createParentName,
               address: createAddress,
               birthDate: createBirthDate,
               notes: createNotes,
@@ -602,12 +356,7 @@ export async function POST(req: Request) {
           }
         }
 
-        const duplicateMerge = await mergeDuplicateChildren(tx, touchedChildIdentityKeys);
-        duplicateMerge.deletedIds.forEach((id) => deletedChildIds.add(id));
-        duplicateMerge.canonicalIds.forEach((id) => remappedChildIds.add(id));
-        duplicateMerge.canonicalIdByDuplicateId.forEach((canonicalId, duplicateId) => {
-          canonicalChildIdByClientId.set(duplicateId, canonicalId);
-        });
+
 
         const filteredAttendancePatches = deduplicateAttendancePatches(
           attendancePatches.filter((patch) => {
@@ -807,7 +556,6 @@ export async function POST(req: Request) {
     const legacyDeletedChildIds = new Set<string>();
     const legacyRemappedChildIds = new Set<string>();
     const legacyCanonicalChildIdByClientId = new Map<string, string>();
-    const legacyTouchedChildIdentityKeys = new Set<string>();
 
     await prisma.$transaction(async (tx) => {
       // 1. Synchronisation des enfants (Optimisée)
@@ -836,20 +584,17 @@ export async function POST(req: Request) {
           let parentId = child.parentId ? String(child.parentId) : null;
 
           if (parentPhone) {
-            const parentFirstName = String(child.parentFirstName ?? "Parent");
-            const parentLastName = String(child.parentLastName ?? child.lastName ?? "Parent");
+            const parentName = String(child.parentName ?? child.lastName ?? "Parent");
             const address = String(child.address ?? "");
 
             const parent = await tx.parent.upsert({
               where: { phone: parentPhone },
               update: {
-                firstName: parentFirstName || undefined,
-                lastName: parentLastName || undefined,
-                address: address || undefined,
+                name: parentName,
+                address: address,
               },
               create: {
-                firstName: parentFirstName || "Parent",
-                lastName: parentLastName || "Parent",
+                name: parentName || "Parent",
                 phone: parentPhone,
                 address: address || "",
               },
@@ -864,34 +609,14 @@ export async function POST(req: Request) {
             gender: child.gender ?? "M",
             classLevel: child.classLevel ?? "FIRST",
             parentPhone: parentPhone,
-            parentFirstName: normalizeName(child.parentFirstName ?? ""),
-            parentLastName: normalizeName(child.parentLastName ?? ""),
+            parentName: normalizeName(child.parentName ?? ""),
             address: child.address,
             birthDate: child.birthDate,
             notes: child.notes,
             photoUrl: child.photoUrl,
             parentId: parentId,
           };
-          const duplicateChild = existingChildIds.has(child.id)
-            ? null
-            : await findDuplicateChild(tx, {
-                id: child.id,
-                firstName: childFields.firstName,
-                lastName: childFields.lastName,
-                postName: childFields.postName,
-                classLevel: childFields.classLevel,
-                parentPhone: childFields.parentPhone,
-                parentId,
-                birthDate: childFields.birthDate,
-              });
-          const targetChildId = duplicateChild?.id ?? child.id;
-          legacyTouchedChildIdentityKeys.add(getChildIdentityKey(childFields));
-
-          if (duplicateChild) {
-            legacyCanonicalChildIdByClientId.set(child.id, duplicateChild.id);
-            legacyDeletedChildIds.add(child.id);
-            legacyRemappedChildIds.add(duplicateChild.id);
-          }
+          const targetChildId = child.id;
 
           await tx.child.upsert({
             where: { id: targetChildId },
@@ -904,12 +629,7 @@ export async function POST(req: Request) {
         }
       }
 
-      const legacyDuplicateMerge = await mergeDuplicateChildren(tx, legacyTouchedChildIdentityKeys);
-      legacyDuplicateMerge.deletedIds.forEach((id) => legacyDeletedChildIds.add(id));
-      legacyDuplicateMerge.canonicalIds.forEach((id) => legacyRemappedChildIds.add(id));
-      legacyDuplicateMerge.canonicalIdByDuplicateId.forEach((canonicalId, duplicateId) => {
-        legacyCanonicalChildIdByClientId.set(duplicateId, canonicalId);
-      });
+
 
       // 2. Synchronisation des présences (Optimisée)
       const filteredAttendances = deduplicateSyncAttendances(

@@ -14,8 +14,7 @@ export interface Child {
   classLevel: ClassLevel;
   photoUrl?: string;
   parentPhone: string;
-  parentFirstName?: string;
-  parentLastName?: string;
+  parentName?: string;
   address: string;
   birthDate?: string;
   notes?: string;
@@ -26,8 +25,7 @@ export interface Child {
 
 export interface Parent {
   id: string;
-  firstName: string;
-  lastName: string;
+  name: string;
   phone: string;
   address: string;
   createdAt: string;
@@ -50,7 +48,7 @@ export interface SyncState {
 }
 
 export type SyncEntity = 'child' | 'attendance';
-export type ChildSyncField = 'firstName' | 'lastName' | 'postName' | 'classLevel' | 'parentPhone' | 'address' | 'birthDate' | 'notes' | 'photoUrl' | 'gender' | 'parentFirstName' | 'parentLastName' | 'parentId';
+export type ChildSyncField = 'firstName' | 'lastName' | 'postName' | 'classLevel' | 'parentPhone' | 'address' | 'birthDate' | 'notes' | 'photoUrl' | 'gender' | 'parentName' | 'parentId';
 
 export interface PendingSyncItem {
   key: string;
@@ -77,22 +75,20 @@ export function normalizeName(value?: string | null) {
   return (value ?? "").trim().toLowerCase();
 }
 
-export function normalizeChildNameFields(child: Partial<Pick<Child, "firstName" | "lastName" | "postName" | "parentFirstName" | "parentLastName">>) {
+export function normalizeChildNameFields(child: Partial<Pick<Child, "firstName" | "lastName" | "postName" | "parentName">>) {
   return {
     ...child,
     firstName: normalizeName(child.firstName),
     lastName: normalizeName(child.lastName),
     postName: normalizeName(child.postName),
-    parentFirstName: normalizeName(child.parentFirstName),
-    parentLastName: normalizeName(child.parentLastName),
+    parentName: normalizeName(child.parentName),
   };
 }
 
-export function normalizeParentNameFields(parent: Partial<Pick<Parent, "firstName" | "lastName">>) {
+export function normalizeParentNameFields(parent: Partial<Pick<Parent, "name">>) {
   return {
     ...parent,
-    firstName: normalizeName(parent.firstName),
-    lastName: normalizeName(parent.lastName),
+    name: normalizeName(parent.name),
   };
 }
 
@@ -112,31 +108,29 @@ interface SyncDeltaResponse {
 type CompactChildPatch = [string, string, ...string[]];
 type CompactAttendancePatch = [string, string, string];
 type CompactServerChild = [
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
+  string, // id
+  string, // firstName
+  string, // lastName
+  string, // postName
+  string, // classLevel
+  string, // parentPhone
+  string, // address
+  string, // birthDate
+  string, // notes
+  string, // photoUrl
+  string, // createdAt
+  string, // updatedAt
+  string, // gender
+  string, // parentName
+  string, // parentId
 ];
 type CompactServerParent = [
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
-  string,
+  string, // id
+  string, // name
+  string, // phone
+  string, // address
+  string, // createdAt
+  string, // updatedAt
 ];
 type CompactServerAttendance = [string, string, string, string, string];
 
@@ -151,8 +145,7 @@ const CHILD_SYNC_FIELDS: ChildSyncField[] = [
   'notes',
   'photoUrl',
   'gender',
-  'parentFirstName',
-  'parentLastName',
+  'parentName',
   'parentId',
 ];
 const CHILD_FIELD_CODES: Record<ChildSyncField, string> = {
@@ -166,8 +159,7 @@ const CHILD_FIELD_CODES: Record<ChildSyncField, string> = {
   notes: 'n',
   photoUrl: 'h',
   gender: 'g',
-  parentFirstName: 'u',
-  parentLastName: 'v',
+  parentName: 'u',
   parentId: 'p',
 };
 const SYNC_BATCH_SIZE = 5;
@@ -337,6 +329,30 @@ db.version(8)
     pendingSync: 'key, entity, id, updatedAt',
   });
 
+db.version(9)
+  .stores({
+    children: 'id, firstName, lastName, postName, parentPhone, classLevel, gender, parentId, createdAt',
+    parents: 'id, phone, name',
+    attendances: 'id, childId, date, status, [childId+date]',
+    syncState: 'key',
+    pendingSync: 'key, entity, id, updatedAt',
+  })
+  .upgrade(async (transaction) => {
+    // Migrer les parents existants : fusionner firstName et lastName en name
+    await transaction.table('parents').toCollection().modify((parent) => {
+      parent.name = `${parent.lastName ?? ""} ${parent.firstName ?? ""}`.trim();
+      delete parent.firstName;
+      delete parent.lastName;
+    });
+
+    // Migrer les enfants existants : fusionner parentFirstName et parentLastName en parentName
+    await transaction.table('children').toCollection().modify((child) => {
+      child.parentName = `${child.parentLastName ?? ""} ${child.parentFirstName ?? ""}`.trim();
+      delete child.parentFirstName;
+      delete child.parentLastName;
+    });
+  });
+
 const LAST_LOCAL_CHANGE_KEY = 'lastLocalChangeAt';
 const LAST_SYNC_KEY = 'lastSyncAt';
 
@@ -411,8 +427,7 @@ function normalizeServerChild(child: Child): Child {
     firstName: normalizeName(child.firstName),
     lastName: normalizeName(child.lastName),
     postName: normalizeName(child.postName),
-    parentFirstName: normalizeName(child.parentFirstName || ''),
-    parentLastName: normalizeName(child.parentLastName || ''),
+    parentName: normalizeName(child.parentName || ''),
     classLevel: normalizeClassLevel(child.classLevel),
     parentPhone: child.parentPhone ?? '',
     address: child.address ?? '',
@@ -437,29 +452,26 @@ function decodeCompactServerChild(child: CompactServerChild): Child {
     createdAt: child[10],
     updatedAt: child[11],
     gender: (child[12] as 'M' | 'F') || 'M',
-    parentFirstName: child[13] || '',
-    parentLastName: child[14] || '',
-    parentId: child[15] || undefined,
+    parentName: child[13] || '',
+    parentId: child[14] || undefined,
   });
 }
 
 function normalizeServerParent(parent: Parent): Parent {
   return {
     ...parent,
-    firstName: normalizeName(parent.firstName),
-    lastName: normalizeName(parent.lastName),
+    name: normalizeName(parent.name),
   };
 }
 
 function decodeCompactServerParent(parent: CompactServerParent): Parent {
   return {
     id: parent[0],
-    firstName: parent[1],
-    lastName: parent[2],
-    phone: parent[3],
-    address: parent[4],
-    createdAt: parent[5],
-    updatedAt: parent[6] || undefined,
+    name: parent[1],
+    phone: parent[2],
+    address: parent[3],
+    createdAt: parent[4],
+    updatedAt: parent[5] || undefined,
   };
 }
 

@@ -270,9 +270,7 @@ export const PointageCard = React.memo(function PointageCard(props: PointageCard
     );
   } if (props.mode === "profile") {
     const { child, onNameClick, onPhotoChange } = props;
-    const parentName = (child.parentFirstName || child.parentLastName)
-      ? `${child.parentFirstName} ${child.parentLastName}`.trim()
-      : "le parent";
+    const parentName = child.parentName || "le parent";
 
     return (
       <BaseCardLayout
@@ -361,8 +359,7 @@ export const PointageCard = React.memo(function PointageCard(props: PointageCard
         if (match) {
           nextValue = {
             ...nextValue,
-            parentFirstName: nextValue.parentFirstName || match.parentFirstName || '',
-            parentLastName: nextValue.parentLastName || match.parentLastName || '',
+            parentName: nextValue.parentName || match.parentName || '',
             address: nextValue.address || match.address || '',
           };
         }

@@ -7,8 +7,7 @@ export type NewChildForm = {
   gender: 'M' | 'F';
   classLevel: ClassLevel;
   parentPhone: string;
-  parentFirstName: string;
-  parentLastName: string;
+  parentName: string;
   address: string;
   birthDate: string;
   notes: string;
@@ -25,8 +24,7 @@ export const emptyNewChild: NewChildForm = {
   gender: "M",
   classLevel: "FIRST",
   parentPhone: "",
-  parentFirstName: "",
-  parentLastName: "",
+  parentName: "",
   address: "",
   birthDate: "",
   notes: "",

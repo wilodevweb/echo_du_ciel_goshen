@@ -40,8 +40,7 @@ model ActivityLog {
 // Parent
 model Parent {
   id              String   @id @default(cuid())
-  firstName       String   // Prénom du parent
-  lastName        String   // Nom de famille du parent
+  name            String   // Nom complet du parent
   phone           String   @unique // Téléphone du parent (identifiant unique)
   address         String   // Adresse du parent
   createdAt       DateTime @default(now())
@@ -59,8 +58,7 @@ model Child {
   gender          String   @default("M") // "M" or "F"
   classLevel      String   @default("FIRST")
   parentPhone     String
-  parentFirstName String   @default("")
-  parentLastName  String   @default("")
+  parentName      String   @default("")
   address         String
   birthDate       String?
   notes           String?

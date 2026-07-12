@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Search, Pencil, Plus, Trash2, User, Users } from "lucide-react";
 import { ActionGroup } from "@/components/ui/ActionGroup";
 import { useLiveQuery } from "dexie-react-hooks";
-import db, { generateId, normalizeName } from "@/lib/db";
+import db, { generateId, normalizeName, markEntityForSync } from "@/lib/db";
 import type { ChildDetailsDraft } from "../types";
 import type { ParentItem } from "./types";
 
@@ -33,7 +33,7 @@ export function ParentEditor({
   }, [searchQuery]);
 
   const allChildren = useLiveQuery(() => db.children.toArray());
-  const [manualLastName, setManualLastName] = useState(draft.parentLastName || "");
+  const [manualName, setManualName] = useState(draft.parentName || "");
   const [manualPhone, setManualPhone] = useState(draft.parentPhone || "");
 
   const childCountByParent = React.useMemo(() => {
@@ -52,8 +52,7 @@ export function ParentEditor({
       const query = debouncedSearchQuery.toLowerCase();
       result = parents.filter(p => {
         return (
-          (p.firstName || "").toLowerCase().includes(query) ||
-          (p.lastName || "").toLowerCase().includes(query) ||
+          (p.name || "").toLowerCase().includes(query) ||
           (p.phone || "").includes(query)
         );
       });
@@ -109,7 +108,7 @@ export function ParentEditor({
                 } else {
                   setMode('new');
                   setShowSearch(false);
-                  setManualLastName("");
+                  setManualName("");
                   setManualPhone("");
                   setEditingParentId(undefined);
                 }
@@ -141,14 +140,14 @@ export function ParentEditor({
               <>
                 {filteredParents.map((p, idx) => (
                   <button
-                    key={p.id || p.phone || `${p.lastName}-${p.firstName}-${idx}`}
+                    key={p.id || p.phone || `${p.name}-${idx}`}
                     type="button"
                     onClick={() => {
                       if (mode === 'edit_list') {
                         setMode('edit_form');
                         setShowSearch(false);
                         setEditingParentId(p.id);
-                        setManualLastName(p.lastName);
+                        setManualName(p.name);
                         setManualPhone(p.phone);
                       } else {
                         onChange(p);
@@ -159,7 +158,7 @@ export function ParentEditor({
                   >
                     <div className="min-w-0 flex-1 pr-2">
                       <p className="text-sm font-semibold text-white truncate flex items-center justify-between">
-                        <span>{p.lastName} {p.firstName}</span>
+                        <span>{p.name}</span>
                         {p.id && (
                           <span className="text-[10px] bg-white/10 text-white/70 px-1.5 py-0.5 rounded-md flex items-center gap-1 shrink-0 ml-2">
                             <Users className="w-3 h-3" />
@@ -185,8 +184,8 @@ export function ParentEditor({
           <div className="grid gap-2">
             <input
               type="text"
-              value={manualLastName}
-              onChange={(e) => setManualLastName(e.target.value)}
+              value={manualName}
+              onChange={(e) => setManualName(e.target.value)}
               placeholder="Nom complet du parent"
               className="h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-fiverr"
               autoFocus
@@ -203,19 +202,32 @@ export function ParentEditor({
           <div className="flex gap-2">
             <button
               type="button"
-              disabled={!manualLastName.trim()}
+              disabled={!manualName.trim()}
               onClick={async () => {
                 const pId = mode === 'edit_form' && editingParentId ? editingParentId : generateId();
                 const savedParent = {
                   id: pId,
-                  firstName: "",
-                  lastName: normalizeName(manualLastName.trim()),
+                  name: normalizeName(manualName.trim()),
                   phone: manualPhone.trim(),
                   address: draft.address || "",
                   createdAt: new Date().toISOString(),
                 };
                 
                 await db.parents.put(savedParent);
+
+                // Propager la modification à tous les enfants liés dans Dexie et les marquer pour synchronisation
+                const linkedChildren = await db.children.where('parentId').equals(pId).toArray();
+                for (const child of linkedChildren) {
+                  const updatedChild = {
+                    ...child,
+                    parentPhone: savedParent.phone,
+                    parentName: savedParent.name,
+                    address: savedParent.address || child.address,
+                    updatedAt: new Date().toISOString()
+                  };
+                  await db.children.put(updatedChild);
+                  await markEntityForSync('child', child.id, ['parentPhone', 'parentName', 'address']);
+                }
 
                 if (mode === 'edit_form') {
                   // Ne l'assigner à l'enfant que si c'était déjà son parent
@@ -244,9 +256,33 @@ export function ParentEditor({
                     "Suppression",
                     "Êtes-vous sûr de vouloir supprimer définitivement ce parent de la base de données ?",
                     async () => {
+                      try {
+                        await fetch('/api/sync', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ mode: 'delete-parent', parentId: editingParentId })
+                        });
+                      } catch (err) {
+                        console.error("Erreur serveur lors de la suppression du parent:", err);
+                      }
                       await db.parents.delete(editingParentId);
+                      
+                      // Dissocier tous les enfants liés dans Dexie et les marquer pour synchronisation
+                      const linkedChildren = await db.children.where('parentId').equals(editingParentId).toArray();
+                      for (const child of linkedChildren) {
+                        const updatedChild = {
+                          ...child,
+                          parentId: undefined,
+                          parentPhone: "",
+                          parentName: "",
+                          updatedAt: new Date().toISOString()
+                        };
+                        await db.children.put(updatedChild);
+                        await markEntityForSync('child', child.id, ['parentId', 'parentPhone', 'parentName']);
+                      }
+
                       if (draft.parentId === editingParentId) {
-                        onChange({ id: undefined, firstName: "", lastName: "", phone: "", address: "" } as ParentItem);
+                        onChange({ id: undefined, name: "", phone: "", address: "" } as ParentItem);
                       }
                       setMode('edit_list');
                       setShowSearch(true);
@@ -283,9 +319,7 @@ export function EditableParentRow({
   onCancel: () => void;
   onRequestConfirm: (title: string, message: string, onConfirm: () => void) => void;
 }) {
-  const parentName = (draft.parentFirstName || draft.parentLastName)
-    ? `${draft.parentFirstName} ${draft.parentLastName}`.trim()
-    : "";
+  const parentName = draft.parentName || "";
 
   return (
     <div className="flex w-full gap-4 text-left">
