@@ -5,10 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Search, UserPlus, Smile, Archive } from 'lucide-react';
+import { Search, UserPlus, Smile, Archive, ArrowLeft } from 'lucide-react';
 import db, { getClassLabel, isDeletedChildRecord, type Child } from '@/lib/db';
 import { Card, CardContent } from '@/components/ui/Card';
-import { MobileHeader } from '@/components/ui/MobileHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { PointageCard } from '@/components/pointage/PointageCard';
 import { ChildDetailsModal } from '@/components/pointage/ChildDetailsModal';
@@ -26,6 +25,8 @@ export default function ChildrenList() {
   const [selectedChild, setSelectedChild] = useState<Child | null>(null);
   const [detailsChild, setDetailsChild] = useState<Child | null>(null);
 
+  const [scrollY, setScrollY] = useState(0);
+
   // Détecter un nouvel enfant ajouté pour afficher sa fiche de profil immédiatement
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -42,6 +43,17 @@ export default function ChildrenList() {
       }
     }
   }, [router]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleScroll = () => {
+      setScrollY(window.scrollY);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
 
   // Récupérer et filtrer les enfants depuis IndexedDB en utilisant l'index createdAt
   const children = useLiveQuery(async () => {
@@ -94,7 +106,61 @@ export default function ChildrenList() {
 
   return (
     <main className="flex min-h-screen flex-col bg-gray-50">
-      <MobileHeader title={showArchived ? "Archives" : "Annuaire"} rightElement={rightAction} />
+      {/* Sticky header collapsing */}
+      <header 
+        style={{
+          backgroundColor: `rgba(52, 46, 232, ${Math.min(0.98, scrollY / 80)})`,
+          backdropFilter: scrollY > 10 ? 'blur(16px)' : 'none',
+          boxShadow: scrollY > 40 ? '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)' : 'none',
+          borderBottom: scrollY > 40 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none'
+        }}
+        className="fixed top-0 left-0 right-0 z-30 transition-all duration-75 h-[60px] flex items-center justify-between px-4 text-white"
+      >
+        <div className="flex items-center">
+          <Link href="/" className="mr-4 hover:opacity-85 transition-opacity p-2 rounded-xl bg-white/10 backdrop-blur-md">
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <h1 
+            style={{ opacity: Math.min(1, scrollY / 80) }}
+            className="text-lg font-extrabold tracking-tight transition-opacity duration-100"
+          >
+            {showArchived ? "Archives" : "Annuaire"}
+          </h1>
+        </div>
+        <div className="flex items-center">
+          {rightAction}
+        </div>
+      </header>
+
+      {/* Hero Header Section */}
+      <div className="relative overflow-hidden bg-gradient-to-tr from-[#1e1b4b] via-[#312e81] to-[#342ee8] text-white pt-20 pb-8 px-6 rounded-b-[36px] shadow-lg">
+        {/* Background blobs for premium decoration */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[#342ee8]/25 rounded-full -mr-20 -mt-20 blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-44 h-44 bg-cyan-500/20 rounded-full -ml-16 -mb-16 blur-2xl" />
+        
+        <div 
+          style={{ 
+            opacity: Math.max(0, 1 - scrollY / 100),
+            transform: `translateY(-${scrollY * 0.12}px)`
+          }}
+          className="relative transition-all duration-75"
+        >
+          <div className="flex items-center gap-4">
+            <div className="h-16 w-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
+              <Smile className="w-10 h-10 text-cyan-200" strokeWidth={1.5} />
+            </div>
+            <div>
+              <h2 className="text-3xl font-black tracking-tight">
+                {showArchived ? "Archives" : "Annuaire"}
+              </h2>
+              <p className="text-white/70 text-xs font-semibold uppercase tracking-[0.1em] mt-1.5 flex items-center gap-2">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
+                {children?.length ?? 0} {showArchived ? "enfants archivés" : "enfants actifs"}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
       
       <Suspense fallback={<div className="h-[60px]" />}>
         <SearchFilterHeader 
@@ -114,7 +180,7 @@ export default function ChildrenList() {
         />
       </Suspense>
 
-      <div className="p-4 flex-1 overflow-y-auto">
+      <div className="p-4 pb-20">
         {children === undefined ? (
           <ChildrenListSkeleton />
         ) : children.length === 0 ? (
