@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Search, Pencil, Plus, Trash2, User, Users } from "lucide-react";
 import { ActionGroup } from "@/components/ui/ActionGroup";
 import { useLiveQuery } from "dexie-react-hooks";
-import db, { generateId, normalizeName, markEntityForSync } from "@/lib/db";
+import db, { generateId, normalizeName, markEntityForSync, markPendingChange } from "@/lib/db";
 import type { ChildDetailsDraft } from "../types";
 import type { ParentItem } from "./types";
 
@@ -256,16 +256,34 @@ export function ParentEditor({
                     "Suppression",
                     "Êtes-vous sûr de vouloir supprimer définitivement ce parent de la base de données ?",
                     async () => {
+                      // Ajouter à la liste des suppressions en attente
+                      try {
+                        const pendingDeletes = JSON.parse(localStorage.getItem("pending-deleted-parents") || "[]");
+                        if (!pendingDeletes.includes(editingParentId)) {
+                          pendingDeletes.push(editingParentId);
+                          localStorage.setItem("pending-deleted-parents", JSON.stringify(pendingDeletes));
+                        }
+                      } catch (e) {
+                        console.error("Erreur d'écriture dans localStorage:", e);
+                      }
+
                       try {
                         await fetch('/api/sync', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ mode: 'delete-parent', parentId: editingParentId })
                         });
+                        // Si la requête immédiate réussit, on peut le retirer de la liste des suppressions en attente
+                        try {
+                          const pendingDeletes = JSON.parse(localStorage.getItem("pending-deleted-parents") || "[]");
+                          const filtered = pendingDeletes.filter((id: string) => id !== editingParentId);
+                          localStorage.setItem("pending-deleted-parents", JSON.stringify(filtered));
+                        } catch (e) {}
                       } catch (err) {
-                        console.error("Erreur serveur lors de la suppression du parent:", err);
+                        console.error("Erreur serveur lors de la suppression du parent (sera synchronisé plus tard):", err);
                       }
                       await db.parents.delete(editingParentId);
+                      await markPendingChange();
                       
                       // Dissocier tous les enfants liés dans Dexie et les marquer pour synchronisation
                       const linkedChildren = await db.children.where('parentId').equals(editingParentId).toArray();

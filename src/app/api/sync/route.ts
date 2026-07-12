@@ -458,6 +458,14 @@ export async function POST(req: Request) {
             );
           }
         }
+
+        // Supprimer les parents demandés par le client
+        const deletedParentIds = Array.isArray(data.dp) ? (data.dp as string[]).filter(Boolean) : [];
+        if (deletedParentIds.length > 0) {
+          await tx.parent.deleteMany({
+            where: { id: { in: deletedParentIds } },
+          });
+        }
       }, {
         maxWait: 15000,
         timeout: 30000,

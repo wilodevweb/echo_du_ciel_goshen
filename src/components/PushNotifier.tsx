@@ -42,29 +42,46 @@ export function PushNotifier() {
       let hasNewSick = false;
       let hasNewAbs = false;
 
-      // Iterating only over children who have an attendance history
+      const sickChildIds: string[] = [];
+      const absChildIds: string[] = [];
+
+      // Parcourir l'historique pour trouver les IDs d'enfants concernés par une notification
       for (const [childId, history] of historyMap.entries()) {
-        // Sickness check
+        // Alerte maladie
         if (history.length > 0 && history[0] === "SICK") {
           if (!notifiedSickKeys.includes(childId)) {
-            const child = await db.children.get(childId);
-            if (child) {
-              hasNewSick = true;
-              notifiedSickKeys.push(childId);
-              sendLocalPush("Enfant malade", `${child.firstName} ${child.lastName} a été signalé(e) malade récemment.`);
-            }
+            sickChildIds.push(childId);
           }
         }
 
-        // Prolonged absence check
+        // Alerte absence prolongée (3 semaines consécutives)
         if (history.length >= 3 && history.slice(0, 3).every(s => s === "ABSENT")) {
           if (!notifiedAbsKeys.includes(childId)) {
-            const child = await db.children.get(childId);
-            if (child) {
-              hasNewAbs = true;
-              notifiedAbsKeys.push(childId);
-              sendLocalPush("Absence prolongée", `${child.firstName} ${child.lastName} est absent(e) depuis 3 semaines. Pensez à appeler.`);
-            }
+            absChildIds.push(childId);
+          }
+        }
+      }
+
+      // Récupérer en bloc (bulkGet) les détails des enfants pour les maladies
+      if (sickChildIds.length > 0) {
+        const children = await db.children.bulkGet(sickChildIds);
+        for (const child of children) {
+          if (child) {
+            hasNewSick = true;
+            notifiedSickKeys.push(child.id);
+            sendLocalPush("Enfant malade", `${child.firstName} ${child.lastName} a été signalé(e) malade récemment.`);
+          }
+        }
+      }
+
+      // Récupérer en bloc (bulkGet) les détails des enfants pour les absences prolongées
+      if (absChildIds.length > 0) {
+        const children = await db.children.bulkGet(absChildIds);
+        for (const child of children) {
+          if (child) {
+            hasNewAbs = true;
+            notifiedAbsKeys.push(child.id);
+            sendLocalPush("Absence prolongée", `${child.firstName} ${child.lastName} est absent(e) depuis 3 semaines. Pensez à appeler.`);
           }
         }
       }

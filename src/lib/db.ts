@@ -738,6 +738,15 @@ export async function syncWithServer() {
       };
     }
 
+    let dp: string[] = [];
+    if (typeof window !== "undefined") {
+      try {
+        dp = JSON.parse(localStorage.getItem("pending-deleted-parents") || "[]");
+      } catch (e) {
+        console.error("Erreur de lecture de localStorage:", e);
+      }
+    }
+
     const response = await fetch('/api/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -748,6 +757,7 @@ export async function syncWithServer() {
         ka,
         c: compactChildren,
         a: compactAttendances,
+        dp,
       }),
     });
 
@@ -775,6 +785,12 @@ export async function syncWithServer() {
         success: false,
         error: data.error ?? 'Échec de la synchronisation',
       };
+    }
+
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("pending-deleted-parents");
+      } catch (e) {}
     }
 
     const pullResult = await applyServerDelta(data);
