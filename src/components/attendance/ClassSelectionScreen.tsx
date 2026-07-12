@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 import { ArrowLeft, Check } from "lucide-react";
 import {
@@ -25,13 +26,16 @@ export function ClassSelectionScreen({
   onToggleClass: (value: ClassLevel) => void;
   onStart: () => void;
 }) {
-  const countByClass = CLASS_LEVELS.reduce<Record<ClassLevel, number>>(
-    (counts, level) => {
-      counts[level.value] = childList?.filter((child) => child.classLevel === level.value).length ?? 0;
-      return counts;
-    },
-    { FIRST: 0, SECOND: 0, THIRD: 0 },
-  );
+  const countByClass = React.useMemo(() => {
+    const counts: Record<ClassLevel, number> = { FIRST: 0, SECOND: 0, THIRD: 0 };
+    if (!childList) return counts;
+    for (const child of childList) {
+      if (counts[child.classLevel] !== undefined) {
+        counts[child.classLevel]++;
+      }
+    }
+    return counts;
+  }, [childList]);
   const maxSunday = getMostRecentSundayDateString(new Date());
   const isFutureDate = selectedDate > maxSunday;
 
