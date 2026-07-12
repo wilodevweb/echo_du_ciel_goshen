@@ -103,6 +103,8 @@ interface SyncDeltaResponse {
   d?: string[];
   serverSyncedAt?: string;
   error?: string;
+  activeChildIds?: string[];
+  activeParentIds?: string[];
 }
 
 type CompactChildPatch = [string, string, ...string[]];
@@ -641,6 +643,31 @@ async function applyServerDelta(data: SyncDeltaResponse) {
 
     if (deltaParents.length > 0) {
       await db.parents.bulkPut(deltaParents);
+    }
+
+    // Purger les enfants supprimés sur le serveur
+    if (data.activeChildIds) {
+      const localChildIds = await db.children.toCollection().primaryKeys();
+      const serverChildIdsSet = new Set(data.activeChildIds);
+      const childIdsToDeleteLocally = (localChildIds as string[]).filter(id => !serverChildIdsSet.has(id));
+      if (childIdsToDeleteLocally.length > 0) {
+        await db.children.bulkDelete(childIdsToDeleteLocally);
+        for (const childId of childIdsToDeleteLocally) {
+          await db.attendances.where('childId').equals(childId).delete();
+        }
+        console.log(`[SYNCHRO] ${childIdsToDeleteLocally.length} enfants supprimés localement (absents du serveur).`);
+      }
+    }
+
+    // Purger les parents supprimés sur le serveur
+    if (data.activeParentIds) {
+      const localParentIds = await db.parents.toCollection().primaryKeys();
+      const serverParentIdsSet = new Set(data.activeParentIds);
+      const parentIdsToDeleteLocally = (localParentIds as string[]).filter(id => !serverParentIdsSet.has(id));
+      if (parentIdsToDeleteLocally.length > 0) {
+        await db.parents.bulkDelete(parentIdsToDeleteLocally);
+        console.log(`[SYNCHRO] ${parentIdsToDeleteLocally.length} parents supprimés localement (absents du serveur).`);
+      }
     }
 
     if (deltaAttendances.length > 0) {

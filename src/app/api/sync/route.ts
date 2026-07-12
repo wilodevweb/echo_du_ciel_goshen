@@ -537,6 +537,11 @@ export async function POST(req: Request) {
         },
       });
 
+      const [allChildIds, allParentIds] = await Promise.all([
+        prisma.child.findMany({ select: { id: true } }),
+        prisma.parent.findMany({ select: { id: true } }),
+      ]);
+
       return NextResponse.json({
         success: true,
         serverSyncedAt: serverSyncedAt.toISOString(),
@@ -544,6 +549,8 @@ export async function POST(req: Request) {
         d: Array.from(deletedChildIds),
         p: serverParents.map(compactParent),
         a: deltaAttendances.map(compactAttendance),
+        activeChildIds: allChildIds.map((c) => c.id),
+        activeParentIds: allParentIds.map((p) => p.id),
       });
     }
 
