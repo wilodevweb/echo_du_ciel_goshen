@@ -1,15 +1,17 @@
-import { PrismaClient } from '@prisma/client';
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
-import { PrismaLibSql } from '@prisma/adapter-libsql';
+import { createClient } from '@libsql/client';
+import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
+import fs from 'fs';
 
-const url = process.env.DATABASE_URL || 'file:./dev.db';
-const adapter =
-  url.startsWith('libsql://') || url.startsWith('https://')
-    ? new PrismaLibSql({ url, authToken: process.env.DATABASE_AUTH_TOKEN })
-    : new PrismaBetterSqlite3({ url });
+dotenv.config();
 
-const prisma = new PrismaClient({ adapter });
+const url = process.env.DATABASE_URL;
+const authToken = process.env.DATABASE_AUTH_TOKEN;
+
+if (!url) {
+  console.error('DATABASE_URL is not set.');
+  process.exit(1);
+}
 
 const defaultUsers = [
   {
@@ -66,111 +68,93 @@ function childSeedId(child) {
     .replace(/^-|-$/g, '');
 }
 
-async function main() {
-  console.log('Debut du seeding...');
+async function runSeedOnClient(client, dbName) {
+  console.log(`\n--- Seeding ${dbName} ---`);
 
+  // 1. Seeding Users
   for (const user of defaultUsers) {
-    const password = await bcrypt.hash(user.password, 10);
-
-    const savedUser = await prisma.user.upsert({
-      where: { username: user.username },
-      update: {
-        name: user.name,
-        password,
-        role: user.role,
-      },
-      create: {
-        username: user.username,
-        name: user.name,
-        password,
-        role: user.role,
-      },
+    const passwordHash = await bcrypt.hash(user.password, 10);
+    const existing = await client.execute({
+      sql: 'SELECT id FROM User WHERE username = ? LIMIT 1',
+      args: [user.username]
     });
 
-    console.log(`Utilisateur pret : ${savedUser.username} (${savedUser.role})`);
-  }
+    const now = new Date().toISOString();
 
-  for (const child of defaultChildren) {
-    const existingChildren = await prisma.$queryRaw`
-      SELECT id FROM Child
-      WHERE lastName = ${child.lastName}
-        AND postName = ${child.postName}
-        AND firstName = ${child.firstName}
-        AND birthDate = ${child.birthDate}
-      LIMIT 1
-    `;
-    const childId = existingChildren[0]?.id ?? childSeedId(child);
-
-    if (existingChildren[0]?.id) {
-      await prisma.$executeRaw`
-        UPDATE Child
-        SET firstName = ${child.firstName},
-            lastName = ${child.lastName},
-            postName = ${child.postName},
-            classLevel = ${child.classLevel},
-            parentPhone = '',
-            address = '',
-            birthDate = ${child.birthDate},
-            notes = '',
-            photoUrl = NULL,
-            updatedAt = CURRENT_TIMESTAMP
-        WHERE id = ${childId}
-      `;
+    if (existing.rows.length > 0) {
+      await client.execute({
+        sql: 'UPDATE User SET name = ?, password = ?, role = ?, updatedAt = ? WHERE username = ?',
+        args: [user.name, passwordHash, user.role, now, user.username]
+      });
+      console.log(`Updated user: ${user.username}`);
     } else {
-      await prisma.$executeRaw`
-        INSERT INTO Child (
-          id,
-          firstName,
-          lastName,
-          postName,
-          classLevel,
-          parentPhone,
-          address,
-          birthDate,
-          notes,
-          photoUrl,
-          createdAt,
-          updatedAt
-        )
-        VALUES (
-          ${childId},
-          ${child.firstName},
-          ${child.lastName},
-          ${child.postName},
-          ${child.classLevel},
-          '',
-          '',
-          ${child.birthDate},
-          '',
-          NULL,
-          CURRENT_TIMESTAMP,
-          CURRENT_TIMESTAMP
-        )
-        ON CONFLICT(id) DO UPDATE SET
-          firstName = excluded.firstName,
-          lastName = excluded.lastName,
-          postName = excluded.postName,
-          classLevel = excluded.classLevel,
-          parentPhone = excluded.parentPhone,
-          address = excluded.address,
-          birthDate = excluded.birthDate,
-          notes = excluded.notes,
-          photoUrl = excluded.photoUrl,
-          updatedAt = CURRENT_TIMESTAMP
-      `;
+      const cuid = 'u' + Math.random().toString(36).substring(2, 15);
+      await client.execute({
+        sql: 'INSERT INTO User (id, username, password, name, role, title, isBlocked, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        args: [cuid, user.username, passwordHash, user.name, user.role, '', 0, now, now]
+      });
+      console.log(`Created user: ${user.username}`);
     }
-
-    console.log(`Enfant pret : ${child.lastName} ${child.postName} ${child.firstName}`);
   }
 
-  console.log('Seeding termine.');
+  // 2. Seeding Children
+  for (const child of defaultChildren) {
+    const childId = childSeedId(child);
+    const now = new Date().toISOString();
+
+    // Check by name fields & birthdate
+    const existing = await client.execute({
+      sql: 'SELECT id FROM Child WHERE lastName = ? AND postName = ? AND firstName = ? AND birthDate = ? LIMIT 1',
+      args: [child.lastName, child.postName, child.firstName, child.birthDate]
+    });
+
+    const targetId = existing.rows.length > 0 ? existing.rows[0].id : childId;
+
+    if (existing.rows.length > 0) {
+      await client.execute({
+        sql: `UPDATE Child 
+              SET firstName = ?, lastName = ?, postName = ?, classLevel = ?, parentPhone = '', address = '', birthDate = ?, notes = '', photoUrl = NULL, updatedAt = ? 
+              WHERE id = ?`,
+        args: [child.firstName, child.lastName, child.postName, child.classLevel, child.birthDate, now, targetId]
+      });
+    } else {
+      await client.execute({
+        sql: `INSERT INTO Child (id, firstName, lastName, postName, classLevel, parentPhone, parentName, address, birthDate, notes, photoUrl, createdAt, updatedAt, parentId)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+        args: [targetId, child.firstName, child.lastName, child.postName, child.classLevel, '', '', '', child.birthDate, '', null, now, now, null]
+      });
+    }
+  }
+  console.log(`Seeding completed successfully for ${dbName} (${defaultChildren.length} children processed).`);
 }
 
-main()
-  .catch((error) => {
-    console.error('Erreur lors du seeding:', error);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+async function main() {
+  console.log('Connecting to remote Turso database...');
+  const remoteClient = createClient({ url, authToken });
+  try {
+    await runSeedOnClient(remoteClient, 'Turso (Remote)');
+  } catch (error) {
+    console.error('Remote seeding failed:', error.message || error);
+  } finally {
+    remoteClient.close();
+  }
+
+  // Local dev.db if exists
+  const localDbPath = 'dev.db';
+  if (fs.existsSync(localDbPath)) {
+    console.log('\nConnecting to local dev.db SQLite database...');
+    const localClient = createClient({ url: 'file:dev.db' });
+    try {
+      await runSeedOnClient(localClient, 'dev.db (Local)');
+    } catch (error) {
+      console.error('Local seeding failed:', error.message || error);
+    } finally {
+      localClient.close();
+    }
+  }
+}
+
+main().catch((error) => {
+  console.error('Main execution failed:', error.message || error);
+  process.exitCode = 1;
+});

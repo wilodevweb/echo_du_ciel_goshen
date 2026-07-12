@@ -40,6 +40,6 @@
     "typescript": "^5"
   },
   "prisma": {
-    "seed": "node ./prisma/seed.mjs"
+    "seed": "node scripts/run-seed.mjs"
   }
 }
