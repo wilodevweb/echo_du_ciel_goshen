@@ -52,7 +52,8 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (url.pathname.startsWith("/_next/static/") || isStaticAsset(request)) {
+  const isPrecached = PRECACHE_URLS.includes(url.pathname);
+  if (url.pathname.startsWith("/_next/static/") || isStaticAsset(request) || isPrecached) {
     event.respondWith(cacheFirst(request));
   }
 });
@@ -137,8 +138,8 @@ async function trimCache(cacheName, maxItems) {
     const cache = await caches.open(cacheName);
     const keys = await cache.keys();
     if (keys.length > maxItems) {
-      await cache.delete(keys[0]);
-      trimCache(cacheName, maxItems);
+      const itemsToDelete = keys.slice(0, keys.length - maxItems);
+      await Promise.all(itemsToDelete.map((key) => cache.delete(key)));
     }
   } catch {
     // Ignore les erreurs de cache silencieusement
