@@ -208,7 +208,7 @@ export async function POST(req: Request) {
       if (!parentId) {
         return NextResponse.json({ success: false, error: "ID parent manquant" }, { status: 400 });
       }
-      await prisma.parent.delete({
+      await prisma.parent.deleteMany({
         where: { id: parentId }
       });
       return NextResponse.json({ success: true });
@@ -315,11 +315,15 @@ export async function POST(req: Request) {
             }
 
             // 2. Gérer le Child
-            if (parentPhone) {
+            if (childData.parentPhone !== undefined) {
               childUpdateFields.parentPhone = createParentPhone;
             }
-            if (parentId) {
-              childUpdateFields.parent = { connect: { id: parentId } };
+            if (childData.parentId !== undefined || childData.parentPhone !== undefined) {
+              if (parentId) {
+                childUpdateFields.parent = { connect: { id: parentId } };
+              } else {
+                childUpdateFields.parent = { disconnect: true };
+              }
             }
 
             const targetChildId = id;
