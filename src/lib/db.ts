@@ -674,17 +674,23 @@ async function applyServerDelta(data: SyncDeltaResponse) {
       // Pour éviter les doublons d'attendances créées localement avec un ID temporaire
       // et reçues du serveur avec leur ID définitif (CUID), on supprime les
       // enregistrements locaux correspondants ayant un ID différent avant d'insérer.
-      for (const att of deltaAttendances) {
-        const existing = await db.attendances
-          .where('[childId+date]')
-          .equals([att.childId, att.date])
-          .toArray();
-        const toDelete = existing
-          .filter((e) => e.id !== att.id)
-          .map((e) => e.id);
-        if (toDelete.length > 0) {
-          await db.attendances.bulkDelete(toDelete);
+      const compoundKeys = deltaAttendances.map((att) => [att.childId, att.date]);
+      const existing = await db.attendances
+        .where('[childId+date]')
+        .anyOf(compoundKeys)
+        .toArray();
+
+      const deltaAttMap = new Map(deltaAttendances.map((att) => [`${att.childId}:${att.date}`, att.id]));
+      const toDelete: string[] = [];
+      for (const e of existing) {
+        const serverId = deltaAttMap.get(`${e.childId}:${e.date}`);
+        if (serverId && e.id !== serverId) {
+          toDelete.push(e.id);
         }
+      }
+
+      if (toDelete.length > 0) {
+        await db.attendances.bulkDelete(toDelete);
       }
       await db.attendances.bulkPut(deltaAttendances);
     }
