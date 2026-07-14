@@ -83,13 +83,15 @@ export default function PointagePage() {
   }, [selectedClasses]);
 
   const sortedChildren = useMemo(() => {
-    return [...(children ?? [])]
+    if (!children) return [];
+    const mapped = children
       .filter((c) => !isDeletedChildRecord(c) && !c.notes?.includes('[ARCHIVE]'))
-      .sort((a, b) =>
-        `${a.lastName} ${a.postName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.postName} ${b.firstName}`, "fr", {
-          sensitivity: "base",
-        }),
-      );
+      .map((c) => ({
+        child: c,
+        sortKey: `${c.lastName} ${c.postName} ${c.firstName}`,
+      }));
+    mapped.sort((a, b) => a.sortKey.localeCompare(b.sortKey, "fr", { sensitivity: "base" }));
+    return mapped.map((item) => item.child);
   }, [children]);
 
   const filteredChildren = useMemo(() => {
