@@ -25,9 +25,17 @@ export function AttendanceHistoryList({ childId }: AttendanceHistoryListProps) {
 
   const visibleMonth = useMemo(() => {
     const latestAttendanceDate = attendances?.[0]?.date;
-    const date = latestAttendanceDate ? new Date(latestAttendanceDate) : new Date();
+    let year = new Date().getFullYear();
+    let month = new Date().getMonth();
+    if (latestAttendanceDate) {
+      const parts = latestAttendanceDate.split("-").map(Number);
+      if (parts.length === 3) {
+        year = parts[0];
+        month = parts[1] - 1;
+      }
+    }
 
-    date.setDate(1);
+    const date = new Date(year, month, 1);
     date.setMonth(date.getMonth() + monthOffset);
     return date;
   }, [attendances, monthOffset]);
@@ -120,7 +128,8 @@ export function AttendanceHistoryList({ childId }: AttendanceHistoryListProps) {
       ) : (
         <div className="space-y-2">
           {visibleAttendances.map((record) => {
-            const dateObj = new Date(record.date);
+            const dateParts = record.date.split("-").map(Number);
+            const dateObj = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
             const formattedDate = dateObj.toLocaleDateString('fr-FR', {
               weekday: 'long',
               day: 'numeric',

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import db from '@/lib/db';
 import { buildAttendanceHistoryMapAsync } from '@/components/pointage/utils';
 
@@ -18,8 +17,6 @@ function sendLocalPush(title: string, body: string) {
 }
 
 export function PushNotifier() {
-  const historyMap = useLiveQuery(() => buildAttendanceHistoryMapAsync());
-
   useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
@@ -27,10 +24,10 @@ export function PushNotifier() {
   }, []);
 
   useEffect(() => {
-    if (!historyMap) return;
     if (!("Notification" in window) || Notification.permission !== "granted") return;
 
     const checkNotifications = async () => {
+      const historyMap = await buildAttendanceHistoryMapAsync();
       
       const todayStr = new Date().toISOString().split("T")[0];
       const sickKey = `notified_sick_${todayStr}`;
@@ -90,8 +87,27 @@ export function PushNotifier() {
       if (hasNewAbs) localStorage.setItem(absKey, JSON.stringify(notifiedAbsKeys));
     };
 
+    // Exécuter au montage
     void checkNotifications();
-  }, [historyMap]);
+
+    // Exécuter périodiquement toutes les 30 secondes
+    const interval = setInterval(() => {
+      void checkNotifications();
+    }, 30000);
+
+    // Exécuter lors du retour au premier plan de l'application
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void checkNotifications();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   return null;
 }
