@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { CalendarDays, CheckCircle2, Circle, Plus, ChevronDown, ChevronRight, Loader2, X, Pencil } from "lucide-react";
-import db, { generateId, type ChildEvent, type ChildTask } from "@/lib/db";
+import db, { generateId, type ChildEvent, type ChildTask, type TaskType } from "@/lib/db";
+import { TASK_TYPES, getTaskTypeConfig } from "@/lib/taskTypes";
 
 interface EventsTabProps {
   childId: string;
@@ -19,6 +20,7 @@ function AddTaskForm({
   onDone: () => void;
 }) {
   const [taskTitle, setTaskTitle] = useState("");
+  const [taskType, setTaskType] = useState<TaskType>("autre");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleAdd = async () => {
@@ -30,10 +32,12 @@ function AddTaskForm({
         eventId,
         childId,
         title: taskTitle.trim(),
+        type: taskType,
         done: false,
         createdAt: new Date().toISOString(),
       });
       setTaskTitle("");
+      setTaskType("autre");
       onDone();
     } finally {
       setIsLoading(false);
@@ -41,23 +45,37 @@ function AddTaskForm({
   };
 
   return (
-    <div className="flex gap-2 mt-2">
-      <input
-        type="text"
-        value={taskTitle}
-        onChange={(e) => setTaskTitle(e.target.value)}
-        placeholder="Nouvelle tâche…"
-        autoFocus
-        onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
-        className="flex-1 h-9 px-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/25"
-      />
+    <div className="flex flex-col gap-2 mt-2 bg-white/5 border border-white/10 rounded-xl p-2">
+      <div className="flex gap-2">
+        <select
+          value={taskType}
+          onChange={(e) => setTaskType(e.target.value as TaskType)}
+          className="h-9 px-2 rounded-lg border border-white/10 bg-white/10 text-sm text-white focus:outline-none focus:border-white/25"
+        >
+          {TASK_TYPES.map((t) => (
+            <option key={t.value} value={t.value} className="text-black">
+              {t.label}
+            </option>
+          ))}
+        </select>
+        <input
+          type="text"
+          value={taskTitle}
+          onChange={(e) => setTaskTitle(e.target.value)}
+          placeholder="Nouvelle tâche…"
+          autoFocus
+          onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
+          className="flex-1 h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/25"
+        />
+      </div>
       <button
         type="button"
         disabled={!taskTitle.trim() || isLoading}
         onClick={handleAdd}
-        className="h-9 px-3 rounded-xl bg-white/10 text-white text-sm font-bold disabled:opacity-40 hover:bg-white/15 transition-all flex items-center gap-1"
+        className="h-9 w-full rounded-lg bg-white/10 text-white text-sm font-bold disabled:opacity-40 hover:bg-white/15 transition-all flex items-center justify-center gap-1"
       >
         {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+        Ajouter
       </button>
     </div>
   );
@@ -203,13 +221,19 @@ function EventCard({
                           <Circle className="w-5 h-5" />
                         )}
                       </button>
-                      <span
-                        className={`flex-1 text-sm leading-snug ${
-                          task.done ? "line-through text-white/35" : "text-white/80"
-                        }`}
-                      >
-                        {task.title}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        {(() => {
+                          const TypeIcon = getTaskTypeConfig(task.type).icon;
+                          return <TypeIcon className={`w-3.5 h-3.5 shrink-0 ${task.done ? 'text-white/20' : 'text-fiverr/70'}`} />;
+                        })()}
+                        <span
+                          className={`text-sm leading-snug truncate ${
+                            task.done ? "line-through text-white/35" : "text-white/80"
+                          }`}
+                        >
+                          {task.title}
+                        </span>
+                      </div>
                       {/* Modifier / Supprimer — uniquement en mode édition */}
                       {isEditMode && (
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">

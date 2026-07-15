@@ -51,12 +51,15 @@ export interface ChildEvent {
   createdAt: string;
 }
 
+export type TaskType = "chant" | "poeme" | "emission" | "sketch" | "theatre" | "autre";
+
 // Tâches liées à un enfant pour un événement (non synchronisées)
 export interface ChildTask {
   id: string;
   eventId: string;      // Référence à ChildEvent.id
   childId: string;      // Référence à Child.id
   title: string;        // Ex: "Lire Psaume 23", "Apporter les chaises"
+  type?: TaskType;      // Type d'activité (optionnel pour rétrocompatibilité)
   done: boolean;
   createdAt: string;
 }

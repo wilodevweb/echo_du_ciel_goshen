@@ -5,7 +5,8 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { CalendarDays, CheckCircle2, Circle, ChevronDown, ChevronRight, Loader2, Plus, X } from "lucide-react";
 import { MobileHeader } from "@/components/ui/MobileHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
-import db, { generateId, type ChildEvent, type ChildTask, getClassLabel } from "@/lib/db";
+import db, { generateId, type ChildEvent, type ChildTask, getClassLabel, type TaskType } from "@/lib/db";
+import { TASK_TYPES, getTaskTypeConfig } from "@/lib/taskTypes";
 import { useSession } from "next-auth/react";
 
 // ─── Formulaire création d'événement ────────────────────────────────────────
@@ -82,6 +83,7 @@ function AddTaskForm({
   onDone: () => void;
 }) {
   const [taskTitle, setTaskTitle] = useState("");
+  const [taskType, setTaskType] = useState<TaskType>("autre");
   const [audienceType, setAudienceType] = useState<"GROUP" | "SINGLE">("GROUP");
   const [targetClass, setTargetClass] = useState<"ALL" | "FIRST" | "SECOND" | "THIRD">("ALL");
   const [targetChildId, setTargetChildId] = useState("");
@@ -112,12 +114,14 @@ function AddTaskForm({
         eventId,
         childId: child.id,
         title: taskTitle.trim(),
+        type: taskType,
         done: false,
         createdAt: new Date().toISOString(),
       }));
 
       await db.tasks.bulkAdd(newTasks);
       setTaskTitle("");
+      setTaskType("autre");
       onDone();
     } finally {
       setIsLoading(false);
@@ -133,14 +137,27 @@ function AddTaskForm({
         </button>
       </div>
 
-      <input
-        type="text"
-        value={taskTitle}
-        onChange={(e) => setTaskTitle(e.target.value)}
-        placeholder="Intitulé de la tâche…"
-        autoFocus
-        className="w-full h-9 px-3 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:border-[#00b22d]"
-      />
+      <div className="flex gap-2">
+        <select
+          value={taskType}
+          onChange={(e) => setTaskType(e.target.value as TaskType)}
+          className="w-1/3 h-9 px-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:border-[#00b22d]"
+        >
+          {TASK_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+        <input
+          type="text"
+          value={taskTitle}
+          onChange={(e) => setTaskTitle(e.target.value)}
+          placeholder="Intitulé de la tâche…"
+          autoFocus
+          className="flex-1 h-9 px-3 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:border-[#00b22d]"
+        />
+      </div>
 
       <div className="flex gap-2">
         <button
@@ -225,16 +242,23 @@ function EventCard({ eventId, title, date, description, isAdmin }: {
     return map;
   }, [children]);
 
-  const tasksByChild = React.useMemo(() => {
+  // Grouper par activité (Type + Titre)
+  const tasksByActivity = React.useMemo(() => {
     const map = new Map<string, typeof allTasks>();
     if (!allTasks) return map;
     for (const task of allTasks) {
-      const list = map.get(task.childId) ?? [];
+      const typeKey = task.type || "autre";
+      const key = `${typeKey}|${task.title}`;
+      const list = map.get(key) ?? [];
       list.push(task);
-      map.set(task.childId, list);
+      map.set(key, list);
     }
     return map;
   }, [allTasks]);
+
+  const toggleTask = async (task: ChildTask) => {
+    await db.tasks.update(task.id, { done: !task.done });
+  };
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "";
@@ -246,7 +270,15 @@ function EventCard({ eventId, title, date, description, isAdmin }: {
 
   const doneCount = allTasks?.filter((t) => t.done).length ?? 0;
   const totalCount = allTasks?.length ?? 0;
-  const childCount = tasksByChild.size;
+  
+  // Compter le nombre d'enfants uniques touchés par cet événement
+  const uniqueChildren = React.useMemo(() => {
+    const set = new Set<string>();
+    if (allTasks) {
+      for (const t of allTasks) set.add(t.childId);
+    }
+    return set.size;
+  }, [allTasks]);
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-3">
@@ -266,7 +298,7 @@ function EventCard({ eventId, title, date, description, isAdmin }: {
             {totalCount > 0 && (
               <span className="ml-2">
                 · {doneCount}/{totalCount} tâche{totalCount > 1 ? "s" : ""}
-                {childCount > 0 && ` · ${childCount} enfant${childCount > 1 ? "s" : ""}`}
+                {uniqueChildren > 0 && ` · ${uniqueChildren} enfant${uniqueChildren > 1 ? "s" : ""}`}
               </span>
             )}
           </p>
@@ -289,37 +321,64 @@ function EventCard({ eventId, title, date, description, isAdmin }: {
             <div className="flex justify-center py-4">
               <Loader2 className="w-4 h-4 animate-spin text-gray-300" />
             </div>
-          ) : tasksByChild.size === 0 && !showAddTask ? (
+          ) : tasksByActivity.size === 0 && !showAddTask ? (
             <p className="text-xs text-gray-400 italic py-3 text-center">Aucune tâche assignée.</p>
           ) : (
             <div className="space-y-4 pt-3">
-              {Array.from(tasksByChild.entries()).map(([childId, tasks]) => {
-                const child = childById.get(childId);
-                const childName = child
-                  ? `${child.lastName} ${child.firstName}`
-                  : "Enfant inconnu";
+              {Array.from(tasksByActivity.entries()).map(([activityKey, tasks]) => {
+                const [typeRaw, ...titleParts] = activityKey.split("|");
+                const taskTitle = titleParts.join("|");
+                const config = getTaskTypeConfig(typeRaw as TaskType);
+                const TypeIcon = config.icon;
+
                 return (
-                  <div key={childId}>
-                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">
-                      {childName}
-                    </p>
-                    <div className="space-y-1">
-                      {(tasks ?? []).map((task) => (
-                        <div key={task.id} className="flex items-center gap-2.5">
-                          {task.done ? (
-                            <CheckCircle2 className="w-4 h-4 text-[#00b22d] shrink-0" />
-                          ) : (
-                            <Circle className="w-4 h-4 text-gray-300 shrink-0" />
-                          )}
-                          <span
-                            className={`text-sm ${
-                              task.done ? "line-through text-gray-400" : "text-gray-700"
-                            }`}
-                          >
-                            {task.title}
-                          </span>
-                        </div>
-                      ))}
+                  <div key={activityKey} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-white shadow-sm border border-gray-100 text-[#00b22d]">
+                        <TypeIcon className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-gray-800 truncate">{taskTitle}</p>
+                        <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400">{config.label}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-1 mt-3 pl-1">
+                      {(tasks ?? []).map((task) => {
+                        const child = childById.get(task.childId);
+                        const childName = child ? `${child.lastName} ${child.firstName}` : "Enfant inconnu";
+                        return (
+                          <div key={task.id} className="flex items-center gap-2.5 group">
+                            {isAdmin ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleTask(task)}
+                                className="shrink-0 text-gray-300 hover:text-gray-500 transition-colors"
+                              >
+                                {task.done ? (
+                                  <CheckCircle2 className="w-5 h-5 text-[#00b22d]" />
+                                ) : (
+                                  <Circle className="w-5 h-5" />
+                                )}
+                              </button>
+                            ) : (
+                              <div className="shrink-0 text-gray-300">
+                                {task.done ? (
+                                  <CheckCircle2 className="w-5 h-5 text-[#00b22d]" />
+                                ) : (
+                                  <Circle className="w-5 h-5" />
+                                )}
+                              </div>
+                            )}
+                            <span
+                              className={`text-sm ${
+                                task.done ? "line-through text-gray-400" : "text-gray-700 font-medium"
+                              }`}
+                            >
+                              {childName}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );
