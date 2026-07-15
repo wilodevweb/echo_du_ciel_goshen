@@ -476,7 +476,7 @@ export function ChildDetailsModal({
 
           {activeTab === "evenement" && (
             <div className="min-h-[150px]">
-              <EventsTab childId={child.id} />
+              <EventsTab childId={child.id} isEditMode={isEditMode} />
             </div>
           )}
         </div>

@@ -5,6 +5,7 @@ import db, { generateId, type ChildEvent, type ChildTask } from "@/lib/db";
 
 interface EventsTabProps {
   childId: string;
+  isEditMode: boolean;
 }
 
 // ─── Formulaire création d'événement ────────────────────────────────────────
@@ -128,7 +129,15 @@ function AddTaskForm({
 }
 
 // ─── Carte d'un événement ────────────────────────────────────────────────────
-function EventCard({ event, childId }: { event: ChildEvent; childId: string }) {
+function EventCard({
+  event,
+  childId,
+  isEditMode,
+}: {
+  event: ChildEvent;
+  childId: string;
+  isEditMode: boolean;
+}) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [showAddTask, setShowAddTask] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -216,7 +225,7 @@ function EventCard({ event, childId }: { event: ChildEvent; childId: string }) {
                   key={task.id}
                   className="flex items-center gap-2.5 group"
                 >
-                  {editingTaskId === task.id ? (
+                  {isEditMode && editingTaskId === task.id ? (
                     <>
                       <input
                         type="text"
@@ -246,6 +255,7 @@ function EventCard({ event, childId }: { event: ChildEvent; childId: string }) {
                     </>
                   ) : (
                     <>
+                      {/* Cocher/décocher toujours visible */}
                       <button
                         type="button"
                         onClick={() => toggleTask(task)}
@@ -265,27 +275,30 @@ function EventCard({ event, childId }: { event: ChildEvent; childId: string }) {
                       >
                         {task.title}
                       </span>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingTaskId(task.id);
-                            setEditingTitle(task.title);
-                          }}
-                          className="p-1 rounded-lg text-white/40 hover:text-white/70 hover:bg-white/10"
-                          aria-label="Modifier"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => deleteTask(task.id)}
-                          className="p-1 rounded-lg text-white/40 hover:text-red-400 hover:bg-red-500/10"
-                          aria-label="Supprimer"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      {/* Modifier / Supprimer — uniquement en mode édition */}
+                      {isEditMode && (
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingTaskId(task.id);
+                              setEditingTitle(task.title);
+                            }}
+                            className="p-1 rounded-lg text-white/40 hover:text-white/70 hover:bg-white/10"
+                            aria-label="Modifier"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteTask(task.id)}
+                            className="p-1 rounded-lg text-white/40 hover:text-red-400 hover:bg-red-500/10"
+                            aria-label="Supprimer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -293,21 +306,24 @@ function EventCard({ event, childId }: { event: ChildEvent; childId: string }) {
             </div>
           )}
 
-          {showAddTask ? (
-            <AddTaskForm
-              eventId={event.id}
-              childId={childId}
-              onDone={() => setShowAddTask(false)}
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowAddTask(true)}
-              className="mt-2 flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Ajouter une tâche
-            </button>
+          {/* Ajouter une tâche — uniquement en mode édition */}
+          {isEditMode && (
+            showAddTask ? (
+              <AddTaskForm
+                eventId={event.id}
+                childId={childId}
+                onDone={() => setShowAddTask(false)}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowAddTask(true)}
+                className="mt-2 flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Ajouter une tâche
+              </button>
+            )
           )}
         </div>
       )}
@@ -316,7 +332,7 @@ function EventCard({ event, childId }: { event: ChildEvent; childId: string }) {
 }
 
 // ─── Onglet principal ────────────────────────────────────────────────────────
-export function EventsTab({ childId }: EventsTabProps) {
+export function EventsTab({ childId, isEditMode }: EventsTabProps) {
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   const events = useLiveQuery(
@@ -339,36 +355,46 @@ export function EventsTab({ childId }: EventsTabProps) {
           <p className="text-lg font-semibold leading-tight text-white">Événements</p>
           <p className="text-xs text-white/50 mt-0.5">Tâches assignées à cet enfant.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowCreateForm((v) => !v)}
-          className={`flex items-center gap-1.5 h-9 px-3 rounded-full text-sm font-bold transition-all ${
-            showCreateForm
-              ? "bg-white/15 text-white"
-              : "bg-white/8 text-white/65 hover:bg-white/12"
-          }`}
-        >
-          <Plus className="w-4 h-4" />
-          Événement
-        </button>
+        {/* Bouton "Créer événement" — uniquement en mode édition */}
+        {isEditMode && (
+          <button
+            type="button"
+            onClick={() => setShowCreateForm((v) => !v)}
+            className={`flex items-center gap-1.5 h-9 px-3 rounded-full text-sm font-bold transition-all ${
+              showCreateForm
+                ? "bg-white/15 text-white"
+                : "bg-white/8 text-white/65 hover:bg-white/12"
+            }`}
+          >
+            <Plus className="w-4 h-4" />
+            Événement
+          </button>
+        )}
       </div>
 
-      {showCreateForm && (
+      {isEditMode && showCreateForm && (
         <CreateEventForm
           onCreated={() => setShowCreateForm(false)}
         />
       )}
 
-      {events.length === 0 && !showCreateForm ? (
+      {events.length === 0 ? (
         <div className="text-center py-10 border border-white/8 rounded-2xl bg-white/3">
           <CalendarDays className="w-10 h-10 text-white/20 mx-auto mb-3" strokeWidth={1.5} />
           <p className="text-sm text-white/40 font-medium">Aucun événement créé.</p>
-          <p className="text-xs text-white/25 mt-1">Crée un événement pour assigner des tâches.</p>
+          {isEditMode && (
+            <p className="text-xs text-white/25 mt-1">Crée un événement pour assigner des tâches.</p>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
           {events.map((event) => (
-            <EventCard key={event.id} event={event} childId={childId} />
+            <EventCard
+              key={event.id}
+              event={event}
+              childId={childId}
+              isEditMode={isEditMode}
+            />
           ))}
         </div>
       )}
