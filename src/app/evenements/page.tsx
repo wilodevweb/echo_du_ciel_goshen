@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { CalendarDays, CheckCircle2, Circle, ChevronDown, ChevronRight, Loader2, Plus, X } from "lucide-react";
+import { CalendarDays, CheckCircle2, Loader2, Plus, X, ChevronRight } from "lucide-react";
+import Link from "next/link";
 import { MobileHeader } from "@/components/ui/MobileHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import db, { generateId, type ChildEvent, type ChildTask, type TaskType } from "@/lib/db";
@@ -216,46 +217,16 @@ function AddTaskForm({
 
 
 
-function EventCard({ eventId, title, date, description, isAdmin }: {
+function EventCard({ eventId, title, date, description }: {
   eventId: string;
   title: string;
   date: string;
   description?: string;
-  isAdmin: boolean;
 }) {
-  const [isExpanded, setIsExpanded] = React.useState(false);
-  const [showAddTask, setShowAddTask] = React.useState(false);
-
   const allTasks = useLiveQuery(
     () => db.tasks.where("eventId").equals(eventId).toArray(),
     [eventId]
   );
-
-  const children = useLiveQuery(() => db.children.toArray(), []);
-
-  const childById = React.useMemo(() => {
-    const map = new Map<string, { firstName: string; lastName: string }>();
-    (children ?? []).forEach((c) => map.set(c.id, c));
-    return map;
-  }, [children]);
-
-  // Grouper par activité (Type + Titre)
-  const tasksByActivity = React.useMemo(() => {
-    const map = new Map<string, typeof allTasks>();
-    if (!allTasks) return map;
-    for (const task of allTasks) {
-      const typeKey = task.type || "autre";
-      const key = `${typeKey}|${task.title}`;
-      const list = map.get(key) ?? [];
-      list.push(task);
-      map.set(key, list);
-    }
-    return map;
-  }, [allTasks]);
-
-  const toggleTask = async (task: ChildTask) => {
-    await db.tasks.update(task.id, { done: !task.done });
-  };
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "";
@@ -267,24 +238,20 @@ function EventCard({ eventId, title, date, description, isAdmin }: {
 
   const doneCount = allTasks?.filter((t) => t.done).length ?? 0;
   const totalCount = allTasks?.length ?? 0;
-  
-  // Compter le nombre d'enfants uniques touchés par cet événement
   const uniqueChildren = React.useMemo(() => {
     const set = new Set<string>();
-    if (allTasks) {
-      for (const t of allTasks) set.add(t.childId);
-    }
+    if (allTasks) for (const t of allTasks) set.add(t.childId);
     return set.size;
   }, [allTasks]);
 
+  const pct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mb-3">
-      {/* En-tête */}
-      <button
-        type="button"
-        onClick={() => setIsExpanded((v) => !v)}
-        className="w-full flex items-center gap-3 p-4 text-left hover:bg-gray-50 transition-colors"
-      >
+    <Link
+      href={`/evenements/${eventId}`}
+      className="block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md active:scale-[0.99] transition-all"
+    >
+      <div className="flex items-center gap-3 p-4">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#00b22d]/10 text-[#00b22d]">
           <CalendarDays className="w-6 h-6" />
         </div>
@@ -292,114 +259,29 @@ function EventCard({ eventId, title, date, description, isAdmin }: {
           <p className="font-bold text-gray-900 leading-tight truncate">{title}</p>
           <p className="text-xs text-gray-500 mt-0.5">
             {formatDate(date)}
-            {totalCount > 0 && (
+            {uniqueChildren > 0 && (
               <span className="ml-2">
-                · {doneCount}/{totalCount} tâche{totalCount > 1 ? "s" : ""}
-                {uniqueChildren > 0 && ` · ${uniqueChildren} enfant${uniqueChildren > 1 ? "s" : ""}`}
+                · {uniqueChildren} enfant{uniqueChildren > 1 ? "s" : ""}
               </span>
             )}
           </p>
         </div>
-        {isExpanded ? (
-          <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
-        ) : (
-          <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
-        )}
-      </button>
-
-      {/* Corps */}
-      {isExpanded && (
-        <div className="border-t border-gray-100 px-4 pb-4">
-          {description && (
-            <p className="text-xs text-gray-400 italic pt-3 mb-2">{description}</p>
-          )}
-
-          {allTasks === undefined ? (
-            <div className="flex justify-center py-4">
-              <Loader2 className="w-4 h-4 animate-spin text-gray-300" />
+        <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
+      </div>
+      {totalCount > 0 && (
+        <div className="px-4 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[#00b22d] rounded-full transition-all"
+                style={{ width: `${pct}%` }}
+              />
             </div>
-          ) : tasksByActivity.size === 0 && !showAddTask ? (
-            <p className="text-xs text-gray-400 italic py-3 text-center">Aucune tâche assignée.</p>
-          ) : (
-            <div className="space-y-4 pt-3">
-              {Array.from(tasksByActivity.entries()).map(([activityKey, tasks]) => {
-                const [typeRaw, ...titleParts] = activityKey.split("|");
-                const taskTitle = titleParts.join("|");
-                const config = getTaskTypeConfig(typeRaw as TaskType);
-                const TypeIcon = config.icon;
-
-                return (
-                  <div key={activityKey} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-white shadow-sm border border-gray-100 text-[#00b22d]">
-                        <TypeIcon className="w-4 h-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-gray-800 truncate">{taskTitle}</p>
-                        <p className="text-[10px] uppercase tracking-widest font-bold text-gray-400">{config.label}</p>
-                      </div>
-                    </div>
-                    <div className="space-y-1 mt-3 pl-1">
-                      {(tasks ?? []).map((task) => {
-                        const child = childById.get(task.childId);
-                        const childName = child ? `${child.lastName} ${child.firstName}` : "Enfant inconnu";
-                        return (
-                          <div key={task.id} className="flex items-center gap-2.5 group">
-                            {isAdmin ? (
-                              <button
-                                type="button"
-                                onClick={() => toggleTask(task)}
-                                className="shrink-0 text-gray-300 hover:text-gray-500 transition-colors"
-                              >
-                                {task.done ? (
-                                  <CheckCircle2 className="w-5 h-5 text-[#00b22d]" />
-                                ) : (
-                                  <Circle className="w-5 h-5" />
-                                )}
-                              </button>
-                            ) : (
-                              <div className="shrink-0 text-gray-300">
-                                {task.done ? (
-                                  <CheckCircle2 className="w-5 h-5 text-[#00b22d]" />
-                                ) : (
-                                  <Circle className="w-5 h-5" />
-                                )}
-                              </div>
-                            )}
-                            <span
-                              className={`text-sm ${
-                                task.done ? "line-through text-gray-400" : "text-gray-700 font-medium"
-                              }`}
-                            >
-                              {childName}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {isAdmin && (
-            showAddTask ? (
-              <AddTaskForm eventId={eventId} onDone={() => setShowAddTask(false)} />
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowAddTask(true)}
-                className="mt-4 flex items-center justify-center gap-1.5 w-full h-10 rounded-xl border border-dashed border-gray-300 text-sm font-semibold text-gray-500 hover:text-gray-700 hover:border-gray-400 hover:bg-gray-50 transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                Assigner des tâches
-              </button>
-            )
-          )}
+            <span className="text-[10px] text-gray-400 font-semibold whitespace-nowrap">{doneCount}/{totalCount}</span>
+          </div>
         </div>
       )}
-    </div>
+    </Link>
   );
 }
 
@@ -462,7 +344,6 @@ export default function EvenementsPage() {
                   title={event.title}
                   date={event.date}
                   description={event.description}
-                  isAdmin={isAdmin}
                 />
               ))}
             </div>
