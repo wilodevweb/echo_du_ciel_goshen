@@ -8,71 +8,6 @@ interface EventsTabProps {
   isEditMode: boolean;
 }
 
-// ─── Formulaire création d'événement ────────────────────────────────────────
-function CreateEventForm({ onCreated }: { onCreated: (event: ChildEvent) => void }) {
-  const [title, setTitle] = useState("");
-  const [date, setDate] = useState("");
-  const [description, setDescription] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-
-  const handleSubmit = async () => {
-    if (!title.trim()) return;
-    setIsLoading(true);
-    try {
-      const event: ChildEvent = {
-        id: generateId(),
-        title: title.trim(),
-        date: date || new Date().toISOString().split("T")[0],
-        description: description.trim() || undefined,
-        createdAt: new Date().toISOString(),
-      };
-      await db.events.add(event);
-      onCreated(event);
-      setTitle("");
-      setDate("");
-      setDescription("");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <div className="space-y-3 rounded-2xl bg-white/5 border border-white/10 p-4">
-      <p className="text-sm font-bold text-white/70 uppercase tracking-widest">Nouvel événement</p>
-      <input
-        type="text"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Nom de l'événement…"
-        autoFocus
-        className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
-      />
-      <input
-        type="date"
-        value={date}
-        onChange={(e) => setDate(e.target.value)}
-        className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white focus:outline-none focus:border-white/30"
-      />
-      <input
-        type="text"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        placeholder="Description (optionnel)…"
-        className="w-full h-10 px-3 rounded-xl border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/30"
-      />
-      <button
-        type="button"
-        disabled={!title.trim() || isLoading}
-        onClick={handleSubmit}
-        className="w-full h-10 flex items-center justify-center gap-2 rounded-xl bg-fiverr text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-fiverr-dark transition-all"
-      >
-        {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-        Créer l'événement
-      </button>
-    </div>
-  );
-}
-
 // ─── Formulaire ajout de tâche ───────────────────────────────────────────────
 function AddTaskForm({
   eventId,
@@ -333,7 +268,6 @@ function EventCard({
 
 // ─── Onglet principal ────────────────────────────────────────────────────────
 export function EventsTab({ childId, isEditMode }: EventsTabProps) {
-  const [showCreateForm, setShowCreateForm] = useState(false);
 
   const events = useLiveQuery(
     () => db.events.orderBy("date").reverse().toArray(),
@@ -355,35 +289,14 @@ export function EventsTab({ childId, isEditMode }: EventsTabProps) {
           <p className="text-lg font-semibold leading-tight text-white">Événements</p>
           <p className="text-xs text-white/50 mt-0.5">Tâches assignées à cet enfant.</p>
         </div>
-        {/* Bouton "Créer événement" — uniquement en mode édition */}
-        {isEditMode && (
-          <button
-            type="button"
-            onClick={() => setShowCreateForm((v) => !v)}
-            className={`flex items-center gap-1.5 h-9 px-3 rounded-full text-sm font-bold transition-all ${
-              showCreateForm
-                ? "bg-white/15 text-white"
-                : "bg-white/8 text-white/65 hover:bg-white/12"
-            }`}
-          >
-            <Plus className="w-4 h-4" />
-            Événement
-          </button>
-        )}
       </div>
-
-      {isEditMode && showCreateForm && (
-        <CreateEventForm
-          onCreated={() => setShowCreateForm(false)}
-        />
-      )}
 
       {events.length === 0 ? (
         <div className="text-center py-10 border border-white/8 rounded-2xl bg-white/3">
           <CalendarDays className="w-10 h-10 text-white/20 mx-auto mb-3" strokeWidth={1.5} />
           <p className="text-sm text-white/40 font-medium">Aucun événement créé.</p>
           {isEditMode && (
-            <p className="text-xs text-white/25 mt-1">Crée un événement pour assigner des tâches.</p>
+            <p className="text-xs text-white/25 mt-1">Les événements se créent depuis l'onglet Événements (Admin).</p>
           )}
         </div>
       ) : (
