@@ -8,9 +8,10 @@ import {
   Users, LayoutList, Info, Trash2, ArrowLeft, Pencil
 } from "lucide-react";
 import { MobileHeader } from "@/components/ui/MobileHeader";
-import db, { generateId, type ChildTask, type TaskType } from "@/lib/db";
+import db, { generateId, type Child, type ChildTask, type TaskType } from "@/lib/db";
 import { TASK_TYPES, getTaskTypeConfig } from "@/lib/taskTypes";
 import { ChildSelector } from "@/components/ui/ChildSelector";
+import { ChildDetailsModal } from "@/components/pointage/ChildDetailsModal";
 import { useSession } from "next-auth/react";
 
 type Tab = "infos" | "activites" | "participants";
@@ -332,8 +333,9 @@ function ParticipantsTab({
   tasks, childById,
 }: {
   tasks: ChildTask[];
-  childById: Map<string, { firstName: string; lastName: string }>;
+  childById: Map<string, Child>;
 }) {
+  const [selectedChild, setSelectedChild] = useState<Child | null>(null);
   const tasksByChild = useMemo(() => {
     const map = new Map<string, ChildTask[]>();
     for (const task of tasks) {
@@ -364,10 +366,24 @@ function ParticipantsTab({
 
         return (
           <div key={childId} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex items-center gap-3 p-4 border-b border-gray-50">
-              <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-bold text-sm shrink-0">
-                {(child?.firstName?.[0] ?? "?").toUpperCase()}
-              </div>
+            {/* En-tête enfant — cliquable pour ouvrir la modale */}
+            <button
+              type="button"
+              onClick={() => child && setSelectedChild(child)}
+              className="w-full flex items-center gap-3 p-4 border-b border-gray-50 text-left hover:bg-gray-50/70 transition-colors"
+            >
+              {/* Avatar (photo ou initiale) */}
+              {child?.photoUrl ? (
+                <img
+                  src={child.photoUrl}
+                  alt={childName}
+                  className="w-10 h-10 rounded-full object-cover shrink-0 border-2 border-white shadow-sm"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#00b22d]/20 to-[#00b22d]/5 flex items-center justify-center text-[#00b22d] font-black text-base shrink-0 border-2 border-white shadow-sm">
+                  {(child?.firstName?.[0] ?? "?").toUpperCase()}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-gray-900 truncate">{childName}</p>
                 <div className="flex items-center gap-2 mt-1">
@@ -380,7 +396,7 @@ function ParticipantsTab({
                   <span className="text-[10px] text-gray-400 font-semibold whitespace-nowrap">{done}/{total}</span>
                 </div>
               </div>
-            </div>
+            </button>
             <div className="divide-y divide-gray-50">
               {childTasks.map((task) => {
                 const config = getTaskTypeConfig(task.type);
@@ -404,6 +420,14 @@ function ParticipantsTab({
           </div>
         );
       })}
+
+      {/* Modale détail enfant */}
+      {selectedChild && (
+        <ChildDetailsModal
+          child={selectedChild}
+          onClose={() => setSelectedChild(null)}
+        />
+      )}
     </div>
   );
 }
@@ -423,7 +447,7 @@ export default function EventDetailPage() {
   const children = useLiveQuery(() => db.children.toArray(), []);
 
   const childById = useMemo(() => {
-    const map = new Map<string, { firstName: string; lastName: string }>();
+    const map = new Map<string, Child>();
     (children ?? []).forEach((c) => map.set(c.id, c));
     return map;
   }, [children]);
