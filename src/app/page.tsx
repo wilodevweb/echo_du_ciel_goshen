@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Bell, CalendarCheck, Users, Images, ShieldCheck } from "lucide-react";
+import { Bell, CalendarCheck, Users, Images, ShieldCheck, Heart, CalendarDays } from "lucide-react";
 import { SyncPanel } from "@/components/SyncPanel";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./api/auth/[...nextauth]/route";
@@ -61,7 +61,26 @@ export default async function Home() {
               Faire l&apos;appel
             </Link>
 
-            {/* Grille 2 colonnes pour Annuaire et Ajout */}
+            {/* Grille 2 colonnes — Famille et Événements */}
+            <div className="grid grid-cols-2 gap-3">
+              <Link
+                href="/famille"
+                className="flex h-14 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-800 transition-all hover:bg-gray-50 active:scale-[0.98]"
+              >
+                <Heart className="h-5 w-5 text-[#00b22d]" />
+                Famille
+              </Link>
+
+              <Link
+                href="/evenements"
+                className="flex h-14 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-800 transition-all hover:bg-gray-50 active:scale-[0.98]"
+              >
+                <CalendarDays className="h-5 w-5 text-[#00b22d]" />
+                Événements
+              </Link>
+            </div>
+
+            {/* Grille 2 colonnes pour Annuaire et Archives */}
             <div className="grid grid-cols-2 gap-3">
               <Link
                 href="/enfants"
