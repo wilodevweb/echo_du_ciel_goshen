@@ -3,6 +3,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { CalendarDays, CheckCircle2, Circle, Plus, ChevronDown, ChevronRight, Loader2, X, Pencil } from "lucide-react";
 import db, { generateId, type ChildEvent, type ChildTask, type TaskType } from "@/lib/db";
 import { TASK_TYPES, getTaskTypeConfig } from "@/lib/taskTypes";
+import { ChildSelector } from "@/components/ui/ChildSelector";
 
 interface EventsTabProps {
   childId: string;
@@ -16,28 +17,34 @@ function AddTaskForm({
   onDone,
 }: {
   eventId: string;
-  childId: string;
+  childId: string; // enfant « contexte » pré-coché
   onDone: () => void;
 }) {
   const [taskTitle, setTaskTitle] = useState("");
   const [taskType, setTaskType] = useState<TaskType>("autre");
+  const [selectedIds, setSelectedIds] = useState<string[]>([childId]);
   const [isLoading, setIsLoading] = useState(false);
 
+  const allChildren = useLiveQuery(() => db.children.orderBy("firstName").toArray(), []) ?? [];
+
   const handleAdd = async () => {
-    if (!taskTitle.trim()) return;
+    if (!taskTitle.trim() || selectedIds.length === 0) return;
     setIsLoading(true);
     try {
-      await db.tasks.add({
+      const targets = allChildren.filter((c) => selectedIds.includes(c.id));
+      const newTasks: ChildTask[] = targets.map((child) => ({
         id: generateId(),
         eventId,
-        childId,
+        childId: child.id,
         title: taskTitle.trim(),
         type: taskType,
         done: false,
         createdAt: new Date().toISOString(),
-      });
+      }));
+      await db.tasks.bulkAdd(newTasks);
       setTaskTitle("");
       setTaskType("autre");
+      setSelectedIds([childId]);
       onDone();
     } finally {
       setIsLoading(false);
@@ -53,9 +60,7 @@ function AddTaskForm({
           className="h-9 px-2 rounded-lg border border-white/10 bg-white/10 text-sm text-white focus:outline-none focus:border-white/25"
         >
           {TASK_TYPES.map((t) => (
-            <option key={t.value} value={t.value} className="text-black">
-              {t.label}
-            </option>
+            <option key={t.value} value={t.value} className="text-black">{t.label}</option>
           ))}
         </select>
         <input
@@ -68,14 +73,21 @@ function AddTaskForm({
           className="flex-1 h-9 px-3 rounded-lg border border-white/10 bg-white/5 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/25"
         />
       </div>
+      <ChildSelector
+        children={allChildren}
+        selectedIds={selectedIds}
+        onChange={setSelectedIds}
+        variant="dark"
+        maxHeight="max-h-36"
+      />
       <button
         type="button"
-        disabled={!taskTitle.trim() || isLoading}
+        disabled={!taskTitle.trim() || isLoading || selectedIds.length === 0}
         onClick={handleAdd}
         className="h-9 w-full rounded-lg bg-white/10 text-white text-sm font-bold disabled:opacity-40 hover:bg-white/15 transition-all flex items-center justify-center gap-1"
       >
         {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-        Ajouter
+        Ajouter{selectedIds.length > 1 ? ` (${selectedIds.length})` : ""}
       </button>
     </div>
   );

@@ -5,8 +5,9 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { CalendarDays, CheckCircle2, Circle, ChevronDown, ChevronRight, Loader2, Plus, X } from "lucide-react";
 import { MobileHeader } from "@/components/ui/MobileHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
-import db, { generateId, type ChildEvent, type ChildTask, getClassLabel, type TaskType } from "@/lib/db";
+import db, { generateId, type ChildEvent, type ChildTask, type TaskType } from "@/lib/db";
 import { TASK_TYPES, getTaskTypeConfig } from "@/lib/taskTypes";
+import { ChildSelector } from "@/components/ui/ChildSelector";
 import { useSession } from "next-auth/react";
 
 // ─── Formulaire création d'événement ────────────────────────────────────────
@@ -74,7 +75,7 @@ function CreateEventForm({ onCreated }: { onCreated: (event: ChildEvent) => void
   );
 }
 
-// ─── Formulaire ajout de tâche (Groupe ou Seul) ──────────────────────────────
+// ─── Formulaire ajout de tâche (Groupe ou Sélection libre) ──────────────────
 function AddTaskForm({
   eventId,
   onDone,
@@ -86,27 +87,23 @@ function AddTaskForm({
   const [taskType, setTaskType] = useState<TaskType>("autre");
   const [audienceType, setAudienceType] = useState<"GROUP" | "SINGLE">("GROUP");
   const [targetClass, setTargetClass] = useState<"ALL" | "FIRST" | "SECOND" | "THIRD">("ALL");
-  const [targetChildId, setTargetChildId] = useState("");
+  const [targetChildIds, setTargetChildIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const children = useLiveQuery(() => db.children.orderBy("firstName").toArray(), []);
+  const allChildren = useLiveQuery(() => db.children.orderBy("firstName").toArray(), []) ?? [];
+
+  // Enfants filtrés par classe (mode Groupe), tous (mode Libre)
+  const displayedChildren = React.useMemo(() => {
+    if (audienceType === "SINGLE") return allChildren;
+    if (targetClass === "ALL") return allChildren;
+    return allChildren.filter((c) => c.classLevel === targetClass);
+  }, [allChildren, audienceType, targetClass]);
 
   const handleAdd = async () => {
-    if (!taskTitle.trim() || !children) return;
+    if (!taskTitle.trim() || targetChildIds.length === 0) return;
     setIsLoading(true);
     try {
-      let targetChildren = [];
-      if (audienceType === "SINGLE") {
-        if (!targetChildId) return;
-        targetChildren = children.filter((c) => c.id === targetChildId);
-      } else {
-        if (targetClass === "ALL") {
-          targetChildren = children;
-        } else {
-          targetChildren = children.filter((c) => c.classLevel === targetClass);
-        }
-      }
-
+      const targetChildren = allChildren.filter((c) => targetChildIds.includes(c.id));
       if (targetChildren.length === 0) return;
 
       const newTasks: ChildTask[] = targetChildren.map((child) => ({
@@ -122,6 +119,7 @@ function AddTaskForm({
       await db.tasks.bulkAdd(newTasks);
       setTaskTitle("");
       setTaskType("autre");
+      setTargetChildIds([]);
       onDone();
     } finally {
       setIsLoading(false);
@@ -137,6 +135,7 @@ function AddTaskForm({
         </button>
       </div>
 
+      {/* Type + Intitulé */}
       <div className="flex gap-2">
         <select
           value={taskType}
@@ -144,9 +143,7 @@ function AddTaskForm({
           className="w-1/3 h-9 px-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:border-[#00b22d]"
         >
           {TASK_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>
-              {t.label}
-            </option>
+            <option key={t.value} value={t.value}>{t.label}</option>
           ))}
         </select>
         <input
@@ -159,31 +156,33 @@ function AddTaskForm({
         />
       </div>
 
+      {/* Mode */}
       <div className="flex gap-2">
         <button
           type="button"
-          onClick={() => setAudienceType("GROUP")}
+          onClick={() => { setAudienceType("GROUP"); setTargetChildIds([]); }}
           className={`flex-1 h-8 rounded-lg text-xs font-bold transition-all ${
             audienceType === "GROUP" ? "bg-[#00b22d] text-white" : "bg-gray-200 text-gray-600 hover:bg-gray-300"
           }`}
         >
-          En groupe
+          Par classe
         </button>
         <button
           type="button"
-          onClick={() => setAudienceType("SINGLE")}
+          onClick={() => { setAudienceType("SINGLE"); setTargetChildIds([]); }}
           className={`flex-1 h-8 rounded-lg text-xs font-bold transition-all ${
             audienceType === "SINGLE" ? "bg-[#00b22d] text-white" : "bg-gray-200 text-gray-600 hover:bg-gray-300"
           }`}
         >
-          Seul
+          Sélection libre
         </button>
       </div>
 
-      {audienceType === "GROUP" ? (
+      {/* Filtre de classe (mode Groupe seulement) */}
+      {audienceType === "GROUP" && (
         <select
           value={targetClass}
-          onChange={(e) => setTargetClass(e.target.value as any)}
+          onChange={(e) => { setTargetClass(e.target.value as any); setTargetChildIds([]); }}
           className="w-full h-9 px-3 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:border-[#00b22d]"
         >
           <option value="ALL">Toute l'école du dimanche</option>
@@ -191,33 +190,31 @@ function AddTaskForm({
           <option value="SECOND">Classe 2</option>
           <option value="THIRD">Classe 3</option>
         </select>
-      ) : (
-        <select
-          value={targetChildId}
-          onChange={(e) => setTargetChildId(e.target.value)}
-          className="w-full h-9 px-3 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:border-[#00b22d]"
-        >
-          <option value="">Sélectionner un enfant…</option>
-          {(children || []).map((child) => (
-            <option key={child.id} value={child.id}>
-              {child.firstName} {child.lastName} ({getClassLabel(child.classLevel)})
-            </option>
-          ))}
-        </select>
       )}
+
+      {/* Sélecteur enfants */}
+      <ChildSelector
+        children={displayedChildren}
+        selectedIds={targetChildIds}
+        onChange={setTargetChildIds}
+        variant="light"
+        maxHeight="max-h-44"
+      />
 
       <button
         type="button"
-        disabled={!taskTitle.trim() || isLoading || (audienceType === "SINGLE" && !targetChildId)}
+        disabled={!taskTitle.trim() || isLoading || targetChildIds.length === 0}
         onClick={handleAdd}
         className="w-full h-9 rounded-lg bg-gray-900 text-white text-sm font-bold disabled:opacity-40 transition-all flex items-center justify-center gap-2 hover:bg-gray-800"
       >
         {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-        Assigner
+        Assigner{targetChildIds.length > 0 ? ` (${targetChildIds.length})` : ""}
       </button>
     </div>
   );
 }
+
+
 
 function EventCard({ eventId, title, date, description, isAdmin }: {
   eventId: string;
