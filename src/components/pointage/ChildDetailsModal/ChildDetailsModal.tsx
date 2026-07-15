@@ -195,15 +195,13 @@ export function ChildDetailsModal({
         const changedFields = (Object.keys(nextChild) as Array<keyof typeof nextChild>)
           .filter((field) => field !== 'updatedAt')
           .filter((field) => child[field] !== nextChild[field]) as ChildSyncField[];
-          
-        if (changedFields.length === 0) {
-          onClose();
-          return;
-        }
 
         await db.children.update(child.id, nextChild);
-        await markEntityForSync('child', child.id, changedFields);
-        onClose();
+        if (changedFields.length > 0) {
+          await markEntityForSync('child', child.id, changedFields);
+        }
+        setIsEditMode(false);
+        setActiveField(null);
       }
     } finally {
       setIsSaving(false);
