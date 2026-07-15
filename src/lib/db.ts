@@ -42,6 +42,25 @@ export interface Attendance {
   markedAt: string;
 }
 
+// Événements locaux (non synchronisés avec le serveur)
+export interface ChildEvent {
+  id: string;
+  title: string;        // Ex: "Fête de Noël 2026", "Journée Sportive"
+  date: string;         // Format: YYYY-MM-DD
+  description?: string;
+  createdAt: string;
+}
+
+// Tâches liées à un enfant pour un événement (non synchronisées)
+export interface ChildTask {
+  id: string;
+  eventId: string;      // Référence à ChildEvent.id
+  childId: string;      // Référence à Child.id
+  title: string;        // Ex: "Lire Psaume 23", "Apporter les chaises"
+  done: boolean;
+  createdAt: string;
+}
+
 export interface SyncState {
   key: string;
   value: string;
@@ -255,6 +274,8 @@ const db = new Dexie('SundaySchoolDB') as Dexie & {
   attendances: EntityTable<Attendance, 'id'>;
   syncState: EntityTable<SyncState, 'key'>;
   pendingSync: EntityTable<PendingSyncItem, 'key'>;
+  events: EntityTable<ChildEvent, 'id'>;
+  tasks: EntityTable<ChildTask, 'id'>;
 };
 
 // Schéma de la base de données (id is no longer auto-incremented `++id`, we set it manually)
@@ -353,6 +374,17 @@ db.version(9)
       delete child.parentFirstName;
       delete child.parentLastName;
     });
+  });
+
+db.version(10)
+  .stores({
+    children: 'id, firstName, lastName, postName, parentPhone, classLevel, gender, parentId, createdAt',
+    parents: 'id, phone, name',
+    attendances: 'id, childId, date, status, [childId+date]',
+    syncState: 'key',
+    pendingSync: 'key, entity, id, updatedAt',
+    events: 'id, date, createdAt',
+    tasks: 'id, eventId, childId, [eventId+childId]',
   });
 
 const LAST_LOCAL_CHANGE_KEY = 'lastLocalChangeAt';

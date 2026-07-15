@@ -13,6 +13,7 @@ import { EditableParentRow } from "./ParentEditor";
 import { InlineTextEditor } from "./InlineTextEditor";
 import { EditableClassRow, EditableGenderRow, EditableDetailRow } from "./EditableRows";
 import { calculateAgeLabel, formatDisplayName, uploadChildPhoto } from "../utils";
+import { EventsTab } from "./EventsTab";
 
 export function ChildDetailsModal({
   child,
@@ -339,6 +340,14 @@ export function ChildDetailsModal({
           >
             Historique
           </button>
+          <button
+            onClick={() => setActiveTab("evenement")}
+            className={`flex h-10 shrink-0 items-center px-4 rounded-full text-sm font-semibold transition ${
+              activeTab === "evenement" ? "bg-white text-[#1b1b1b]" : "bg-white/10 text-white/65 hover:bg-white/15"
+            }`}
+          >
+            Événement
+          </button>
         </div>
         </div>
 
@@ -390,17 +399,6 @@ export function ChildDetailsModal({
                 </div>
               </div>
               <EditableDetailRow
-                icon={<MapPin className="h-6 w-6" />}
-                title="Adresse"
-                value={draft.address}
-                placeholder="Non renseignée"
-                isEditing={activeField === "address"}
-                onEdit={() => {
-                  if (isEditMode) setActiveField("address");
-                }}
-                onChange={(value) => updateDraft("address", value)}
-              />
-              <EditableDetailRow
                 icon={<NotebookText className="h-6 w-6" />}
                 title="Notes"
                 value={draft.notes}
@@ -443,6 +441,20 @@ export function ChildDetailsModal({
                 />
               </div>
 
+              <div className="border-t border-white/10 pt-5">
+                <EditableDetailRow
+                  icon={<MapPin className="h-6 w-6" />}
+                  title="Adresse"
+                  value={draft.address}
+                  placeholder="Non renseignée"
+                  isEditing={activeField === "address"}
+                  onEdit={() => {
+                    if (isEditMode) setActiveField("address");
+                  }}
+                  onChange={(value) => updateDraft("address", value)}
+                />
+              </div>
+
               <div className="min-h-[150px] border-t border-white/10 pt-5">
                 <p className="text-lg font-semibold leading-tight text-white mb-1">Frères et Sœurs</p>
                 <p className="text-xs text-white/50 mb-3">Enfants partageant le même responsable.</p>
@@ -459,6 +471,12 @@ export function ChildDetailsModal({
               <p className="text-lg font-semibold leading-tight text-white mb-1">Historique des Présences</p>
               <p className="text-xs text-white/50 mb-3">Détail des pointages passés pour cet enfant.</p>
               <AttendanceHistoryList childId={child.id} />
+            </div>
+          )}
+
+          {activeTab === "evenement" && (
+            <div className="min-h-[150px]">
+              <EventsTab childId={child.id} />
             </div>
           )}
         </div>
