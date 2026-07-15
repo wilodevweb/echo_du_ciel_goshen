@@ -17,7 +17,7 @@ export default async function Home() {
 
   return (
     <main className="flex h-[100dvh] flex-col items-center overflow-hidden bg-gray-50 px-5 py-6 relative">
-      {/* Boutons flottants Admin et Notifications */}
+      {/* Boutons flottants — Notifs, Famille, Événements, Admin */}
       <div className="fixed right-4 top-4 z-30 flex items-center gap-2">
         <Link
           href="/notifications"
@@ -25,6 +25,20 @@ export default async function Home() {
           title="Notifications"
         >
           <Bell className="h-5 w-5" />
+        </Link>
+        <Link
+          href="/famille"
+          className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-200 bg-white text-[#00b22d] transition-all hover:bg-gray-50 active:scale-90"
+          title="Famille"
+        >
+          <Heart className="h-5 w-5" />
+        </Link>
+        <Link
+          href="/evenements"
+          className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-200 bg-white text-[#00b22d] transition-all hover:bg-gray-50 active:scale-90"
+          title="Événements"
+        >
+          <CalendarDays className="h-5 w-5" />
         </Link>
         {isAdmin && (
           <Link
@@ -60,25 +74,6 @@ export default async function Home() {
               <CalendarCheck className="h-6 w-6" />
               Faire l&apos;appel
             </Link>
-
-            {/* Grille 2 colonnes — Famille et Événements */}
-            <div className="grid grid-cols-2 gap-3">
-              <Link
-                href="/famille"
-                className="flex h-14 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-800 transition-all hover:bg-gray-50 active:scale-[0.98]"
-              >
-                <Heart className="h-5 w-5 text-[#00b22d]" />
-                Famille
-              </Link>
-
-              <Link
-                href="/evenements"
-                className="flex h-14 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-800 transition-all hover:bg-gray-50 active:scale-[0.98]"
-              >
-                <CalendarDays className="h-5 w-5 text-[#00b22d]" />
-                Événements
-              </Link>
-            </div>
 
             {/* Grille 2 colonnes pour Annuaire et Archives */}
             <div className="grid grid-cols-2 gap-3">
