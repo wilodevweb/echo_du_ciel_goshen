@@ -159,7 +159,12 @@ export function ChildDetailsModal({
             if (onSave) {
               await onSave(draft);
             } else {
-              await db.children.delete(child.id);
+              // Marquer comme supprimé en vidant les noms (le serveur détecte firstName=="" && lastName=="")
+              await db.children.update(child.id, {
+                firstName: "",
+                lastName: "",
+                postName: "",
+              });
               await markEntityForSync('child', child.id, ['firstName', 'lastName', 'postName']);
               onClose();
             }

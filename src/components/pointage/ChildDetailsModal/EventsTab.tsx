@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { CalendarDays, CheckCircle2, Circle, Plus, ChevronDown, ChevronRight, Loader2, X, Pencil } from "lucide-react";
-import db, { generateId, type ChildEvent, type ChildTask, type TaskType } from "@/lib/db";
+import db, { generateId, markEntityForSync, type ChildEvent, type ChildTask, type TaskType } from "@/lib/db";
 import { TASK_TYPES, getTaskTypeConfig } from "@/lib/taskTypes";
 import { ChildSelector } from "@/components/ui/ChildSelector";
 
@@ -42,6 +42,10 @@ function AddTaskForm({
         createdAt: new Date().toISOString(),
       }));
       await db.tasks.bulkAdd(newTasks);
+      // Marquer chaque tâche pour synchronisation
+      for (const task of newTasks) {
+        await markEntityForSync('task', task.id);
+      }
       setTaskTitle("");
       setTaskType("autre");
       setSelectedIds([childId]);
@@ -119,15 +123,18 @@ function EventCard({
 
   const toggleTask = async (task: ChildTask) => {
     await db.tasks.update(task.id, { done: !task.done });
+    await markEntityForSync('task', task.id);
   };
 
   const deleteTask = async (taskId: string) => {
+    await db.pendingSync.delete(`task:${taskId}`);
     await db.tasks.delete(taskId);
   };
 
   const saveTaskEdit = async (taskId: string) => {
     if (!editingTitle.trim()) return;
     await db.tasks.update(taskId, { title: editingTitle.trim() });
+    await markEntityForSync('task', taskId);
     setEditingTaskId(null);
     setEditingTitle("");
   };
