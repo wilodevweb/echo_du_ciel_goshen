@@ -90,6 +90,26 @@ self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
+  
+  if (event.data && event.data.type === "REFRESH_PRECACHE") {
+    console.log("[Service Worker] Connexion détectée. Mise à jour en arrière-plan des fichiers offline...");
+    event.waitUntil(
+      caches.open(APP_CACHE).then((cache) => {
+        // Tenter de télécharger à nouveau chaque ressource
+        return Promise.all(
+          PRECACHE_URLS.map((url) =>
+            fetch(url, { cache: "reload" })
+              .then((response) => {
+                if (response.ok) {
+                  return cache.put(url, response);
+                }
+              })
+              .catch((err) => console.warn(`[Service Worker] Échec mise à jour offline pour ${url}:`, err))
+          )
+        );
+      })
+    );
+  }
 });
 
 self.addEventListener("push", (event) => {

@@ -43,17 +43,25 @@ export function RegisterPWA() {
           console.error("Erreur d'enregistrement du Service Worker:", error);
         });
 
-      // 3. Forcer la recherche de mises à jour régulièrement à chaque changement de focus
+      // 3. Forcer la recherche de mises à jour régulièrement à chaque changement de focus ou retour en ligne
       const checkForUpdates = () => {
         navigator.serviceWorker.ready.then((registration) => {
           if (navigator.onLine) {
             registration.update().catch((e) => console.warn("Échec de la recherche de mise à jour du SW", e));
+            // Envoyer un message au Service Worker actif pour qu'il mette à jour silencieusement les fichiers en cache
+            if (navigator.serviceWorker.controller) {
+              navigator.serviceWorker.controller.postMessage({ type: "REFRESH_PRECACHE" });
+            }
           }
         });
       };
 
       window.addEventListener("focus", checkForUpdates);
-      return () => window.removeEventListener("focus", checkForUpdates);
+      window.addEventListener("online", checkForUpdates);
+      return () => {
+        window.removeEventListener("focus", checkForUpdates);
+        window.removeEventListener("online", checkForUpdates);
+      };
     };
 
     if (document.readyState === "complete") {
