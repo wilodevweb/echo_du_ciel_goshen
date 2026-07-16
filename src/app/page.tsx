@@ -33,7 +33,6 @@ export default async function Home() {
           title="Événements"
         >
           <CalendarDays className="h-4 w-4 text-[#00b22d] shrink-0" />
-          Événements
         </Link>
         <Link
           href="/notifications"
