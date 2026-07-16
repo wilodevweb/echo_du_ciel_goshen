@@ -194,6 +194,12 @@ export default function PointagePage() {
     const isDeletion = firstName === "" && lastName === "" && postName === "";
 
     if (isDeletion) {
+      // Nettoyer pendingSync pour les présences supprimées
+      const attendancesToDelete = await db.attendances.where("childId").equals(childId).toArray();
+      const attendanceKeysToDelete = attendancesToDelete.map(a => `attendance:${a.id}`);
+      if (attendanceKeysToDelete.length > 0) {
+        await db.pendingSync.bulkDelete(attendanceKeysToDelete);
+      }
       await db.attendances.where("childId").equals(childId).delete();
       await db.children.update(childId, {
         firstName: "",

@@ -199,7 +199,13 @@ const MAX_SYNC_BATCH_BYTES = 700_000;
 const MAX_SYNC_STRING_VALUE_LENGTH = 100_000;
 
 // Générateur basique d'ID unique (fallback simple pour mode hors-ligne)
-export const generateId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+export const generateId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback ultra-rare (très vieux navigateurs)
+  return Math.random().toString(36).substring(2, 15) + Date.now().toString(36) + Math.random().toString(36).substring(2, 15);
+};
 
 export const CLASS_LEVELS: Array<{ value: ClassLevel; label: string }> = [
   { value: 'FIRST', label: '1ere classe' },
@@ -826,7 +832,7 @@ async function applyServerDelta(data: SyncDeltaResponse) {
     ? data.t.map(decodeCompactServerTask)
     : (data.tasks ?? []);
 
-  await db.transaction('rw', db.children, db.parents, db.attendances, db.events, db.tasks, async () => {
+  await db.transaction('rw', [db.children, db.parents, db.attendances, db.events, db.tasks, db.pendingSync], async () => {
     if (deltaChildren.length > 0) {
       await db.children.bulkPut(deltaChildren);
     }
@@ -835,7 +841,13 @@ async function applyServerDelta(data: SyncDeltaResponse) {
     if (deletedChildIds.length > 0) {
       await db.children.bulkDelete(deletedChildIds);
       for (const childId of deletedChildIds) {
+        const attendancesToDelete = await db.attendances.where('childId').equals(childId).toArray();
+        const attendanceKeysToDelete = attendancesToDelete.map(a => `attendance:${a.id}`);
+        if (attendanceKeysToDelete.length > 0) {
+          await db.pendingSync.bulkDelete(attendanceKeysToDelete);
+        }
         await db.attendances.where('childId').equals(childId).delete();
+        await db.pendingSync.delete(`child:${childId}`);
       }
     }
 
@@ -851,7 +863,13 @@ async function applyServerDelta(data: SyncDeltaResponse) {
       if (childIdsToDeleteLocally.length > 0) {
         await db.children.bulkDelete(childIdsToDeleteLocally);
         for (const childId of childIdsToDeleteLocally) {
+          const attendancesToDelete = await db.attendances.where('childId').equals(childId).toArray();
+          const attendanceKeysToDelete = attendancesToDelete.map(a => `attendance:${a.id}`);
+          if (attendanceKeysToDelete.length > 0) {
+            await db.pendingSync.bulkDelete(attendanceKeysToDelete);
+          }
           await db.attendances.where('childId').equals(childId).delete();
+          await db.pendingSync.delete(`child:${childId}`);
         }
         console.log(`[SYNCHRO] ${childIdsToDeleteLocally.length} enfants supprimés localement (absents du serveur).`);
       }
@@ -869,6 +887,19 @@ async function applyServerDelta(data: SyncDeltaResponse) {
     }
 
     if (deltaAttendances.length > 0) {
+      // Éviter la duplication des présences (IDs locaux vs IDs serveur)
+      // Rechercher les présences locales ayant le même [childId+date] et les supprimer
+      const attendanceKeys = deltaAttendances.map(a => [a.childId, a.date]);
+      const existingLocals = await db.attendances.where('[childId+date]').anyOf(attendanceKeys).toArray();
+      const localIdsToDelete = existingLocals.filter(local => !deltaAttendances.some(server => server.id === local.id)).map(a => a.id);
+      
+      if (localIdsToDelete.length > 0) {
+        await db.attendances.bulkDelete(localIdsToDelete);
+        // Également nettoyer pendingSync si l'ID local y était bloqué
+        const pendingKeysToClean = localIdsToDelete.map(id => `attendance:${id}`);
+        await db.pendingSync.bulkDelete(pendingKeysToClean);
+      }
+      
       await db.attendances.bulkPut(deltaAttendances);
     }
     if (deltaEvents.length > 0) {

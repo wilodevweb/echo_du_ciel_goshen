@@ -402,30 +402,17 @@ export async function POST(req: Request) {
               const parentName = childData.parentName
                 ? normalizeName(String(childData.parentName))
                 : normalizeName(String(childData.lastName ?? "Parent"));
-                
-              const parentExists = await tx.parent.findUnique({
+
+              await tx.parent.upsert({
                 where: { id: parentId },
-                select: { id: true },
+                update: { name: parentName || "Parent" },
+                create: {
+                  id: parentId,
+                  name: parentName || "Parent",
+                  phone: null,
+                  address: null,
+                },
               });
-              if (!parentExists) {
-                // Le parent n'est pas encore sur le serveur — le créer avec l'ID client
-                await tx.parent.create({
-                  data: {
-                    id: parentId,
-                    name: parentName || "Parent",
-                    phone: null,
-                    address: null,
-                  },
-                });
-              } else {
-                // Le parent existe, on met à jour ses infos
-                await tx.parent.update({
-                  where: { id: parentId },
-                  data: {
-                    name: parentName || "Parent",
-                  }
-                });
-              }
             }
 
             // 2. Gérer le Child
@@ -797,27 +784,16 @@ export async function POST(req: Request) {
             // Pas de téléphone : créer le parent par son ID si absent du serveur ou le mettre à jour
             const parentName = normalizeName(String(child.parentName ?? child.lastName ?? "Parent"));
             
-            const parentExists = await tx.parent.findUnique({
+            await tx.parent.upsert({
               where: { id: parentId },
-              select: { id: true },
+              update: { name: parentName || "Parent" },
+              create: {
+                id: parentId,
+                name: parentName || "Parent",
+                phone: null,
+                address: null,
+              },
             });
-            if (!parentExists) {
-              await tx.parent.create({
-                data: {
-                  id: parentId,
-                  name: parentName || "Parent",
-                  phone: null,
-                  address: null,
-                },
-              });
-            } else {
-              await tx.parent.update({
-                where: { id: parentId },
-                data: {
-                  name: parentName || "Parent",
-                },
-              });
-            }
           }
 
           const childFields = {
