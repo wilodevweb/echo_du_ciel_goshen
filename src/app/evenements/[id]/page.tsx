@@ -8,7 +8,7 @@ import {
   Users, LayoutList, Info, Trash2, ArrowLeft, Pencil
 } from "lucide-react";
 import { MobileHeader } from "@/components/ui/MobileHeader";
-import db, { generateId, type Child, type ChildTask, type TaskType } from "@/lib/db";
+import db, { generateId, markEntityForSync, type Child, type ChildTask, type TaskType } from "@/lib/db";
 import { TASK_TYPES, getTaskTypeConfig } from "@/lib/taskTypes";
 import { ChildSelector } from "@/components/ui/ChildSelector";
 import { ChildDetailsModal } from "@/components/pointage/ChildDetailsModal";
@@ -148,9 +148,17 @@ function ActivitesTab({
     return map;
   }, [tasks]);
 
-  const toggleTask = (task: ChildTask) => db.tasks.update(task.id, { done: !task.done });
+  const toggleTask = async (task: ChildTask) => {
+    await db.tasks.update(task.id, { done: !task.done });
+    await markEntityForSync('task', task.id);
+  };
 
-  const deleteTask = (taskId: string) => db.tasks.delete(taskId);
+  const deleteTask = async (taskId: string) => {
+    // On ne peut pas synchroniser la suppression d'une tâche (pas de mécanisme de tombstone),
+    // on la supprime juste localement et on retire de la queue de synchro
+    await db.pendingSync.delete(`task:${taskId}`);
+    await db.tasks.delete(taskId);
+  };
 
   const handleAdd = async () => {
     if (!taskTitle.trim() || selectedIds.length === 0) return;
@@ -167,6 +175,10 @@ function ActivitesTab({
         createdAt: new Date().toISOString(),
       }));
       await db.tasks.bulkAdd(newTasks);
+      // Marquer chaque tâche pour synchronisation
+      for (const task of newTasks) {
+        await markEntityForSync('task', task.id);
+      }
       setTaskTitle("");
       setTaskType("autre");
       setSelectedIds([]);
@@ -454,8 +466,18 @@ export default function EventDetailPage() {
 
   const handleDelete = async () => {
     if (!confirm("Supprimer cet événement et toutes ses tâches ?")) return;
+    // Récupérer les IDs des tâches avant suppression
+    const eventTasks = await db.tasks.where("eventId").equals(eventId).toArray();
+    const taskIds = eventTasks.map((t) => t.id);
+    // Supprimer les tâches et l'événement
     await db.tasks.where("eventId").equals(eventId).delete();
     await db.events.delete(eventId);
+    // Nettoyer la file de synchro
+    const keysToDelete = [
+      `event:${eventId}`,
+      ...taskIds.map((id) => `task:${id}`),
+    ];
+    await db.pendingSync.bulkDelete(keysToDelete);
     router.back();
   };
 

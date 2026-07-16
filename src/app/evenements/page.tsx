@@ -6,7 +6,7 @@ import { CalendarDays, CheckCircle2, Loader2, Plus, X, ChevronRight } from "luci
 import Link from "next/link";
 import { MobileHeader } from "@/components/ui/MobileHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
-import db, { generateId, type ChildEvent, type ChildTask, type TaskType } from "@/lib/db";
+import db, { generateId, markEntityForSync, type ChildEvent, type ChildTask, type TaskType } from "@/lib/db";
 import { TASK_TYPES, getTaskTypeConfig } from "@/lib/taskTypes";
 import { ChildSelector } from "@/components/ui/ChildSelector";
 import { useSession } from "next-auth/react";
@@ -30,6 +30,7 @@ function CreateEventForm({ onCreated }: { onCreated: (event: ChildEvent) => void
         createdAt: new Date().toISOString(),
       };
       await db.events.add(event);
+      await markEntityForSync('event', event.id);
       onCreated(event);
       setTitle("");
       setDate("");
@@ -118,6 +119,10 @@ function AddTaskForm({
       }));
 
       await db.tasks.bulkAdd(newTasks);
+      // Marquer chaque tâche pour synchronisation
+      for (const task of newTasks) {
+        await markEntityForSync('task', task.id);
+      }
       setTaskTitle("");
       setTaskType("autre");
       setTargetChildIds([]);
