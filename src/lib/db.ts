@@ -390,6 +390,81 @@ db.version(10)
     tasks: 'id, eventId, childId, [eventId+childId]',
   });
 
+// ─── v11 : Migration des parents legacy ──────────────────────────────────────
+// Regroupe tous les enfants qui ont un parentName mais pas de parentId,
+// crée un enregistrement Parent pour chaque nom unique, et assigne le parentId
+// à chaque enfant concerné. Après cette migration, il n'existe plus de parent
+// "fantôme" stocké uniquement sur les enfants.
+db.version(11)
+  .stores({
+    children: 'id, firstName, lastName, postName, parentPhone, classLevel, gender, parentId, createdAt',
+    parents: 'id, phone, name',
+    attendances: 'id, childId, date, status, [childId+date]',
+    syncState: 'key',
+    pendingSync: 'key, entity, id, updatedAt',
+    events: 'id, date, createdAt',
+    tasks: 'id, eventId, childId, [eventId+childId]',
+  })
+  .upgrade(async (transaction) => {
+    const childrenTable = transaction.table('children');
+    const parentsTable  = transaction.table('parents');
+
+    // Lire tous les enfants sans parentId mais avec un nom de parent
+    const legacyChildren = await childrenTable
+      .filter((c: any) => !c.parentId && !!c.parentName?.trim())
+      .toArray();
+
+    if (legacyChildren.length === 0) return;
+
+    // Regrouper par nom normalisé (minuscules, espaces réduits)
+    const groups = new Map<string, { name: string; phone: string; childIds: string[] }>();
+    for (const child of legacyChildren) {
+      const key = (child.parentName as string).toLowerCase().replace(/\s+/g, ' ').trim();
+      if (!groups.has(key)) {
+        groups.set(key, {
+          name: (child.parentName as string).trim(),
+          phone: child.parentPhone ?? '',
+          childIds: [],
+        });
+      }
+      // Si ce groupe n'a pas encore de téléphone, utiliser celui de l'enfant
+      const grp = groups.get(key)!;
+      if (!grp.phone && child.parentPhone) grp.phone = child.parentPhone;
+      grp.childIds.push(child.id as string);
+    }
+
+    // Créer un Parent pour chaque groupe et lier les enfants
+    for (const [, grp] of groups) {
+      // Vérifie si un parent avec ce nom existe déjà dans db.parents
+      const existing = await parentsTable
+        .filter((p: any) =>
+          (p.name ?? '').toLowerCase().replace(/\s+/g, ' ').trim() ===
+          grp.name.toLowerCase().replace(/\s+/g, ' ').trim()
+        )
+        .first();
+
+      let parentId: string;
+      if (existing) {
+        parentId = existing.id as string;
+      } else {
+        // Générer un ID déterministe basé sur le nom (évite les doublons si la migration tourne deux fois)
+        parentId = `legacy-${grp.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}-migrated`;
+        await parentsTable.put({
+          id: parentId,
+          name: grp.name,
+          phone: grp.phone || undefined,
+          address: undefined,
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      // Mettre à jour chaque enfant du groupe
+      for (const childId of grp.childIds) {
+        await childrenTable.update(childId, { parentId });
+      }
+    }
+  });
+
 const LAST_LOCAL_CHANGE_KEY = 'lastLocalChangeAt';
 const LAST_SYNC_KEY = 'lastSyncAt';
 
