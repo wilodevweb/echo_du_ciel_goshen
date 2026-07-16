@@ -20,26 +20,29 @@ export default async function Home() {
       {/* Boutons flottants — Notifs, Famille, Événements, Admin */}
       <div className="fixed right-4 top-4 z-30 flex items-center gap-2">
         <Link
+          href="/famille"
+          className="flex h-12 items-center gap-2 px-4 rounded-full border border-gray-200 bg-white text-sm font-bold text-gray-700 transition-all hover:bg-gray-50 active:scale-90"
+          title="Famille"
+        >
+          <Heart className="h-4 w-4 text-[#00b22d] shrink-0" />
+          Famille
+        </Link>
+        <Link
+          href="/evenements"
+          className="flex h-12 items-center gap-2 px-4 rounded-full border border-gray-200 bg-white text-sm font-bold text-gray-700 transition-all hover:bg-gray-50 active:scale-90"
+          title="Événements"
+        >
+          <CalendarDays className="h-4 w-4 text-[#00b22d] shrink-0" />
+          Événements
+        </Link>
+        <Link
           href="/notifications"
           className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 transition-all hover:bg-gray-50 active:scale-90"
           title="Notifications"
         >
           <Bell className="h-5 w-5" />
         </Link>
-        <Link
-          href="/famille"
-          className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-200 bg-white text-[#00b22d] transition-all hover:bg-gray-50 active:scale-90"
-          title="Famille"
-        >
-          <Heart className="h-5 w-5" />
-        </Link>
-        <Link
-          href="/evenements"
-          className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-200 bg-white text-[#00b22d] transition-all hover:bg-gray-50 active:scale-90"
-          title="Événements"
-        >
-          <CalendarDays className="h-5 w-5" />
-        </Link>
+
         {isAdmin && (
           <Link
             href="/dashboard"
@@ -94,7 +97,7 @@ export default async function Home() {
               </Link>
             </div>
 
-            
+
           </div>
         </div>
 
