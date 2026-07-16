@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { FileQuestion, Home } from "lucide-react";
-import { BackButton } from "@/components/BackButton";
+import { BackButton } from "@/components/ui/BackButton";
 
 export default function NotFound() {
   return (

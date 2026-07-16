@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Users, History, Upload, ArrowLeft, Loader2, LogOut } from "lucide-react";
 import dynamic from "next/dynamic";
 
-const UploadTab = dynamic(() => import("@/components/dashboard/UploadTab"), {
+const UploadTab = dynamic(() => import("@/components/admin/UploadTab"), {
   loading: () => (
     <div className="flex justify-center p-10">
       <Loader2 className="h-8 w-8 animate-spin text-fiverr" />
@@ -15,7 +15,7 @@ const UploadTab = dynamic(() => import("@/components/dashboard/UploadTab"), {
   ),
 });
 
-const MoniteursTab = dynamic(() => import("@/components/dashboard/MoniteursTab"), {
+const MoniteursTab = dynamic(() => import("@/components/admin/MoniteursTab"), {
   loading: () => (
     <div className="flex justify-center p-10">
       <Loader2 className="h-8 w-8 animate-spin text-fiverr" />
@@ -23,7 +23,7 @@ const MoniteursTab = dynamic(() => import("@/components/dashboard/MoniteursTab")
   ),
 });
 
-const ActivitesTab = dynamic(() => import("@/components/dashboard/ActivitesTab"), {
+const ActivitesTab = dynamic(() => import("@/components/admin/ActivitesTab"), {
   loading: () => (
     <div className="flex justify-center p-10">
       <Loader2 className="h-8 w-8 animate-spin text-fiverr" />

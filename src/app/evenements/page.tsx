@@ -8,7 +8,7 @@ import { MobileHeader } from "@/components/ui/MobileHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import db, { generateId, markEntityForSync, type ChildEvent, type ChildTask, type TaskType } from "@/lib/db";
 import { TASK_TYPES, getTaskTypeConfig } from "@/lib/taskTypes";
-import { ChildSelector } from "@/components/ui/ChildSelector";
+import { ChildSelector } from "@/components/children/ChildSelector";
 import { useSession } from "next-auth/react";
 
 // ─── Formulaire création d'événement ────────────────────────────────────────

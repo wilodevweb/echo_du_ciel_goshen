@@ -10,8 +10,8 @@ import {
 import { MobileHeader } from "@/components/ui/MobileHeader";
 import db, { generateId, markEntityForSync, type Child, type ChildTask, type TaskType } from "@/lib/db";
 import { TASK_TYPES, getTaskTypeConfig } from "@/lib/taskTypes";
-import { ChildSelector } from "@/components/ui/ChildSelector";
-import { ChildDetailsModal } from "@/components/pointage/ChildDetailsModal";
+import { ChildSelector } from "@/components/children/ChildSelector";
+import { ChildDetailsModal } from "@/components/children/ChildDetailsModal";
 import { useSession } from "next-auth/react";
 
 type Tab = "infos" | "activites" | "participants";

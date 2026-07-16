@@ -1,7 +1,7 @@
 import React from "react";
 import type { ClassLevel } from "@/lib/db";
 import { CLASS_LEVELS, getClassLabel } from "@/lib/db";
-import { SelectionButtonGroup } from "../SelectionButtonGroup";
+import { SelectionButtonGroup } from "@/components/pointage/SelectionButtonGroup";
 
 export function DetailPill({
   label,

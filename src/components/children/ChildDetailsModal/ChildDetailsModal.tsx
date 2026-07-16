@@ -5,14 +5,14 @@ import type { AttendanceStatus, Child, ChildSyncField } from "@/lib/db";
 import db, { markEntityForSync, normalizeName } from "@/lib/db";
 import type { ChildDetailsDraft } from "../types";
 import { SiblingsList } from "../SiblingsList";
-import { AttendanceHistoryList } from "../AttendanceHistoryList";
+import { AttendanceHistoryList } from "@/components/pointage/AttendanceHistoryList";
 
 import type { ModalTab, ParentItem } from "./types";
 import { ConfirmDialog, AlertDialog } from "./Dialogs";
 import { EditableParentRow } from "./ParentEditor";
 import { InlineTextEditor } from "./InlineTextEditor";
 import { EditableClassRow, EditableGenderRow, EditableDetailRow } from "./EditableRows";
-import { calculateAgeLabel, formatDisplayName, uploadChildPhoto } from "../utils";
+import { calculateAgeLabel, formatDisplayName, uploadChildPhoto } from "@/components/pointage/utils";
 import { EventsTab } from "./EventsTab";
 
 export function ChildDetailsModal({

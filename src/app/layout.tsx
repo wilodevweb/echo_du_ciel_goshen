@@ -40,9 +40,9 @@ export const metadata: Metadata = {
   },
 };
 
-import AuthProvider from "@/components/AuthProvider";
-import { RegisterPWA } from "@/components/RegisterPWA";
-import { PushNotifier } from "@/components/PushNotifier";
+import AuthProvider from "@/components/system/AuthProvider";
+import { RegisterPWA } from "@/components/system/RegisterPWA";
+import { PushNotifier } from "@/components/system/PushNotifier";
 
 export default function RootLayout({
   children,

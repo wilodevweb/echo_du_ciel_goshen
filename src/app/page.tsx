@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Bell, CalendarCheck, Users, Images, ShieldCheck, Heart, CalendarDays } from "lucide-react";
-import { SyncPanel } from "@/components/SyncPanel";
+import { SyncPanel } from "@/components/system/SyncPanel";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./api/auth/[...nextauth]/route";
 import { redirect } from "next/navigation";

@@ -10,7 +10,7 @@ import db, { getClassLabel, isDeletedChildRecord, type Child } from '@/lib/db';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { PointageCard } from '@/components/pointage/PointageCard';
-import { ChildDetailsModal } from '@/components/pointage/ChildDetailsModal';
+import { ChildDetailsModal } from '@/components/children/ChildDetailsModal';
 import { SearchFilterHeader } from '@/components/ui/SearchFilterHeader';
 import { ActionGroup } from '@/components/ui/ActionGroup';
 import { Suspense } from 'react';

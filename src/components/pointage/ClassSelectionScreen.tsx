@@ -9,7 +9,7 @@ import {
   type ClassLevel,
   getClassLabel,
 } from "@/lib/db";
-import { AttendanceDateSelector, getMostRecentSundayDateString } from "@/components/attendance/AttendanceDateSelector";
+import { AttendanceDateSelector, getMostRecentSundayDateString } from "@/components/pointage/AttendanceDateSelector";
 
 export function ClassSelectionScreen({
   selectedDate,

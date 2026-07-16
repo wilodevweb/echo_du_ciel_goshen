@@ -20,11 +20,11 @@ import db, {
 import {
   AttendanceDateSelector,
   getMostRecentSundayDateString,
-} from "@/components/attendance/AttendanceDateSelector";
-import { ClassSelectionScreen } from "@/components/attendance/ClassSelectionScreen";
+} from "@/components/pointage/AttendanceDateSelector";
+import { ClassSelectionScreen } from "@/components/pointage/ClassSelectionScreen";
 import { AttendanceSkeleton } from "@/components/pointage/AttendanceSkeleton";
 import { PointageCard } from "@/components/pointage/PointageCard";
-import { ChildDetailsModal } from "@/components/pointage/ChildDetailsModal";
+import { ChildDetailsModal } from "@/components/children/ChildDetailsModal";
 import {
   type ChildDetailsDraft,
   type NewChildForm,
