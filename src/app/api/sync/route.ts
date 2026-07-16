@@ -7,6 +7,8 @@ import { authOptions } from "../auth/[...nextauth]/route";
 
 type ChildPatch = [string, string, ...string[]];
 type AttendancePatch = [string, string, string];
+type EventPatch = [string, string, string, string];
+type TaskPatch = [string, string, string, string, string, string];
 
 interface CustomUser {
   id: string;
@@ -123,6 +125,16 @@ function decodeChildPatch(patch: ChildPatch) {
   return { id, data };
 }
 
+function decodeEventPatch(patch: EventPatch) {
+  const [id, title, date, description] = patch;
+  return { id, title, date: decodeDate(date), description: description || null };
+}
+
+function decodeTaskPatch(patch: TaskPatch) {
+  const [id, eventId, childId, title, type, done] = patch;
+  return { id, eventId, childId, title, type: type || null, done: done === "1" };
+}
+
 function compactChild(child: {
   id: string;
   firstName: string;
@@ -193,6 +205,42 @@ function compactAttendance(attendance: {
   ];
 }
 
+function compactEvent(event: {
+  id: string;
+  title: string;
+  date: string;
+  description: string | null;
+  createdAt: Date;
+}) {
+  return [
+    event.id,
+    event.title,
+    encodeDate(event.date),
+    event.description ?? "",
+    event.createdAt.toISOString(),
+  ];
+}
+
+function compactTask(task: {
+  id: string;
+  eventId: string;
+  childId: string;
+  title: string;
+  type: string | null;
+  done: boolean;
+  createdAt: Date;
+}) {
+  return [
+    task.id,
+    task.eventId,
+    task.childId,
+    task.title,
+    task.type ?? "",
+    task.done ? "1" : "0",
+    task.createdAt.toISOString(),
+  ];
+}
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -219,8 +267,14 @@ export async function POST(req: Request) {
       const attendancePatches = Array.isArray(data.a) ? data.a as AttendancePatch[] : [];
       const knownChildIds = Array.isArray(data.kc) ? data.kc : [];
       const knownAttendanceKeys = new Set(Array.isArray(data.ka) ? data.ka : []);
+      const eventPatches = Array.isArray(data.e) ? data.e as EventPatch[] : [];
+      const taskPatches = Array.isArray(data.t) ? data.t as TaskPatch[] : [];
+      
       const pushedChildIds = new Set(childPatches.map((patch) => patch[0]));
       const pushedAttendanceKeys = new Set(attendancePatches.map((patch) => `${patch[0]}:${patch[1]}`));
+      const pushedEventIds = new Set(eventPatches.map((patch) => patch[0]));
+      const pushedTaskIds = new Set(taskPatches.map((patch) => patch[0]));
+      
       const lastSyncDate = typeof data.l === "string" ? new Date(data.l) : null;
       const hasValidLastSyncDate = lastSyncDate instanceof Date && !Number.isNaN(lastSyncDate.getTime());
       const serverSyncedAt = new Date();
@@ -487,6 +541,58 @@ export async function POST(req: Request) {
             where: { id: { in: deletedParentIds } },
           });
         }
+        
+        // 4. Gérer les Événements
+        if (eventPatches.length > 0) {
+          for (const patch of eventPatches) {
+            const eventData = decodeEventPatch(patch);
+            await tx.event.upsert({
+              where: { id: eventData.id },
+              update: {
+                title: eventData.title,
+                date: eventData.date,
+                description: eventData.description,
+              },
+              create: {
+                id: eventData.id,
+                title: eventData.title,
+                date: eventData.date,
+                description: eventData.description,
+              },
+            });
+          }
+        }
+        
+        // 5. Gérer les Tâches
+        if (taskPatches.length > 0) {
+          for (const patch of taskPatches) {
+            const taskData = decodeTaskPatch(patch);
+            // Vérifier que l'enfant et l'événement existent
+            const [childExists, eventExists] = await Promise.all([
+              tx.child.findUnique({ where: { id: taskData.childId } }),
+              tx.event.findUnique({ where: { id: taskData.eventId } })
+            ]);
+            
+            if (childExists && eventExists) {
+              await tx.task.upsert({
+                where: { id: taskData.id },
+                update: {
+                  title: taskData.title,
+                  type: taskData.type,
+                  done: taskData.done,
+                },
+                create: {
+                  id: taskData.id,
+                  eventId: taskData.eventId,
+                  childId: taskData.childId,
+                  title: taskData.title,
+                  type: taskData.type,
+                  done: taskData.done,
+                },
+              });
+            }
+          }
+        }
       }, {
         maxWait: 15000,
         timeout: 30000,
@@ -524,7 +630,7 @@ export async function POST(req: Request) {
         ? { updatedAt: { gt: lastSyncDate } }
         : undefined;
 
-      const [serverChildren, serverParents, serverAttendances] = await Promise.all([
+      const [serverChildren, serverParents, serverAttendances, serverEvents, serverTasks] = await Promise.all([
         prisma.child.findMany({
           where: childWhere,
           orderBy: [
@@ -545,8 +651,17 @@ export async function POST(req: Request) {
             { childId: "asc" },
           ],
         }),
+        prisma.event.findMany({
+          where: hasValidLastSyncDate ? { updatedAt: { gt: lastSyncDate } } : undefined,
+        }),
+        prisma.task.findMany({
+          where: hasValidLastSyncDate ? { updatedAt: { gt: lastSyncDate } } : undefined,
+        }),
       ]);
       const deltaChildren = serverChildren.filter((child) => !pushedChildIds.has(child.id));
+      const deltaEvents = serverEvents.filter((event) => !pushedEventIds.has(event.id));
+      const deltaTasks = serverTasks.filter((task) => !pushedTaskIds.has(task.id));
+      
       const deltaAttendances = serverAttendances.filter((attendance) => {
         const key = `${attendance.childId}:${encodeDate(attendance.date)}`;
         const isMissing = !knownAttendanceKeys.has(key);
@@ -578,6 +693,8 @@ export async function POST(req: Request) {
         d: Array.from(deletedChildIds),
         p: serverParents.map(compactParent),
         a: deltaAttendances.map(compactAttendance),
+        e: deltaEvents.map(compactEvent),
+        t: deltaTasks.map(compactTask),
         activeChildIds: allChildIds.map((c) => c.id),
         activeParentIds: allParentIds.map((p) => p.id),
       });

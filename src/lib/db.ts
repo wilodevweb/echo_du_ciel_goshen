@@ -69,7 +69,7 @@ export interface SyncState {
   value: string;
 }
 
-export type SyncEntity = 'child' | 'attendance';
+export type SyncEntity = 'child' | 'attendance' | 'event' | 'task';
 export type ChildSyncField = 'firstName' | 'lastName' | 'postName' | 'classLevel' | 'parentPhone' | 'address' | 'birthDate' | 'notes' | 'photoUrl' | 'gender' | 'parentName' | 'parentId';
 
 export interface PendingSyncItem {
@@ -122,6 +122,10 @@ interface SyncDeltaResponse {
   c?: CompactServerChild[];
   p?: CompactServerParent[];
   a?: CompactServerAttendance[];
+  e?: CompactServerEvent[];
+  t?: CompactServerTask[];
+  events?: ChildEvent[];
+  tasks?: ChildTask[];
   d?: string[];
   serverSyncedAt?: string;
   error?: string;
@@ -157,6 +161,10 @@ type CompactServerParent = [
   string, // updatedAt
 ];
 type CompactServerAttendance = [string, string, string, string, string];
+type CompactEventPatch = [string, string, string, string];
+type CompactTaskPatch = [string, string, string, string, string, string];
+type CompactServerEvent = [string, string, string, string, string];
+type CompactServerTask = [string, string, string, string, string, string, string];
 
 const CHILD_SYNC_FIELDS: ChildSyncField[] = [
   'firstName',
@@ -611,6 +619,28 @@ function decodeCompactServerAttendance(attendance: CompactServerAttendance): Att
   };
 }
 
+function decodeCompactServerEvent(event: CompactServerEvent): ChildEvent {
+  return {
+    id: event[0],
+    title: event[1],
+    date: decodeDate(event[2]),
+    description: event[3] || undefined,
+    createdAt: event[4],
+  };
+}
+
+function decodeCompactServerTask(task: CompactServerTask): ChildTask {
+  return {
+    id: task[0],
+    eventId: task[1],
+    childId: task[2],
+    title: task[3],
+    type: (task[4] || undefined) as TaskType | undefined,
+    done: task[5] === "1",
+    createdAt: task[6],
+  };
+}
+
 function encodeChildPatch(child: Child, pendingItem?: PendingSyncItem): CompactChildPatch {
   const fields = pendingItem?.fields?.length ? pendingItem.fields : CHILD_SYNC_FIELDS;
   const codes = fields.map((field) => CHILD_FIELD_CODES[field]).join('');
@@ -627,6 +657,14 @@ function encodeAttendancePatch(attendance: Attendance): CompactAttendancePatch {
   return [attendance.childId, encodeDate(attendance.date), encodeStatus(status)];
 }
 
+function encodeEventPatch(event: ChildEvent): CompactEventPatch {
+  return [event.id, event.title, encodeDate(event.date), event.description ?? ""];
+}
+
+function encodeTaskPatch(task: ChildTask): CompactTaskPatch {
+  return [task.id, task.eventId, task.childId, task.title, task.type ?? "", task.done ? "1" : "0"];
+}
+
 function estimateJsonBytes(data: unknown) {
   return new TextEncoder().encode(JSON.stringify(data)).length;
 }
@@ -636,16 +674,22 @@ function buildSyncBatch(
   pendingItemByKey: Map<string, PendingSyncItem>,
   changedChildren: Child[],
   changedAttendances: Attendance[],
+  changedEvents: ChildEvent[],
+  changedTasks: ChildTask[],
   lastSyncAt: string | null,
   batchSize = 10,
   maxBytes = MAX_SYNC_BATCH_BYTES,
 ) {
   const changedChildById = new Map(changedChildren.map((child) => [child.id, child]));
   const changedAttendanceById = new Map(changedAttendances.map((attendance) => [attendance.id, attendance]));
+  const changedEventById = new Map(changedEvents.map((event) => [event.id, event]));
+  const changedTaskById = new Map(changedTasks.map((task) => [task.id, task]));
 
   const selectedItems: PendingSyncItem[] = [];
   const compactChildren: CompactChildPatch[] = [];
   const compactAttendances: CompactAttendancePatch[] = [];
+  const compactEvents: CompactEventPatch[] = [];
+  const compactTasks: CompactTaskPatch[] = [];
 
   const baseRequest = {
     mode: 'sync-v2',
@@ -654,31 +698,48 @@ function buildSyncBatch(
     ka: [] as string[],
     c: compactChildren,
     a: compactAttendances,
+    e: compactEvents,
+    t: compactTasks,
   };
+
   for (const item of pendingItems) {
     if (selectedItems.length >= batchSize) break;
 
-    let patch: CompactChildPatch | CompactAttendancePatch | undefined;
+    let patch: CompactChildPatch | CompactAttendancePatch | CompactEventPatch | CompactTaskPatch | undefined;
     if (item.entity === 'child') {
       const child = changedChildById.get(item.id);
       if (child) {
         patch = encodeChildPatch(child, pendingItemByKey.get(item.key));
       }
-    } else {
+    } else if (item.entity === 'attendance') {
       const attendance = changedAttendanceById.get(item.id);
       if (attendance) {
         patch = encodeAttendancePatch(attendance);
+      }
+    } else if (item.entity === 'event') {
+      const event = changedEventById.get(item.id);
+      if (event) {
+        patch = encodeEventPatch(event);
+      }
+    } else if (item.entity === 'task') {
+      const task = changedTaskById.get(item.id);
+      if (task) {
+        patch = encodeTaskPatch(task);
       }
     }
 
     if (!patch) continue;
 
-    const nextChildren = item.entity === 'child' ? [...compactChildren, patch] : compactChildren;
-    const nextAttendances = item.entity === 'attendance' ? [...compactAttendances, patch] : compactAttendances;
+    const nextChildren = item.entity === 'child' ? [...compactChildren, patch as CompactChildPatch] : compactChildren;
+    const nextAttendances = item.entity === 'attendance' ? [...compactAttendances, patch as CompactAttendancePatch] : compactAttendances;
+    const nextEvents = item.entity === 'event' ? [...compactEvents, patch as CompactEventPatch] : compactEvents;
+    const nextTasks = item.entity === 'task' ? [...compactTasks, patch as CompactTaskPatch] : compactTasks;
     const nextRequest = {
       ...baseRequest,
       c: nextChildren,
       a: nextAttendances,
+      e: nextEvents,
+      t: nextTasks,
     };
     const nextSize = estimateJsonBytes(nextRequest);
 
@@ -689,8 +750,12 @@ function buildSyncBatch(
     selectedItems.push(item);
     if (item.entity === 'child') {
       compactChildren.push(patch as CompactChildPatch);
-    } else {
+    } else if (item.entity === 'attendance') {
       compactAttendances.push(patch as CompactAttendancePatch);
+    } else if (item.entity === 'event') {
+      compactEvents.push(patch as CompactEventPatch);
+    } else if (item.entity === 'task') {
+      compactTasks.push(patch as CompactTaskPatch);
     }
   }
 
@@ -704,6 +769,8 @@ function buildSyncBatch(
           ...baseRequest,
           c: [patch],
           a: compactAttendances,
+          e: compactEvents,
+          t: compactTasks,
         };
 
         if (estimateJsonBytes(request) <= maxBytes) {
@@ -711,11 +778,23 @@ function buildSyncBatch(
           compactChildren.push(patch);
         }
       }
-    } else {
+    } else if (firstItem.entity === 'attendance') {
       const attendance = changedAttendanceById.get(firstItem.id);
       if (attendance) {
         selectedItems.push(firstItem);
         compactAttendances.push(encodeAttendancePatch(attendance));
+      }
+    } else if (firstItem.entity === 'event') {
+      const event = changedEventById.get(firstItem.id);
+      if (event) {
+        selectedItems.push(firstItem);
+        compactEvents.push(encodeEventPatch(event));
+      }
+    } else if (firstItem.entity === 'task') {
+      const task = changedTaskById.get(firstItem.id);
+      if (task) {
+        selectedItems.push(firstItem);
+        compactTasks.push(encodeTaskPatch(task));
       }
     }
   }
@@ -724,6 +803,8 @@ function buildSyncBatch(
     selectedItems,
     compactChildren,
     compactAttendances,
+    compactEvents,
+    compactTasks,
   };
 }
 
@@ -738,7 +819,14 @@ async function applyServerDelta(data: SyncDeltaResponse) {
     ? data.a.map(decodeCompactServerAttendance)
     : (data.attendances ?? []).map(normalizeServerAttendance);
 
-  await db.transaction('rw', db.children, db.parents, db.attendances, async () => {
+  const deltaEvents = data.e
+    ? data.e.map(decodeCompactServerEvent)
+    : (data.events ?? []);
+  const deltaTasks = data.t
+    ? data.t.map(decodeCompactServerTask)
+    : (data.tasks ?? []);
+
+  await db.transaction('rw', db.children, db.parents, db.attendances, db.events, db.tasks, async () => {
     if (deltaChildren.length > 0) {
       await db.children.bulkPut(deltaChildren);
     }
@@ -783,6 +871,12 @@ async function applyServerDelta(data: SyncDeltaResponse) {
     if (deltaAttendances.length > 0) {
       await db.attendances.bulkPut(deltaAttendances);
     }
+    if (deltaEvents.length > 0) {
+      await db.events.bulkPut(deltaEvents);
+    }
+    if (deltaTasks.length > 0) {
+      await db.tasks.bulkPut(deltaTasks);
+    }
   });
 
   return {
@@ -801,13 +895,17 @@ export async function syncWithServer() {
     const pendingItemByKey = new Map(pendingItems.map((item) => [item.key, item]));
     const childIds = pendingItems.filter((item) => item.entity === 'child').map((item) => item.id);
     const attendanceIds = pendingItems.filter((item) => item.entity === 'attendance').map((item) => item.id);
-    const children = childIds.length > 0
-      ? await db.children.bulkGet(childIds)
-      : [];
-    const attendances = attendanceIds.length > 0
-      ? await db.attendances.bulkGet(attendanceIds)
-      : [];
+    const eventIds = pendingItems.filter((item) => item.entity === 'event').map((item) => item.id);
+    const taskIds = pendingItems.filter((item) => item.entity === 'task').map((item) => item.id);
+
+    const children = childIds.length > 0 ? await db.children.bulkGet(childIds) : [];
+    const attendances = attendanceIds.length > 0 ? await db.attendances.bulkGet(attendanceIds) : [];
+    const events = eventIds.length > 0 ? await db.events.bulkGet(eventIds) : [];
+    const tasks = taskIds.length > 0 ? await db.tasks.bulkGet(taskIds) : [];
+
     const changedChildren = children.filter((child): child is Child => Boolean(child));
+    const changedEvents = events.filter((e): e is ChildEvent => Boolean(e));
+    const changedTasks = tasks.filter((t): t is ChildTask => Boolean(t));
     const changedAttendances = attendances.filter((attendance): attendance is Attendance => Boolean(attendance)).map((attendance) => {
       const status = getAttendanceStatus(attendance) ?? 'ABSENT';
 
@@ -821,7 +919,9 @@ export async function syncWithServer() {
       selectedItems: effectivePendingItems,
       compactChildren,
       compactAttendances,
-    } = buildSyncBatch(pendingItems, pendingItemByKey, changedChildren, changedAttendances, lastSyncAt ?? null, SYNC_BATCH_SIZE);
+      compactEvents,
+      compactTasks,
+    } = buildSyncBatch(pendingItems, pendingItemByKey, changedChildren, changedAttendances, changedEvents, changedTasks, lastSyncAt ?? null, SYNC_BATCH_SIZE);
 
     if (effectivePendingItems.length === 0 && pendingItems.length > 0) {
       await db.pendingSync.delete(pendingItems[0].key);
@@ -852,6 +952,8 @@ export async function syncWithServer() {
         ka,
         c: compactChildren,
         a: compactAttendances,
+        e: compactEvents,
+        t: compactTasks,
         dp,
       }),
     });

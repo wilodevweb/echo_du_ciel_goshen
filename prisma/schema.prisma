@@ -69,7 +69,8 @@ model Child {
   parentId        String?
   parent          Parent?  @relation(fields: [parentId], references: [id], onDelete: SetNull)
 
-  attendances Attendance[]
+  attendances     Attendance[]
+  tasks           Task[]
 
   @@index([updatedAt])
 }
@@ -101,4 +102,32 @@ model MediaResource {
   
   @@index([type])
   @@index([createdAt])
+}
+
+// Événement (synchro locale/distante)
+model Event {
+  id          String   @id @default(cuid())
+  title       String
+  date        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tasks       Task[]
+}
+
+// Tâche liée à un événement et à un enfant
+model Task {
+  id        String   @id @default(cuid())
+  eventId   String
+  childId   String
+  title     String
+  type      String?
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  child     Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  
+  @@unique([eventId, childId, title])
 }
