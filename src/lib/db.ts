@@ -847,6 +847,14 @@ async function applyServerDelta(data: SyncDeltaResponse) {
           await db.pendingSync.bulkDelete(attendanceKeysToDelete);
         }
         await db.attendances.where('childId').equals(childId).delete();
+
+        const tasksToDelete = await db.tasks.where('childId').equals(childId).toArray();
+        const taskKeysToDelete = tasksToDelete.map(t => `task:${t.id}`);
+        if (taskKeysToDelete.length > 0) {
+          await db.pendingSync.bulkDelete(taskKeysToDelete);
+        }
+        await db.tasks.where('childId').equals(childId).delete();
+
         await db.pendingSync.delete(`child:${childId}`);
       }
     }
@@ -869,6 +877,14 @@ async function applyServerDelta(data: SyncDeltaResponse) {
             await db.pendingSync.bulkDelete(attendanceKeysToDelete);
           }
           await db.attendances.where('childId').equals(childId).delete();
+
+          const tasksToDelete = await db.tasks.where('childId').equals(childId).toArray();
+          const taskKeysToDelete = tasksToDelete.map(t => `task:${t.id}`);
+          if (taskKeysToDelete.length > 0) {
+            await db.pendingSync.bulkDelete(taskKeysToDelete);
+          }
+          await db.tasks.where('childId').equals(childId).delete();
+
           await db.pendingSync.delete(`child:${childId}`);
         }
         console.log(`[SYNCHRO] ${childIdsToDeleteLocally.length} enfants supprimés localement (absents du serveur).`);

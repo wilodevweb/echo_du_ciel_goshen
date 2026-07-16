@@ -159,6 +159,22 @@ export function ChildDetailsModal({
             if (onSave) {
               await onSave(draft);
             } else {
+              // Nettoyer les présences et pendingSync pour cet enfant
+              const attendancesToDelete = await db.attendances.where("childId").equals(child.id).toArray();
+              const attendanceKeysToDelete = attendancesToDelete.map(a => `attendance:${a.id}`);
+              if (attendanceKeysToDelete.length > 0) {
+                await db.pendingSync.bulkDelete(attendanceKeysToDelete);
+              }
+              await db.attendances.where("childId").equals(child.id).delete();
+
+              // Nettoyer les tâches et pendingSync pour cet enfant
+              const tasksToDelete = await db.tasks.where("childId").equals(child.id).toArray();
+              const taskKeysToDelete = tasksToDelete.map(t => `task:${t.id}`);
+              if (taskKeysToDelete.length > 0) {
+                await db.pendingSync.bulkDelete(taskKeysToDelete);
+              }
+              await db.tasks.where("childId").equals(child.id).delete();
+
               // Marquer comme supprimé en vidant les noms (le serveur détecte firstName=="" && lastName=="")
               await db.children.update(child.id, {
                 firstName: "",

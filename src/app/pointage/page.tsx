@@ -201,6 +201,14 @@ export default function PointagePage() {
         await db.pendingSync.bulkDelete(attendanceKeysToDelete);
       }
       await db.attendances.where("childId").equals(childId).delete();
+
+      // Nettoyer pendingSync pour les tâches supprimées
+      const tasksToDelete = await db.tasks.where("childId").equals(childId).toArray();
+      const taskKeysToDelete = tasksToDelete.map(t => `task:${t.id}`);
+      if (taskKeysToDelete.length > 0) {
+        await db.pendingSync.bulkDelete(taskKeysToDelete);
+      }
+      await db.tasks.where("childId").equals(childId).delete();
       await db.children.update(childId, {
         firstName: "",
         lastName: "",
