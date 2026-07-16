@@ -447,8 +447,8 @@ db.version(11)
       if (existing) {
         parentId = existing.id as string;
       } else {
-        // Générer un ID déterministe basé sur le nom (évite les doublons si la migration tourne deux fois)
-        parentId = `legacy-${grp.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}-migrated`;
+        // ID propre, identique à tout autre parent créé normalement
+        parentId = generateId();
         await parentsTable.put({
           id: parentId,
           name: grp.name,
