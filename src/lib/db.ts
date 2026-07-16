@@ -882,6 +882,8 @@ async function applyServerDelta(data: SyncDeltaResponse) {
   return {
     pulledChildrenCount: deltaChildren.length,
     pulledAttendancesCount: deltaAttendances.length,
+    pulledEventsCount: deltaEvents.length,
+    pulledTasksCount: deltaTasks.length,
   };
 }
 
@@ -992,7 +994,7 @@ export async function syncWithServer() {
 
     const pullResult = await applyServerDelta(data);
 
-    await db.transaction('rw', db.syncState, db.pendingSync, db.children, db.parents, async () => {
+    await db.transaction('rw', [db.syncState, db.pendingSync, db.children, db.parents, db.events, db.tasks], async () => {
       await setStateValue(LAST_SYNC_KEY, data.serverSyncedAt ?? new Date().toISOString());
       await db.pendingSync.bulkDelete(effectivePendingItems.map((item) => item.key));
 

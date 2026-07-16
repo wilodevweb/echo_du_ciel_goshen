@@ -108,17 +108,18 @@ export function buildAttendanceHistoryMap(attendances?: Attendance[]) {
 export async function buildAttendanceHistoryMapAsync() {
   const map = new Map<string, AttendanceStatus[]>();
   
-  // Obtenir le nombre total d'enfants actifs pour savoir quand arrêter le scan
   const activeChildren = await db.children.toArray();
   const activeChildIds = new Set(activeChildren.map(c => c.id));
   const totalActiveChildren = activeChildIds.size;
 
   if (totalActiveChildren === 0) return map;
 
-  // Utilisation de .each() avec un index pour éviter de charger des milliers d'objets en mémoire
-  // et éviter un tri JavaScript très coûteux.
+  let allCompleted = false;
+
   await db.attendances.orderBy('date').reverse().each((attendance) => {
-    // Si l'enfant n'est plus actif, on ignore son historique
+    // Court-circuiter si on a déjà collecté tout ce qu'on voulait
+    if (allCompleted) return;
+
     if (!activeChildIds.has(attendance.childId)) return;
 
     const status = getAttendanceStatus(attendance);
@@ -130,12 +131,9 @@ export async function buildAttendanceHistoryMapAsync() {
       map.set(attendance.childId, history);
     }
 
-    // Si nous avons collecté 3 historiques pour TOUS les enfants actifs, on s'arrête immédiatement !
+    // Vérifier si tous les enfants actifs ont 3 historiques
     if (map.size === totalActiveChildren) {
-      const allCompleted = Array.from(map.values()).every(h => h.length >= 3);
-      if (allCompleted) {
-        return false; // Arrête l'itération Dexie immédiatement
-      }
+      allCompleted = Array.from(map.values()).every(h => h.length >= 3);
     }
   });
 
