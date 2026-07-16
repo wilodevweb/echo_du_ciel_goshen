@@ -305,16 +305,17 @@ export async function POST(req: Request) {
               });
               parentId = parent.id;
             } else if (parentId) {
-              // Pas de téléphone mais parentId fourni par le client : vérifier si le parent existe
+              // Pas de téléphone mais parentId fourni par le client
+              const parentName = childData.parentName
+                ? normalizeName(String(childData.parentName))
+                : normalizeName(String(childData.lastName ?? "Parent"));
+                
               const parentExists = await tx.parent.findUnique({
                 where: { id: parentId },
                 select: { id: true },
               });
               if (!parentExists) {
                 // Le parent n'est pas encore sur le serveur — le créer avec l'ID client
-                const parentName = childData.parentName
-                  ? normalizeName(String(childData.parentName))
-                  : normalizeName(String(childData.lastName ?? "Parent"));
                 await tx.parent.create({
                   data: {
                     id: parentId,
@@ -322,6 +323,14 @@ export async function POST(req: Request) {
                     phone: null,
                     address: null,
                   },
+                });
+              } else {
+                // Le parent existe, on met à jour ses infos
+                await tx.parent.update({
+                  where: { id: parentId },
+                  data: {
+                    name: parentName || "Parent",
+                  }
                 });
               }
             }
@@ -625,19 +634,27 @@ export async function POST(req: Request) {
             });
             parentId = parent.id;
           } else if (parentId) {
-            // Pas de téléphone : créer le parent par son ID si absent du serveur
+            // Pas de téléphone : créer le parent par son ID si absent du serveur ou le mettre à jour
+            const parentName = normalizeName(String(child.parentName ?? child.lastName ?? "Parent"));
+            
             const parentExists = await tx.parent.findUnique({
               where: { id: parentId },
               select: { id: true },
             });
             if (!parentExists) {
-              const parentName = normalizeName(String(child.parentName ?? child.lastName ?? "Parent"));
               await tx.parent.create({
                 data: {
                   id: parentId,
                   name: parentName || "Parent",
                   phone: null,
                   address: null,
+                },
+              });
+            } else {
+              await tx.parent.update({
+                where: { id: parentId },
+                data: {
+                  name: parentName || "Parent",
                 },
               });
             }

@@ -70,7 +70,7 @@ self.addEventListener("fetch", (event) => {
 
   // Gérer la navigation html
   if (request.mode === "navigate") {
-    event.respondWith(staleWhileRevalidateNavigate(request));
+    event.respondWith(staleWhileRevalidateNavigate(event));
     return;
   }
 
@@ -158,7 +158,8 @@ self.addEventListener("notificationclick", (event) => {
  * Si le réseau met trop de temps ou échoue, elle renvoie immédiatement la version en cache.
  * Si aucune version en cache n'existe, elle renvoie la page /offline.
  */
-async function staleWhileRevalidateNavigate(request) {
+async function staleWhileRevalidateNavigate(event) {
+  const request = event.request;
   const cache = await caches.open(RUNTIME_CACHE);
   
   // Créer une promesse de timeout réseau de 2.5 secondes

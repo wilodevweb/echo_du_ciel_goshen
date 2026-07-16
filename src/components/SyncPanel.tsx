@@ -56,24 +56,6 @@ export function SyncPanel() {
     runLocalCleanup();
   }, []);
 
-  // Nettoyage local unique pour vider la table parents suite à la remise à zéro
-  useEffect(() => {
-    const runParentsCleanup = async () => {
-      const isCleaned = localStorage.getItem("local-parents-cleanup-20260712-done");
-      if (isCleaned) return;
-
-      try {
-        await db.parents.clear();
-        localStorage.setItem("local-parents-cleanup-20260712-done", "true");
-        console.log("[NETTOYAGE LOCAL] Table parents vidée localement suite à la demande.");
-      } catch (error) {
-        console.error("[NETTOYAGE LOCAL] Échec du vidage de la table parents :", error);
-      }
-    };
-
-    runParentsCleanup();
-  }, []);
-
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine,
   );
