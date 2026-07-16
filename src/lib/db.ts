@@ -26,8 +26,8 @@ export interface Child {
 export interface Parent {
   id: string;
   name: string;
-  phone: string;
-  address: string;
+  phone?: string;   // optionnel — une famille peut ne pas avoir de téléphone
+  address?: string;
   createdAt: string;
   updatedAt?: string;
 }

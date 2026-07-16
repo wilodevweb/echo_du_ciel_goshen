@@ -63,7 +63,7 @@ export function ChildDetailsModal({
       parentMap.set(p.id, {
         id: p.id,
         name: p.name,
-        phone: p.phone,
+        phone: p.phone || undefined,
         address: p.address,
       });
     });
@@ -427,7 +427,7 @@ export function ChildDetailsModal({
                     setDraft(current => ({
                       ...current,
                       parentId: selectedParent.id || undefined,
-                      parentPhone: selectedParent.phone,
+                      parentPhone: selectedParent.phone || "",
                       parentName: selectedParent.name,
                       address: selectedParent.address || current.address,
                     }));

@@ -24,6 +24,8 @@ export function ParentEditor({
   const [mode, setMode] = useState<'search' | 'edit_list' | 'new' | 'edit_form'>('search');
   const [showSearch, setShowSearch] = useState(false);
   const [editingParentId, setEditingParentId] = useState<string | undefined>(undefined);
+  // Nom du parent legacy en cours d'édition (quand p.id est undefined)
+  const [editingLegacyName, setEditingLegacyName] = useState<string | undefined>(undefined);
 
   React.useEffect(() => {
     const handler = setTimeout(() => {
@@ -147,8 +149,10 @@ export function ParentEditor({
                         setMode('edit_form');
                         setShowSearch(false);
                         setEditingParentId(p.id);
+                        // Mémoriser le nom legacy si le parent n'a pas d'ID réel
+                        setEditingLegacyName(p.id ? undefined : p.name);
                         setManualName(p.name);
-                        setManualPhone(p.phone);
+                        setManualPhone(p.phone || "");
                       } else {
                         onChange(p);
                         onCancel();
@@ -166,7 +170,7 @@ export function ParentEditor({
                           </span>
                         )}
                       </p>
-                      <p className="text-xs text-white/45 truncate">{p.phone}</p>
+                      <p className="text-xs text-white/45 truncate">{p.phone || <span className="italic opacity-60">Sans téléphone</span>}</p>
                     </div>
                   </button>
                 ))}
@@ -208,38 +212,51 @@ export function ParentEditor({
                 const savedParent = {
                   id: pId,
                   name: normalizeName(manualName.trim()),
-                  phone: manualPhone.trim(),
-                  address: draft.address || "",
+                  phone: manualPhone.trim() || undefined,
+                  address: draft.address || undefined,
                   createdAt: new Date().toISOString(),
                 };
-                
+
                 await db.parents.put(savedParent);
 
-                // Propager la modification à tous les enfants liés dans Dexie et les marquer pour synchronisation
+                // 1. Mettre à jour les enfants déjà liés par parentId
                 const linkedChildren = await db.children.where('parentId').equals(pId).toArray();
                 for (const child of linkedChildren) {
-                  const updatedChild = {
-                    ...child,
-                    parentPhone: savedParent.phone,
+                  await db.children.update(child.id, {
+                    parentPhone: savedParent.phone || "",
                     parentName: savedParent.name,
-                    address: savedParent.address || child.address,
-                    updatedAt: new Date().toISOString()
-                  };
-                  await db.children.put(updatedChild);
-                  await markEntityForSync('child', child.id, ['parentPhone', 'parentName', 'address']);
+                    updatedAt: new Date().toISOString(),
+                  });
+                  await markEntityForSync('child', child.id, ['parentPhone', 'parentName']);
+                }
+
+                // 2. Migrer les enfants legacy qui ont ce parentName mais pas de parentId
+                //    (évite les doublons lors de l'ajout d'un numéro à un parent legacy)
+                if (editingLegacyName) {
+                  const legacyName = editingLegacyName.toLowerCase().trim();
+                  const legacyChildren = await db.children.toArray();
+                  for (const child of legacyChildren) {
+                    if (!child.parentId && child.parentName?.toLowerCase().trim() === legacyName) {
+                      await db.children.update(child.id, {
+                        parentId: pId,
+                        parentName: savedParent.name,
+                        parentPhone: savedParent.phone || "",
+                        updatedAt: new Date().toISOString(),
+                      });
+                      await markEntityForSync('child', child.id, ['parentId', 'parentPhone', 'parentName']);
+                    }
+                  }
+                  setEditingLegacyName(undefined);
                 }
 
                 if (mode === 'edit_form') {
-                  // Ne l'assigner à l'enfant que si c'était déjà son parent
-                  if (savedParent.id === draft.parentId) {
+                  if (savedParent.id === draft.parentId || editingLegacyName) {
                     onChange(savedParent);
                   }
                 } else {
-                  // Mode 'new': on l'assigne à l'enfant car on vient de le créer
                   onChange(savedParent);
                 }
-                
-                // Retourner à la liste de sélection au lieu de tout fermer
+
                 setMode('edit_list');
                 setShowSearch(true);
               }}
