@@ -128,6 +128,4 @@ model Task {
 
   event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   child     Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
-  
-  @@unique([eventId, childId, title])
 }

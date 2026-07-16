@@ -604,32 +604,36 @@ export async function POST(req: Request) {
         
         // 5. Gérer les Tâches
         if (taskPatches.length > 0) {
+          // Pré-charger les IDs valides en 2 requêtes au lieu de N*2
+          const taskChildIds = [...new Set(taskPatches.map((p) => p[2]))];
+          const taskEventIds = [...new Set(taskPatches.map((p) => p[1]))];
+          const [validTaskChildren, validTaskEvents] = await Promise.all([
+            tx.child.findMany({ where: { id: { in: taskChildIds } }, select: { id: true } }),
+            tx.event.findMany({ where: { id: { in: taskEventIds } }, select: { id: true } }),
+          ]);
+          const validChildIdSet = new Set(validTaskChildren.map((c) => c.id));
+          const validEventIdSet = new Set(validTaskEvents.map((e) => e.id));
+
           for (const patch of taskPatches) {
             const taskData = decodeTaskPatch(patch);
-            // Vérifier que l'enfant et l'événement existent
-            const [childExists, eventExists] = await Promise.all([
-              tx.child.findUnique({ where: { id: taskData.childId } }),
-              tx.event.findUnique({ where: { id: taskData.eventId } })
-            ]);
-            
-            if (childExists && eventExists) {
-              await tx.task.upsert({
-                where: { id: taskData.id },
-                update: {
-                  title: taskData.title,
-                  type: taskData.type,
-                  done: taskData.done,
-                },
-                create: {
-                  id: taskData.id,
-                  eventId: taskData.eventId,
-                  childId: taskData.childId,
-                  title: taskData.title,
-                  type: taskData.type,
-                  done: taskData.done,
-                },
-              });
-            }
+            if (!validChildIdSet.has(taskData.childId) || !validEventIdSet.has(taskData.eventId)) continue;
+
+            await tx.task.upsert({
+              where: { id: taskData.id },
+              update: {
+                title: taskData.title,
+                type: taskData.type,
+                done: taskData.done,
+              },
+              create: {
+                id: taskData.id,
+                eventId: taskData.eventId,
+                childId: taskData.childId,
+                title: taskData.title,
+                type: taskData.type,
+                done: taskData.done,
+              },
+            });
           }
         }
       }, {

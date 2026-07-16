@@ -49,10 +49,9 @@ async function main() {
       );
     `);
 
-    console.log("Creating unique index on Task...");
-    await client.execute(`
-      CREATE UNIQUE INDEX IF NOT EXISTS "Task_eventId_childId_title_key" ON "Task"("eventId", "childId", "title");
-    `);
+    // Supprimer l'ancien index unique qui causait des conflits d'upsert
+    console.log("Dropping old unique index on Task (if exists)...");
+    await client.execute(`DROP INDEX IF EXISTS "Task_eventId_childId_title_key";`);
 
     console.log("Migration completed successfully!");
   } catch (error) {
