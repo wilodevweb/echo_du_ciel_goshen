@@ -41,8 +41,8 @@ model ActivityLog {
 model Parent {
   id              String   @id @default(cuid())
   name            String   // Nom complet du parent
-  phone           String   @unique // Téléphone du parent (identifiant unique)
-  address         String   // Adresse du parent
+  phone           String?  @unique // Téléphone du parent — optionnel mais unique si renseigné
+  address         String?  // Adresse du parent — optionnelle
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
