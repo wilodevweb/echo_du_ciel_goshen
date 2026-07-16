@@ -345,19 +345,58 @@ export async function POST(req: Request) {
               const parentName = hasParentName ? normalizeName(String(childData.parentName)) : normalizeName(String(childData.lastName ?? ""));
               const address = hasAddress ? String(childData.address) : "";
 
-              const parent = await tx.parent.upsert({
-                where: { phone: parentPhone },
-                update: {
-                  name: hasParentName ? parentName : undefined,
-                  address: hasAddress ? address : undefined,
-                },
-                create: {
-                  name: parentName || "Parent",
-                  phone: parentPhone,
-                  address: address || null,
-                },
+              const parentWithPhone = await tx.parent.findUnique({
+                where: { phone: parentPhone }
               });
-              parentId = parent.id;
+
+              if (parentWithPhone) {
+                // Le téléphone existe déjà, on met à jour
+                await tx.parent.update({
+                  where: { id: parentWithPhone.id },
+                  data: {
+                    name: hasParentName ? parentName : undefined,
+                    address: hasAddress ? address : undefined,
+                  }
+                });
+                parentId = parentWithPhone.id;
+              } else if (parentId) {
+                // Le téléphone n'existe pas, mais on a un parentId
+                const parentById = await tx.parent.findUnique({
+                  where: { id: parentId }
+                });
+
+                if (parentById) {
+                  // Le parent existe (probablement sans téléphone), on lui ajoute le téléphone
+                  await tx.parent.update({
+                    where: { id: parentId },
+                    data: {
+                      phone: parentPhone,
+                      name: hasParentName ? parentName : undefined,
+                      address: hasAddress ? address : undefined,
+                    }
+                  });
+                } else {
+                  // Le parent n'existe pas sur le serveur, on le crée avec l'ID client
+                  await tx.parent.create({
+                    data: {
+                      id: parentId,
+                      name: parentName || "Parent",
+                      phone: parentPhone,
+                      address: address || null,
+                    }
+                  });
+                }
+              } else {
+                // Pas de parentId fourni, création standard
+                const newParent = await tx.parent.create({
+                  data: {
+                    name: parentName || "Parent",
+                    phone: parentPhone,
+                    address: address || null,
+                  },
+                });
+                parentId = newParent.id;
+              }
             } else if (parentId) {
               // Pas de téléphone mais parentId fourni par le client
               const parentName = childData.parentName
