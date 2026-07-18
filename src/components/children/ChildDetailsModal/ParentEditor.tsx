@@ -3,7 +3,7 @@ import { Search, Pencil, Plus, Trash2, User, Users } from "lucide-react";
 import { ActionGroup } from "@/components/ui/ActionGroup";
 import { useLiveQuery } from "dexie-react-hooks";
 import db, { generateId, normalizeName, markEntityForSync, markPendingChange } from "@/lib/db";
-import type { ChildDetailsDraft } from "../types";
+import type { ChildDetailsDraft } from "@/components/pointage/types";
 import type { ParentItem } from "./types";
 
 export function ParentEditor({

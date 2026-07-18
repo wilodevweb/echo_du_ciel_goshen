@@ -3,7 +3,7 @@ import { Camera, Save, Pencil, Trash2, X, User, Smile, GraduationCap, Calendar, 
 import { useLiveQuery } from "dexie-react-hooks";
 import type { AttendanceStatus, Child, ChildSyncField } from "@/lib/db";
 import db, { markEntityForSync, normalizeName } from "@/lib/db";
-import type { ChildDetailsDraft } from "../types";
+import type { ChildDetailsDraft } from "@/components/pointage/types";
 import { SiblingsList } from "../SiblingsList";
 import { AttendanceHistoryList } from "@/components/pointage/AttendanceHistoryList";
 

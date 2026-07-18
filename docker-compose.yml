@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      network: host
     container_name: echo-du-ciel-goshen
     restart: unless-stopped
     ports:

@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -8,7 +8,7 @@ WORKDIR /app
 
 # Install dependencies based on the preferred package manager
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm ci --ignore-scripts --fetch-timeout=600000 --fetch-retries=5
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -38,8 +38,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy the generated Prisma client
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+# Copy the generated Prisma client (output personnalisé dans src/generated/prisma)
+COPY --from=builder --chown=nextjs:nodejs /app/src/generated ./src/generated
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 # Create the public directory if it doesn't exist and copy contents

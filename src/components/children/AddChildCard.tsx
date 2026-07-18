@@ -1,6 +1,6 @@
 import React from "react";
-import type { NewChildForm } from "./types";
-import { PointageCard } from "./PointageCard";
+import type { NewChildForm } from "@/components/pointage/types";
+import { PointageCard } from "@/components/pointage/PointageCard";
 
 export function AddChildCard(props: {
   value: NewChildForm;
