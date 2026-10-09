@@ -1,505 +1,161 @@
-# Revue UX Mobile — Echo du Ciel Goshen (v2 — Analyse approfondie)
-> Document destiné à Codex après lecture exhaustive de tous les écrans, composants, Service Worker et couche de données.
-> Priorité absolue : **offline-first** avec sync automatique à la détection réseau, UX optimisée.
+# Revue UX Mobile — Echo du Ciel Goshen (v3 — Audit d'exhaustivité & Synthèse)
+> Document destiné à **Codex** après lecture intégrale du code source de tous les écrans, composants, formulaires, modales, utilitaires Dexie, endpoints API, Service Worker et layout.
+> Priorité absolue : **offline-first 100% robuste**, zéro écran d'erreur Chrome / Next.js hors ligne, synchronisation automatique intelligente et discrète lors de la reconnexion internet.
 
 ---
 
-## 1. Cartographie réelle de l'application
+## 1. Cartographie Exhaustive de l'Application
 
-### 1.1 Écrans et leur rapport à l'offline
+### 1.1 Inventaire des Routes & État d'Offline
 
-| Route | Rendu | Source de données | Fonctionne hors ligne ? |
-|---|---|---|---|
-| `/` (accueil) | Client | — | ✅ Oui (SW précache) |
-| `/pointage` | Client | Dexie (`children`, `attendances`) | ✅ Oui, 100 % |
-| `/enfants` | Client | Dexie (`children`) | ✅ Oui, 100 % |
-| `/enfants/nouveau` | Client | Dexie | ✅ Oui |
-| `/evenements` | Client | Dexie (`events`, `tasks`) | ✅ Oui, 100 % |
-| `/evenements/[id]` | Client | Dexie (`events`, `tasks`, `children`) | ✅ Oui, 100 % |
-| `/fichiers` | **Server Component** | **Prisma direct** | ❌ Non — requiert réseau |
-| `/famille` | Inconnu | Inconnu | ? |
-| `/dashboard` | Client | **fetch `/api/admin/users`** | ❌ Non |
-| `/login` | Client | **fetch `/api/auth`** | ❌ Non |
-| `/notifications` | Inconnu | Inconnu | ? |
-
-> **Découverte critique** : `/fichiers` est un **Server Component** qui appelle `prisma.mediaResource.findMany()` directement. Cette page est **impossible à rendre hors ligne**, quoi que fasse le Service Worker. Si un moniteur navigue vers "Archives" sans connexion, il verra la page `/offline` au lieu du contenu.
-
-### 1.2 Flux de données par entité
-
-```
-Children / Parents / Attendances / Events / Tasks
-  ↓ écriture immédiate dans Dexie (offline OK)
-  ↓ markEntityForSync() → table pendingSync
-  ↓ [MANUEL : bouton FAB sur /] → syncWithServer()
-  ↓ POST /api/sync (mode sync-v2, compact patches)
-  ↓ Prisma → Turso/SQLite
-```
-
-### 1.3 Service Worker — ce qu'il fait vraiment
-
-```
-Install  → précache 16 URLs statiques (pages HTML + icônes + logo)
-Activate → purge des anciens caches
-Fetch    → GET sur /api/* : PASS-THROUGH (pas de cache)
-         → Navigation (mode=navigate) : stale-while-revalidate avec timeout 2.5s
-         → Assets /_next/, /static/, images : cache-first
-Message  → SKIP_WAITING : active le nouveau SW
-         → REFRESH_PRECACHE : re-fetch les 16 URLs précachées
-```
-
-**Ce que le SW ne fait pas** :
-- Pas de Background Sync API
-- Pas de mise en cache des données dynamiques (API)
-- Pas d'interception des POST → la sync de données repose entièrement sur Dexie + JS
+| Route | Type de Rendu | Source de Données | Statut Hors Ligne | Analyse Critique |
+|---|---|---|---|---|
+| `/` (accueil) | Client | Dexie (`getSyncStatus`) | ✅ 100% Hors ligne | Shell précaché par le SW, FAB de sync présent uniquement ici. |
+| `/pointage` | Client | Dexie (`children`, `attendances`) | ✅ 100% Hors ligne | Carrousel swipe, mode fiche, ajouts enfants, historique. Totalement fonctionnel sans réseau. |
+| `/enfants` | Client | Dexie (`children`, `parents`) | ✅ 100% Hors ligne | Filtre dynamique par classe, recherche deferred, consultation & ouverture modale. |
+| `/enfants/nouveau` | Client | Dexie (`children`, `parents`) | ✅ 100% Hors ligne | Formulaire direct avec calcul d'âge dynamique et génération UUID local. |
+| `/evenements` | Client | Dexie (`events`, `tasks`, `children`) | ✅ 100% Hors ligne | Liste des activités, comptage de tâches terminées, création d'événement locale. |
+| `/evenements/[id]` | Client | Dexie (`events`, `tasks`, `children`) | ⚠️ Partiel (Bug suppression) | Affichage & pointage de tâches 100% offline. En revanche, les suppressions de tâches/événements sont perdues (non synchronisées). |
+| `/famille` | Client | Dexie (`parents`, `children`) | ✅ 100% Hors ligne (Lecture seule) | Annuaire des parents et fratries. Attention : aucun bouton d'action ou modification directe sur cette page. |
+| `/notifications` | Client | Dexie via scan complet `attendances` | ✅ 100% Hors ligne | Alertes maladies et absences prolongées. Action de transfert de classe sans dialogue de confirmation. |
+| `/fichiers` | **Server Component** | **Prisma direct (`prisma.mediaResource`)** | ❌ **Rupture totale hors ligne** | Requiert une connexion active vers la BDD SQLite/Turso. Affiche la page fallback `/offline` si pas de réseau. |
+| `/dashboard` | Client | `fetch('/api/admin/...')` | ❌ Requiert le réseau | Gestion administrative des comptes moniteurs, logs d'audit et téléversement média. |
+| `/login` | Client | NextAuth `signIn('credentials')` | ❌ Requiert le réseau | Authentification serveur. Session cookie / JWT. |
+| `/offline` | Client | Navigation statique | ✅ 100% Hors ligne | Écran de secours quand le SW intercepte une route non cachée. Détection réseau via `navigator.onLine` basique. |
 
 ---
 
-## 2. Analyse approfondie par écran
+## 2. Corrections Importantes par rapport aux Analyses Précédentes
 
-### 2.1 `/pointage` — L'écran central
+1. **Upload photo enfant (`uploadChildPhoto`) — ERREUR PRÉCÉDENTE CORRIGÉE** :
+   - *Analyse précédente* : stipulait à tort que l'upload photo dans la fiche enfant requérait internet.
+   - *Réalité constatée dans le code (`src/components/pointage/utils.ts` L.123-149)* : Le redimensionnement (400px max) est effectué **100% côté client via un élément `<canvas>` HTML5** et encodé directement en base64 (`canvas.toDataURL("image/jpeg", 0.7)`). **Cette opération fonctionne parfaitement hors ligne** sans aucun appel réseau.
+   - *Point de vigilance restant* : la photo en base64 est stockée directement dans IndexedDB et envoyée dans le patch synchronisé. Si la chaîne dépasse 100 Ko (`MAX_SYNC_STRING_VALUE_LENGTH`), elle pourrait être tronquée si non prise en compte par le compresseur de sync.
 
-**Ce qui fonctionne bien :**
-- Carrousel tactile (swipe) avec index de position (`visibleIndex + 1 / totalCards`)
-- `setAttendanceStatus` : vérifie si le statut a changé avant d'écrire (évite les sync inutiles)
-- Ajout d'enfant : crée aussi automatiquement une présence PRESENT pour la date courante
-- Détection de doublons de téléphone parent lors de l'ajout (`db.children.where('parentPhone').equals(phone)`)
-- `getAttendanceStatus` : normalise le statut qu'il vienne de `status` ou de `present`
+2. **Validation des dates de naissance** :
+   - Sur `/pointage` (ligne 267-273), une validation empêche d'ajouter un enfant né dans le futur (`birthDate > today`).
+   - Sur `/enfants/nouveau/page.tsx`, cette vérification n'est pas présente, permettant d'enregistrer des dates de naissance futures.
 
-**Ce qui manque :**
-- **Aucun indicateur offline** : le moniteur sur `/pointage` ne sait pas s'il est connecté. Il coche les présences en espérant qu'elles partiront. Rien ne lui dit "3 modifications en attente d'envoi".
-- **La date est libre** : on peut pointer sur n'importe quel dimanche passé. Le seul garde-fou est `selectedDate > maxSunday`. Aucun avertissement visuel si on change de date après avoir déjà pointé.
-- **Swipe trop sensible** : seuil à 48px (`Math.abs(deltaX) < 48`). Sur un clic mal positionné ou une légère vibration, on peut sauter une carte.
-- **La carte "Ajouter un enfant" (mode=add) appelle `uploadChildPhoto`** côté client. Cette fonction doit requérir le réseau. Si offline, l'upload de photo échouera silencieusement (l'erreur est catchée et affichée en `alert`, mais le champ `photoUrl` restera vide).
-
-### 2.2 `/enfants` — Annuaire
-
-**Ce qui fonctionne bien :**
-- Header collapsé au scroll avec effet glassmorphism
-- `useDeferredValue` pour la recherche — ne bloque pas l'UI
-- Archivage via `notes?.includes('[ARCHIVE]')` — simple et efficace
-- Détection du paramètre URL `?newChildId` pour ouvrir la fiche après création
-
-**Ce qui manque :**
-- **Pas d'indicateur de mutation locale** : une fiche modifiée offline et non encore synchro est identique visuellement à une fiche synchro. Le moniteur ne sait pas si ses modifications ont bien été transmises.
-- **La suppression via `ChildDetailsModal` (noms vides) est irréversible** et non confirmée dans l'annuaire — seule la modal de détails gère la logique de suppression.
-- **Pas de FAB sync** sur cette page. Si un moniteur crée 5 enfants depuis `/enfants`, il doit revenir sur `/` pour synchro.
-- **`orderBy('createdAt').reverse()`** : les nouveaux enfants apparaissent en tête. Logique pour voir ses ajouts récents, mais contre-intuitif pour chercher par nom. L'ordre alphabétique serait préférable quand on ne cherche pas.
-
-### 2.3 `/evenements` et `/evenements/[id]`
-
-**Ce qui fonctionne bien :**
-- Création d'événement : `markEntityForSync('event', event.id)` — offline OK
-- Ajout de tâches en bulk : `bulkAdd` + boucle `markEntityForSync` — offline OK
-- Toggle de tâche : `markEntityForSync('task', task.id)` — offline OK
-- Progression en temps réel via barre de progression
-- Onglets Infos / Activités / Participants bien organisés
-
-**Problème découvert — suppression de tâche non synchronisable :**
-```typescript
-// /evenements/[id]/page.tsx ligne 156-161
-const deleteTask = async (taskId: string) => {
-  // On ne peut pas synchroniser la suppression d'une tâche (pas de mécanisme de tombstone),
-  // on la supprime juste localement et on retire de la queue de synchro
-  await db.pendingSync.delete(`task:${taskId}`);
-  await db.tasks.delete(taskId);
-};
-```
-**Impact** : si un admin supprime une tâche sur son téléphone hors ligne, la suppression ne sera jamais synchronisée. Si un autre moniteur se synchronise après, la tâche réapparaîtra localement. **Incohérence de données garantie.**
-
-**Problème — suppression d'événement non synchronisable :**
-```typescript
-// handleDelete dans EventDetailPage
-await db.tasks.where("eventId").equals(eventId).delete();
-await db.events.delete(eventId);
-await db.pendingSync.bulkDelete(keysToDelete);
-// Pas de markEntityForSync → la suppression ne part jamais au serveur
-```
-Même problème : la suppression ne part au serveur que si on est en ligne au moment de la navigation (via un reload de la page qui repasserait par le serveur, mais ce n'est pas garanti).
-
-**Problème — accès admin basé sur la session next-auth côté client :**
-```typescript
-const { data: session } = useSession();
-const isAdmin = (session?.user as any)?.role === "ADMIN";
-```
-Si la session expire offline (31 jours pour le JWT mobile, mais `useSession` côté web), un admin pourrait se retrouver sans les boutons de création/suppression même si son JWT est valide.
-
-### 2.4 `/fichiers` — Problème structurel
-
-Cette page est un **Server Component** avec un appel direct à Prisma :
-```typescript
-const dbFiles = await prisma.mediaResource.findMany({ ... });
-```
-
-**Conséquences :**
-1. **Zéro offline** : Si l'utilisateur clique sur "Archives" sans réseau, il atterrit sur `/offline`.
-2. **Pas de cache Dexie** pour les médias : si les médias sont des images en base64 (pattern détecté dans `/api/mobile/upload`), elles ne peuvent pas être précachées par le SW (trop volumineuses).
-3. **Recherche via URL params** : la recherche recharge la page entière à chaque frappe (paramètre `?q=`). Mauvaise UX sur mobile (clavier qui disparaît).
-
-**Solution envisageable** : passer en Client Component + `useLiveQuery` sur une table Dexie `mediaResources` synchronisée par le protocole sync-v2. Nécessite d'ajouter l'entité dans le protocole.
-
-### 2.5 Layout global — Ce qui manque
-
-```typescript
-// layout.tsx
-export default function RootLayout({ children }) {
-  return (
-    <html lang="fr">
-      <body>
-        <RegisterPWA />   ← gère les mises à jour SW uniquement
-        <PushNotifier />  ← gère les notifications push
-        <AuthProvider>
-          {children}
-        </AuthProvider>
-      </body>
-    </html>
-  );
-}
-```
-
-**Absent du layout :**
-- Aucun bandeau/overlay global de statut offline
-- Aucun déclencheur automatique de sync
-- Le `SyncPanel` n'est rendu **que** sur la page d'accueil `/` (page.tsx)
+3. **Performance d'audit des présences (`buildAttendanceHistoryMapAsync`)** :
+   - Utilisé dans `/notifications/page.tsx` et dans le composant de push local `PushNotifier.tsx`.
+   - Effectue un scan linéaire de toute la table `attendances` triée par date (`db.attendances.orderBy('date').reverse().toArray()`).
+   - Au bout de plusieurs mois de cours avec des milliers d'appels, ce scan exécuté toutes les 30 secondes en tâche de fond dans `PushNotifier` peut saturer le thread principal JS des smartphones modestes.
 
 ---
 
-## 3. Analyse du Service Worker
+## 3. Revue Détaillée Écran par Écran & Composants Clés
 
-### Points forts
-- Stratégie stale-while-revalidate pour la navigation avec timeout 2.5s → l'app charge depuis le cache si le réseau est lent
-- `REFRESH_PRECACHE` : quand `RegisterPWA` détecte la reconnexion (`online` event), il poste `REFRESH_PRECACHE` au SW qui rafraîchit silencieusement les 16 URLs — astucieux
-- Gestion des mises à jour SW avec toast de confirmation utilisateur
+### 3.1 `/pointage` — Moteur de présence principal
+- **Points forts** :
+  - Fluidité extrême grâce à Dexie et `useLiveQuery`.
+  - Double index composé `[childId+date]` pour retrouver l'historique instantanément.
+  - Détection automatique et association intelligente du parent via son numéro de téléphone normalisé.
+  - Sauvegarde locale automatique lors du clic sur PRESENT, SICK ou ABSENT.
+- **Faiblesses UX** :
+  - **Sensibilité du geste swipe (48px)** : Risque élevé de tourner la page involontairement lors d'un tap imprécis sur un bouton de statut.
+  - **Absence de visibilité du statut de sync** : Aucun badge "Enregistré localement - Non envoyé" sur la carte de l'enfant qui vient d'être pointé.
+  - **Restriction des dates futures** : La page bloque le pointage des dimanches futurs, ce qui est excellent pour éviter les erreurs de saisie.
 
-### Lacunes
-- **Pas de Background Sync API** (`registration.sync.register(...)`) : si l'onglet est fermé quand le réseau revient, la sync ne se déclenche jamais
-- **Les requêtes POST à `/api/sync` ne sont pas interceptées** : normal (le SW ignore toutes les requêtes `/api/`), mais ça signifie qu'il n'y a pas de file réseau SW-level
-- **`/fichiers` n'est pas précachée de manière utile** : le SW précache la coquille HTML, mais le contenu (données Prisma) ne peut pas être précaché
-- **Pas de `sync` event** dans le SW → pas de déclenchement de sync en arrière-plan
+### 3.2 `/enfants` & Modale de Fiche Enfant (`ChildDetailsModal`)
+- **Édition du parent (`ParentEditor.tsx`)** :
+  - Gestion fine des parents "legacy" (anciennes fiches ayant seulement un nom texte sans entité Parent formelle).
+  - Suppression d'un parent : stocke l'ID dans `pending-deleted-parents` sous localStorage et tente immédiatement un `fetch('/api/sync')`. Si la machine est offline, la requête échoue mais le localStorage retient la clé.
+  - *Problème UX* : Si le parent est supprimé offline, l'erreur réseau est interceptée en silence, mais l'utilisateur n'a aucun retour explicite lui assurant que la suppression se synchronisera dès le retour du Wi-Fi.
+- **Historique de présence (`AttendanceHistoryList.tsx`)** :
+  - Affichage mois par mois avec carrousel horizontal tactile.
+  - Excellent usage de l'index composé `[childId+date]` avec curseur Dexie sans tri en mémoire.
 
----
+### 3.3 `/evenements` & `/evenements/[id]` — Événements & Tâches
+- **Tombstones manquants (Bug critique de synchronisation)** :
+  - `deleteTask` (L.130-132 de `EventsTab.tsx` et L.156-161 de `evenements/[id]/page.tsx`) : supprime uniquement la tâche dans Dexie et enlève son entrée de `pendingSync`. **Aucun marqueur de suppression n'est propagé au serveur**.
+  - Conséquence : la tâche supprimée hors ligne réapparaîtra automatiquement sur le téléphone dès que le serveur renverra la liste globale lors d'une prochaine synchronisation.
+  - Même constat pour la suppression d'un événement complet dans `EventDetailPage`.
 
-## 4. Analyse du protocole sync-v2
+### 3.4 `/notifications` & `PushNotifier.tsx`
+- **Notifications Web Push Locales** :
+  - Déclenchées sans serveur push (pas de VAPID externe nécessaire) : le Service Worker local instancié affiche directement `registration.showNotification` en arrière-plan.
+  - Détection automatique : 1) Enfant signalé malade au dernier pointage, 2) Absence prolongée (3 dimanches consécutifs d'absence).
+  - *Problème de confirmation UX* : Dans `/notifications/page.tsx`, le bouton "Transférer dans la classe supérieure" applique la mutation instantanément dans Dexie sans modale de confirmation préalable, contrairement à l'archivage qui demande confirmation.
 
-### Points forts
-- **Encodage compact** : les patches enfants sont des tableaux positionnels avec codes à 1 lettre. Payload minimal.
-- **Delta intelligent** : le serveur retourne uniquement ce que le client ne connaît pas (`updatedAt > lastSyncAt` + `id NOT IN knownIds`)
-- **Déduplication côté client ET serveur** : `deduplicateAttendancePatches` côté serveur, gestion des clés `childId:date` côté client
-- **Batch limité à 700 Ko et 5 items** : évite de saturer le réseau sur des gros payloads
-- **Transaction Prisma 30s/15s** : robuste pour les writes concurrents
+### 3.5 `/famille`
+- **Comportement actuel** :
+  - Regroupe les enfants par parent (par `parentId` ou nom normalisé).
+  - Filtrage des orphelins legacy (`f.children.length > 0 || !f.isLegacy`).
+  - *Lacune UX* : Écran 100% en lecture seule. Impossible de corriger le numéro d'un parent ou d'ajouter une note familiale directement depuis cet écran sans passer par la fiche d'un enfant spécifique.
 
-### Lacunes
-- **Pas de tombstone pour les suppressions** : les suppressions d'événements et de tâches ne se synchronisent pas. Seules les suppressions d'enfants (via noms vides = soft-delete) et les parents (`dp` = deleted parents) sont gérées.
-- **`lastSyncAt` stocké dans Dexie `syncState`** : si IndexedDB est purgé (navigateur en mode privé, quota dépassé), toute la sync repart de zéro (full sync). Normal mais à documenter.
-- **Pas de versioning de conflit** : last-write-wins. Si deux moniteurs modifient le même enfant en simultané offline, le dernier sync écrase l'autre. Acceptable pour ce cas d'usage mais à mentionner.
-- **Boucle `do...while` sans timeout global** dans `handleSync` de `SyncPanel` : si le réseau est intermittent, peut boucler indéfiniment.
-
----
-
-## 5. Problèmes UX classés et détaillés
-
-### 🔴 P0 — Bloquants UX (à corriger en priorité)
-
-#### P0-1 : Sync entièrement manuelle, FAB uniquement sur `/`
-- **Fichiers** : `src/app/page.tsx` (ligne 103), `src/components/system/SyncPanel.tsx`
-- **Impact** : Un moniteur peut faire l'appel de 50 enfants offline et repartir sans synchro. Données perdues si l'appareil est remplacé.
-- **Fix** : auto-sync à l'event `online` + déplacer `SyncPanel` dans `layout.tsx`
-
-#### P0-2 : Aucun indicateur de statut réseau sur les écrans de saisie
-- **Fichiers** : `src/app/pointage/page.tsx`, `src/app/enfants/page.tsx`
-- **Impact** : le moniteur ne sait pas s'il est offline. Il peut penser que ses pointages ont été envoyés immédiatement.
-- **Fix** : composant `OfflineBanner` dans `layout.tsx` avec `useLiveQuery(getSyncStatus)`
-
-#### P0-3 : `/fichiers` ne fonctionne pas hors ligne
-- **Fichier** : `src/app/fichiers/page.tsx`
-- **Impact** : une fonctionnalité entière est inaccessible offline alors que l'app est présentée comme offline-first.
-- **Fix** : migrer vers Client Component + table Dexie `mediaResources` + sync via protocol `sync-v2` (ajouter entité `m`)
-
-### 🟠 P1 — Importants
-
-#### P1-1 : Suppressions de tâches et événements non synchronisées
-- **Fichiers** : `src/app/evenements/[id]/page.tsx` (lignes 156-161, 467-481)
-- **Impact** : incohérence de données garantie si suppression offline
-- **Fix** : implémenter un mécanisme de tombstone (table `deletedEntities` ou champ `deletedAt`)
-
-#### P1-2 : Boucle de sync sans timeout global
-- **Fichier** : `src/components/system/SyncPanel.tsx` (lignes 113-127)
-- **Impact** : si réseau intermittent, la boucle peut tenir l'UI bloquée indéfiniment
-- **Fix** : ajouter un timeout global (ex: max 3 tentatives ou 60 secondes)
-
-#### P1-3 : `navigator.onLine` non fiable (faux positifs)
-- **Fichiers** : `src/components/system/SyncPanel.tsx`, `src/components/system/RegisterPWA.tsx`
-- **Impact** : sur Wi-Fi captif ou réseau sans internet, `navigator.onLine === true` mais les requêtes échouent
-- **Fix** : validation réseau réelle via `HEAD /api/sync` avec timeout
-
-#### P1-4 : Photo d'enfant — upload impossible offline
-- **Fichier** : `src/components/pointage/PointageCard.tsx` (lignes 404-419), `src/components/pointage/utils.ts`
-- **Impact** : si offline, le champ `photoUrl` reste vide. L'erreur est affichée via `alert()` (mauvaise UX)
-- **Fix** : stocker la photo en base64 localement dans Dexie (déjà partiellement prévu vu `MAX_SYNC_STRING_VALUE_LENGTH = 100_000`), et ne l'uploader que lors de la sync
-
-### 🟡 P2 — Améliorations importantes
-
-#### P2-1 : Aucune distinction visuelle "local vs synchronisé"
-- **Fichiers** : `src/app/enfants/page.tsx`, `src/app/evenements/page.tsx`
-- Ajouter un micro-indicateur (point orange) sur les fiches/événements présents dans `pendingSync`
-
-#### P2-2 : Feedback de sync trop verbeux et fugace
-- **Fichier** : `src/components/system/SyncPanel.tsx` (lignes 130-135)
-- Message texte affiché 6s au-dessus du FAB. Trop petit, peu visible, disparaît avant que l'utilisateur puisse le lire
-- Fix : toast pleine largeur en bas d'écran, 4s, avec icône
-
-#### P2-3 : Ordre des enfants dans l'annuaire contre-intuitif
-- **Fichier** : `src/app/enfants/page.tsx` (ligne 61)
-- `orderBy('createdAt').reverse()` : les plus récents en tête. OK pour voir ses ajouts, mais mauvais pour chercher
-- Fix : par défaut alphabétique, avec une option "Récents" dans les filtres
-
-#### P2-4 : Swipe trop sensible sur le carrousel
-- **Fichier** : `src/app/pointage/page.tsx` (ligne 358)
-- Seuil 48px peut déclencher accidentellement un changement de carte
-- Fix : augmenter le seuil à 80px ou ajouter une vélocité minimale
-
-#### P2-5 : Session `useSession()` peut expirer côté web (admin sans boutons)
-- **Fichiers** : `src/app/evenements/page.tsx`, `src/app/evenements/[id]/page.tsx`
-- L'accès admin est conditionné par `useSession()`. Si session expirée, les boutons admin disparaissent
-- Fix : vérifier également via le token local stocké dans localStorage/sessionStorage
-
-### 🟢 P3 — Confort et polish
-
-#### P3-1 : Recherche dans `/fichiers` recharge la page entière
-- Migrer `/fichiers` vers Client Component résout ce problème
-
-#### P3-2 : Pas de retry automatique avec backoff après échec réseau
-- Après un échec de sync, ne pas laisser l'utilisateur sans feedback pendant plusieurs minutes
-- Fix : retry à 10s, 30s, 2min
-
-#### P3-3 : Pas de Background Sync SW
-- `registration.sync.register('goshen-sync')` permettrait la sync même si l'onglet est fermé
-- Pertinent si des moniteurs oublient régulièrement de synchro avant de fermer l'appli
+### 3.6 `/fichiers` — Dépendance Serveur Incompatible Hors Ligne
+- La page est un Server Component React Next.js :
+  ```tsx
+  // src/app/fichiers/page.tsx
+  const dbFiles = await prisma.mediaResource.findMany({ ... });
+  ```
+- **Problème** : Lors d'une navigation hors ligne, Next.js ne peut pas exécuter le code serveur. Le Service Worker renvoie alors la page fallback `/offline.html`. L'utilisateur est expulsé de son application pour une page d'erreur.
+- **De plus**, le téléversement de médias via `/dashboard` (`/api/admin/upload`) encode le fichier complet sous forme de chaîne base64 data-URI directement dans la colonne SQLite `url`.
 
 ---
 
-## 6. Architecture cible recommandée
+## 4. Synthèse des Problèmes Détectés (Classés par Gravité)
 
-### 6.1 Nouveau composant `OfflineBanner` dans `layout.tsx`
-
-```tsx
-// src/components/system/OfflineBanner.tsx
-"use client";
-import { useLiveQuery } from "dexie-react-hooks";
-import { useEffect, useState } from "react";
-import { getSyncStatus } from "@/lib/db";
-
-export function OfflineBanner() {
-  const [isOnline, setIsOnline] = useState(true);
-  const [syncState, setSyncState] = useState<"idle"|"syncing"|"done"|"error">("idle");
-  const syncStatus = useLiveQuery(() => getSyncStatus(), []);
-  const pending = syncStatus?.pendingChanges ?? 0;
-
-  // Écouter online/offline
-  useEffect(() => {
-    const onOnline = () => setIsOnline(true);
-    const onOffline = () => setIsOnline(false);
-    setIsOnline(navigator.onLine);
-    window.addEventListener("online", onOnline);
-    window.addEventListener("offline", onOffline);
-    return () => { window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
-  }, []);
-
-  if (isOnline && pending === 0 && syncState === "idle") return null; // Tout va bien, rien à afficher
-
-  const bgColor = !isOnline
-    ? "bg-amber-500"
-    : syncState === "syncing" ? "bg-blue-500"
-    : syncState === "done" ? "bg-green-500"
-    : syncState === "error" ? "bg-red-500"
-    : "bg-amber-500";
-
-  const message = !isOnline
-    ? `📡 Hors ligne${pending > 0 ? ` — ${pending} modification${pending > 1 ? "s" : ""} en attente` : ""}`
-    : syncState === "syncing" ? "🔄 Synchronisation en cours…"
-    : syncState === "done" ? "✅ Tout est à jour"
-    : syncState === "error" ? "⚠️ Échec de sync — Réessai en cours…"
-    : `⏳ ${pending} modification${pending > 1 ? "s" : ""} à envoyer…`;
-
-  return (
-    <div className={`fixed top-0 left-0 right-0 z-[100] py-2 px-4 text-center text-xs font-bold text-white ${bgColor} transition-all`}>
-      {message}
-    </div>
-  );
-}
-```
-
-### 6.2 Hook `useAutoSync` centralisé
-
-```typescript
-// src/hooks/useAutoSync.ts
-import { useEffect, useRef } from "react";
-import db, { syncWithServer } from "@/lib/db";
-
-async function isNetworkReachable(): Promise<boolean> {
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 4000);
-    const res = await fetch("/api/sync", { method: "HEAD", signal: ctrl.signal, cache: "no-store" });
-    clearTimeout(timer);
-    return res.ok || res.status < 500;
-  } catch { return false; }
-}
-
-export function useAutoSync(onSyncStart?: () => void, onSyncEnd?: (success: boolean) => void) {
-  const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const attemptSync = async (attempt = 1) => {
-    const pending = await db.pendingSync.count();
-    if (pending === 0) return;
-
-    const reachable = await isNetworkReachable();
-    if (!reachable) {
-      const delay = Math.min(10_000 * Math.pow(2, attempt - 1), 120_000);
-      retryRef.current = setTimeout(() => attemptSync(attempt + 1), delay);
-      return;
-    }
-
-    onSyncStart?.();
-    const result = await syncWithServer();
-    onSyncEnd?.(result.success);
-
-    if (!result.success && attempt < 5) {
-      const delay = Math.min(10_000 * Math.pow(2, attempt), 120_000);
-      retryRef.current = setTimeout(() => attemptSync(attempt + 1), delay);
-    }
-  };
-
-  useEffect(() => {
-    const handleOnline = async () => {
-      // Délai de stabilisation réseau
-      await new Promise(r => setTimeout(r, 1500));
-      attemptSync();
-    };
-
-    window.addEventListener("online", handleOnline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      if (retryRef.current) clearTimeout(retryRef.current);
-    };
-  }, []);
-}
-```
-
-### 6.3 Migration `/fichiers` vers offline-first
-
-**Étape 1** : Ajouter l'entité `MediaResource` à Dexie :
-```typescript
-// db.ts — version 12
-db.version(12).stores({
-  // ... existant ...
-  mediaResources: "id, type, createdAt",
-});
-```
-
-**Étape 2** : Ajouter `mr` (mediaResources) au protocole sync-v2 :
-- Côté serveur (`/api/sync`) : retourner `mr: serverMediaResources.map(compactMedia)`
-- Côté client (`db.ts`) : `applyServerDelta` upsert dans `db.mediaResources`
-
-**Étape 3** : Convertir `/fichiers/page.tsx` en Client Component avec `useLiveQuery`.
-
-**Attention** : les images en base64 encodées dans `url` sont potentiellement très lourdes. La sync initiale avec des dizaines d'images pourrait dépasser la limite de 700 Ko par batch. Recommandation : stocker uniquement les métadonnées (titre, type, thumbnail, aspectRatio), et charger les URLs depuis le réseau à la demande.
-
-### 6.4 Tombstone pour les suppressions
-
-Ajouter une table `deletedEntities` à Dexie et une route côté sync :
-
-```typescript
-// db.ts
-export interface DeletedEntity {
-  key: string; // "event:uuid" ou "task:uuid"
-  entity: "event" | "task";
-  id: string;
-  deletedAt: string;
-}
-// db.version(13).stores({ ..., deletedEntities: "key, entity, deletedAt" })
-```
-
-Et dans le protocole sync-v2, ajouter un champ `del` (deletions) avec les IDs à supprimer côté serveur.
+| Réf | Gravité | Problème Détecté | Fichier(s) Source | Impact Utilisateur |
+|---|---|---|---|---|
+| **P0-1** | 🔴 Bloquant | **Synchronisation 100% manuelle & locale à l'accueil** | `src/app/page.tsx` (L.103), `SyncPanel.tsx` | Si un moniteur fait l'appel sans retourner sur l'accueil pour cliquer sur le bouton de sync, les données restent isolées sur l'appareil. |
+| **P0-2** | 🔴 Bloquant | **Rupture hors ligne sur `/fichiers`** | `src/app/fichiers/page.tsx` | La section "Archives / Ressources" est inaccessible sans réseau. |
+| **P0-3** | 🔴 Bloquant | **Perte des suppressions hors ligne (Tâches & Événements)** | `evenements/[id]/page.tsx`, `EventsTab.tsx` | Supprimer une tâche ou un événement hors ligne ne l'efface pas sur le serveur. Il ressuscite à la prochaine sync. |
+| **P1-1** | 🟠 Majeur | **Absence d'indicateur réseau & statut de sync persistant** | `layout.tsx`, `pointage/page.tsx` | L'utilisateur ne sait jamais si ses pointages sont arrivés au serveur ou stockés localement. |
+| **P1-2** | 🟠 Majeur | **Faux positifs de `navigator.onLine`** | `SyncPanel.tsx`, `offline/page.tsx`, `RegisterPWA.tsx` | Réseau mobile avec 0 data ou portail captif : le navigateur dit "En ligne", mais la sync échoue ou boucle sans fin. |
+| **P1-3** | 🟠 Majeur | **Boucle `do...while` infinie potentielle lors de la sync** | `SyncPanel.tsx` (L.113-127) | En cas de réseau instable, la synchronisation par lots peut bloquer l'UI indéfiniment. |
+| **P1-4** | 🟠 Majeur | **Expiration de session NextAuth offline pour les Admins** | `evenements/page.tsx`, `evenements/[id]/page.tsx` | Un moniteur admin connecté hors ligne peut perdre subitement ses droits et ses boutons d'action si le cookie expire. |
+| **P2-1** | 🟡 Modéré | **Scan global non optimisé dans `PushNotifier` et notifications** | `PushNotifier.tsx`, `utils.ts` | Lecture séquentielle de l'intégralité de la table `attendances` toutes les 30s sur le téléphone. |
+| **P2-2** | 🟡 Modéré | **Absence de confirmation sur le transfert de classe** | `src/app/notifications/page.tsx` | Clic involontaire déplace l'enfant d'une classe sans avertissement ni annulation possible. |
+| **P2-3** | 🟡 Modéré | **Absence de validation de date de naissance sur `/enfants/nouveau`** | `src/app/enfants/nouveau/page.tsx` | Possibilité d'enregistrer une date de naissance dans le futur (contrairement à `/pointage`). |
+| **P2-4** | 🟡 Modéré | **Sensibilité du geste swipe sur le carrousel** | `src/app/pointage/page.tsx` (L.358) | Seuil de 48px trop faible sur les écrans tactiles récents. |
+| **P3-1** | 🟢 Mineur | **Écran `/famille` en lecture seule** | `src/app/famille/page.tsx` | Impossibilité de corriger les coordonnées d'un parent depuis cette vue d'ensemble. |
+| **P3-2** | 🟢 Mineur | **Ordre d'affichage des enfants par défaut** | `src/app/enfants/page.tsx` | Affichage par `createdAt` décroissant plutôt qu'ordre alphabétique standard. |
 
 ---
 
-## 7. Flux UX complet cible
+## 5. Architecture Recommandée & Propositions pour Codex
 
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- ÉTAT OFFLINE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+### 5.1 Orchestration Automatique de la Synchronisation (`useAutoSync`)
 
- Bandeau ambre (fixé en haut, z-100) :
- "📡 Hors ligne — 3 modifications en attente"
+Ne plus forcer l'utilisateur à cliquer sur un bouton :
+1. **Écouteur d'événement `window.ononline`** combiné à un **ping réel** (`HEAD /api/sync` avec timeout strict de 3 secondes).
+2. **Temporisation de stabilisation** : attendre 1,5 à 2 secondes après le retour réseau avant de lancer le flux pour laisser le Wi-Fi / 4G s'établir.
+3. **Backoff exponentiel intelligent** en cas d'échec : 5s, 15s, 45s, puis toutes les 2 minutes.
+4. **Trigger automatique lors de la mise au premier plan** (`visibilitychange === 'visible'`).
 
- Le moniteur fait l'appel normalement :
-  → Dexie écrit instantanément
-  → markEntityForSync() met à jour pendingSync
-  → Le bandeau se met à jour : "…4 modifications…"
-  → Micro-point orange sur les cartes modifiées
+### 5.2 Composant Universel dans `layout.tsx` : `GlobalSyncBar`
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- RETOUR RÉSEAU DÉTECTÉ
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Remplacer le panneau flottant isolé sur `/` par un bandeau discret ou un indicateur d'état global intégré au header de l'application :
+- **État hors ligne** : Pastille ou bandeau discret : *"Mode hors ligne (N modifications enregistrées sur cet appareil)"*.
+- **État synchronisation** : Spinner doux : *"Synchronisation des présences..."*.
+- **État synchronisé** : Pastille verte furtive (disparaît après 3s) : *"Tout est à jour"*.
+- **État conflit / erreur** : Indication rassurante : *"Vos modifications sont conservées sur le téléphone. Nouvelle tentative dès que la connexion s'améliore."*.
 
- event 'online' reçu
-   → attendre 1500ms (stabilisation réseau)
-   → HEAD /api/sync (timeout 4s)
-   → Si KO → retry dans 10s, 30s, 2min…
-   → Si OK → déclencher syncWithServer()
+### 5.3 Mécanisme de Tombstones pour les Suppressions
 
- Bandeau bleu : "🔄 Synchronisation en cours…"
- FAB spinner (si visible)
+Pour éviter que les tâches et événements supprimés hors ligne ne réapparaissent :
+1. Ajouter une table `deletedEntities` dans Dexie (`{ key, entityType, entityId, deletedAt }`).
+2. Lors de la suppression locale d'une tâche ou d'un événement, insérer son ID dans `deletedEntities` et marquer un flag de sync.
+3. Côté `/api/sync`, ajouter une section `deletions: string[]` qui exécute un `prisma.task.deleteMany({ where: { id: { in: deletedIds } } })`.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- SYNC RÉUSSIE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+### 5.4 Refonte de `/fichiers` en Client Component Offline-Friendly
 
- Toast bas : "✅ 12 pointages envoyés · 3 enfants mis à jour"
- Bandeau vert 3s : "✅ Tout est à jour" → disparaît
- Points orange sur les cartes disparaissent
- Badge FAB disparaît
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- SYNC ÉCHOUÉE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
- Bandeau rouge 5s : "⚠️ Échec de sync — Réessai dans 30s"
- Retry automatique avec backoff exponentiel
- FAB toujours dispo pour forcer manuellement
-```
+1. Ajouter la table `mediaResources` dans Dexie.
+2. Synchroniser les métadonnées (titre, type d'activité, miniature optimisée ou icône) via `sync-v2`.
+3. Les documents lourds (vidéos, PDF volumineux) restent téléchargeables à la demande en ligne, mais la liste et les fiches descriptives restent consultables 100% hors ligne.
 
 ---
 
-## 8. Résumé des priorités pour Codex
+## 6. Questions & Orientations Soumises à Codex
 
-| Priorité | Action | Fichiers à modifier |
-|---|---|---|
-| **P0** | Auto-sync à la reconnexion réseau | `layout.tsx`, nouveau `useAutoSync.ts` |
-| **P0** | Bandeau offline global dans layout | `layout.tsx`, nouveau `OfflineBanner.tsx` |
-| **P0** | Migrer `/fichiers` vers Client Component + Dexie | `fichiers/page.tsx`, `db.ts`, `api/sync/route.ts` |
-| **P1** | Tombstone pour suppressions tâches/événements | `db.ts`, `api/sync/route.ts`, `evenements/[id]/page.tsx` |
-| **P1** | Validation réseau réelle (HEAD ping) | `useAutoSync.ts` |
-| **P1** | Timeout global sur la boucle de sync | `SyncPanel.tsx` |
-| **P1** | Photo offline (base64 → Dexie → upload lors sync) | `PointageCard.tsx`, `db.ts`, `utils.ts` |
-| **P2** | Indicateur "en attente" sur les fiches | `enfants/page.tsx`, `evenements/page.tsx` |
-| **P2** | Toast de résultat de sync | `SyncPanel.tsx` ou `OfflineBanner.tsx` |
-| **P2** | Ordre alphabétique par défaut dans annuaire | `enfants/page.tsx` |
-| **P2** | Retry avec backoff exponentiel | `useAutoSync.ts` |
-| **P3** | Background Sync API dans le SW | `public/sw.js` |
-| **P3** | FAB sync accessible depuis tous les écrans | `layout.tsx` |
+1. **Format des Médias & Quota de Stockage Mobile** :
+   Le stockage de médias en data-URI base64 directement en BDD est pratique mais gonfle IndexedDB sur les téléphones d'entrée de gamme. Codex préconise-t-il de maintenir les données base64 dans Dexie, ou de ne synchroniser que les miniatures vectorielles/compressées avec mise en cache CacheStorage pour les gros fichiers ?
 
----
+2. **Stratégie de Résolution des Conflits de Pointage** :
+   Si deux moniteurs pointent le même enfant sur deux téléphones hors ligne (ex: l'un le met "PRESENT" à 10h05, l'autre "ABSENT" à 10h10) :
+   - Faut-il garder la règle simple *Last Write Wins* (le dernier synchronisé l'emporte) ?
+   - Ou appliquer une règle métier stricte (ex: le statut "PRESENT" prime toujours sur "ABSENT") ?
 
-## 9. Questions ouvertes pour Codex
-
-1. **`/fichiers` base64 dans Dexie** : les médias stockés en base64 dans Prisma (`url = "data:image/..."`) sont potentiellement énormes. Faut-il les exclure de la sync mobile et afficher une page "connexion requise" uniquement pour les médias lourds ? Ou implémenter une pagination de la sync médias ?
-
-2. **Background Sync API** : le SW a déjà un handler `REFRESH_PRECACHE`. Peut-on y ajouter un handler `sync` pour déclencher `syncWithServer()` même onglet fermé ? Le défi est que `syncWithServer()` accède à Dexie (IndexedDB) depuis le contexte SW, ce qui est possible mais nécessite un import séparé.
-
-3. **Conflit de sync** : deux moniteurs pointent le même enfant différemment (l'un marque "PRESENT", l'autre "ABSENT" pour le même dimanche). Le serveur applique le dernier arrivé. Est-ce acceptable ? Ou faut-il un mécanisme de résolution (ex: favoriser PRESENT sur ABSENT) ?
-
-4. **Quota IndexedDB** : sur Android bas de gamme, le quota peut être aussi bas que 50 Mo. Avec des centaines d'enfants + photos base64 + historique d'attendance, le risque de quota exceeded est réel. Y a-t-il une stratégie de purge progressive ou une alerte quota ?
-
-5. **`useSession()` vs localStorage pour le rôle admin** : en production, les boutons admin disparaissent si la session next-auth expire (même si l'utilisateur a un JWT Bearer valide). Faut-il dupliquer le rôle dans localStorage pour les décisions UI offline ?
+3. **Background Sync API vs AutoSync en Foreground** :
+   L'API Background Sync (`registration.sync.register`) n'est pas supportée par Safari iOS (WebKit). Faut-il privilégier un moteur JS pur au premier plan (`window.ononline` + `visibilitychange`), ou coupler les deux approches ?
