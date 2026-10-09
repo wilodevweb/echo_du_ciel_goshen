@@ -1,4 +1,4 @@
-const CACHE_VERSION = "goshen-v2"; // Nouvelle version pour forcer la mise à jour
+const CACHE_VERSION = "goshen-v3"; // Nouvelle version pour forcer la mise à jour
 const APP_CACHE = `${CACHE_VERSION}-app`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const MAX_RUNTIME_ITEMS = 100;
@@ -15,6 +15,7 @@ const PRECACHE_URLS = [
   "/notifications",
   "/login",
   "/offline",
+  "/offline-shell.html",
   "/manifest.webmanifest",
   "/icon-192x192.png",
   "/icon-512x512.png",
@@ -182,6 +183,13 @@ async function staleWhileRevalidateNavigate(event) {
   
   if (networkResponse) {
     return networkResponse;
+  }
+
+  // Si l’accueil n’a pas pu joindre le serveur, servir un shell statique sans session
+  // ni contenu protégé. Une réponse serveur (y compris une redirection login) reste prioritaire.
+  if (new URL(request.url).pathname === "/") {
+    const offlineShell = await caches.match("/offline-shell.html");
+    if (offlineShell) return offlineShell;
   }
 
   // Hors-ligne ou réseau lent : chercher dans tous les caches disponibles

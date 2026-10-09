@@ -161,6 +161,7 @@ export type PointageCardProps =
     mode: "attendance";
     child: Child;
     status: AttendanceStatus | null;
+    isPendingSync?: boolean;
     recentStatuses: AttendanceStatus[];
     hasBirthdayThisWeek: boolean;
     onNameClick: () => void;
@@ -182,14 +183,17 @@ export type PointageCardProps =
 
 export const PointageCard = React.memo(function PointageCard(props: PointageCardProps) {
   if (props.mode === "attendance") {
-    const { child, status, recentStatuses, hasBirthdayThisWeek, onNameClick, onSetStatus } = props;
+    const { child, status, isPendingSync = false, recentStatuses, hasBirthdayThisWeek, onNameClick, onSetStatus } = props;
 
     return (
       <BaseCardLayout
         header={
           <div className="flex items-center justify-between gap-3">
-            <div className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-white/60">
-              {getClassLabel(child.classLevel)}
+            <div className="flex items-center gap-2">
+              <div className="rounded-full bg-white/8 px-3 py-1 text-xs font-semibold text-white/60">
+                {getClassLabel(child.classLevel)}
+              </div>
+              {isPendingSync && <span className="rounded-full bg-amber-300/15 px-2 py-1 text-[10px] font-bold text-amber-200">Local · à envoyer</span>}
             </div>
             <div className="flex items-center gap-2 rounded-full bg-white/8 px-3 py-1">
               {[3, 2, 1, 0].map((index) => (

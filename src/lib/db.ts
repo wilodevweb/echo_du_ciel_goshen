@@ -131,6 +131,8 @@ interface SyncDeltaResponse {
   error?: string;
   activeChildIds?: string[];
   activeParentIds?: string[];
+  activeEventIds?: string[];
+  activeTaskIds?: string[];
 }
 
 type CompactChildPatch = [string, string, ...string[]];
@@ -285,14 +287,33 @@ function decodeDate(value?: string | null) {
   return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
 }
 
+export interface PendingDeletion {
+  key: string;       // Format: "entity:id"
+  entity: 'event' | 'task';
+  id: string;
+  deletedAt: string;
+}
+
+export interface MediaResource {
+  id: string;
+  title: string;
+  type: string;      // "image" | "video" | "pdf"
+  url: string;
+  thumbnail?: string;
+  aspectRatio: string;
+  createdAt: string;
+}
+
 const db = new Dexie('SundaySchoolDB') as Dexie & {
   children: EntityTable<Child, 'id'>;
   parents: EntityTable<Parent, 'id'>;
   attendances: EntityTable<Attendance, 'id'>;
   syncState: EntityTable<SyncState, 'key'>;
   pendingSync: EntityTable<PendingSyncItem, 'key'>;
+  pendingDeletions: EntityTable<PendingDeletion, 'key'>;
   events: EntityTable<ChildEvent, 'id'>;
   tasks: EntityTable<ChildTask, 'id'>;
+  mediaResources: EntityTable<MediaResource, 'id'>;
 };
 
 // Schéma de la base de données (id is no longer auto-incremented `++id`, we set it manually)
@@ -479,6 +500,19 @@ db.version(11)
     }
   });
 
+// ─── v12 : Tombstones de suppression et Métadonnées médias (T01 & T06) ────────
+db.version(12).stores({
+  children: 'id, firstName, lastName, postName, parentPhone, classLevel, gender, parentId, createdAt',
+  parents: 'id, phone, name',
+  attendances: 'id, childId, date, status, [childId+date]',
+  syncState: 'key',
+  pendingSync: 'key, entity, id, updatedAt',
+  pendingDeletions: 'key, entity, id, deletedAt',
+  events: 'id, date, createdAt',
+  tasks: 'id, eventId, childId, [eventId+childId]',
+  mediaResources: 'id, type, createdAt',
+});
+
 const LAST_LOCAL_CHANGE_KEY = 'lastLocalChangeAt';
 const LAST_SYNC_KEY = 'lastSyncAt';
 
@@ -513,6 +547,24 @@ export async function markEntityForSync(entity: SyncEntity, id: string, fields?:
   await markPendingChange();
 }
 
+/**
+ * Enregistre un tombstone de suppression pour synchronisation avec le serveur (T01).
+ * Utilisé lors de la suppression locale d'un événement ou d'une tâche.
+ */
+export async function markEntityForDeletion(entity: 'event' | 'task', id: string) {
+  const key = `${entity}:${id}`;
+  // Retirer de pendingSync si une modification locale était en attente
+  await db.pendingSync.delete(key);
+  // Ajouter au store de tombstones
+  await db.pendingDeletions.put({
+    key,
+    entity,
+    id,
+    deletedAt: new Date().toISOString(),
+  });
+  await markPendingChange();
+}
+
 function isInlineDataUrl(value?: string | null) {
   return Boolean(value?.startsWith('data:'));
 }
@@ -533,14 +585,15 @@ function getSyncStringValue(field: ChildSyncField, value: unknown) {
 
 // Suppression complète du système de doublons devenu obsolète
 export async function getSyncStatus() {
-  const [pendingChanges, lastLocalChangeAt, lastSyncAt] = await Promise.all([
+  const [pendingSyncCount, pendingDeletionsCount, lastLocalChangeAt, lastSyncAt] = await Promise.all([
     db.pendingSync.count(),
+    db.pendingDeletions.count(),
     getStateValue(LAST_LOCAL_CHANGE_KEY),
     getStateValue(LAST_SYNC_KEY),
   ]);
 
   return {
-    pendingChanges,
+    pendingChanges: pendingSyncCount + pendingDeletionsCount,
     lastLocalChangeAt,
     lastSyncAt,
   };
@@ -902,6 +955,30 @@ async function applyServerDelta(data: SyncDeltaResponse) {
       }
     }
 
+    // Purger les événements supprimés sur le serveur (T02)
+    if (data.activeEventIds) {
+      const localEventIds = await db.events.toCollection().primaryKeys();
+      const serverEventIdsSet = new Set(data.activeEventIds);
+      const eventIdsToDeleteLocally = (localEventIds as string[]).filter(id => !serverEventIdsSet.has(id));
+      if (eventIdsToDeleteLocally.length > 0) {
+        await db.events.bulkDelete(eventIdsToDeleteLocally);
+        // Supprimer en cascade les tâches de ces événements
+        await db.tasks.where('eventId').anyOf(eventIdsToDeleteLocally).delete();
+        console.log(`[SYNCHRO] ${eventIdsToDeleteLocally.length} événements supprimés localement.`);
+      }
+    }
+
+    // Purger les tâches supprimées sur le serveur (T02)
+    if (data.activeTaskIds) {
+      const localTaskIds = await db.tasks.toCollection().primaryKeys();
+      const serverTaskIdsSet = new Set(data.activeTaskIds);
+      const taskIdsToDeleteLocally = (localTaskIds as string[]).filter(id => !serverTaskIdsSet.has(id));
+      if (taskIdsToDeleteLocally.length > 0) {
+        await db.tasks.bulkDelete(taskIdsToDeleteLocally);
+        console.log(`[SYNCHRO] ${taskIdsToDeleteLocally.length} tâches supprimées localement.`);
+      }
+    }
+
     if (deltaAttendances.length > 0) {
       // Éviter la duplication des présences (IDs locaux vs IDs serveur)
       // Rechercher les présences locales ayant le même [childId+date] et les supprimer
@@ -935,7 +1012,7 @@ async function applyServerDelta(data: SyncDeltaResponse) {
 }
 
 // Fonction de synchronisation avec le serveur
-export async function syncWithServer() {
+export async function syncWithServer(options: { signal?: AbortSignal } = {}) {
   try {
     const pendingItems = await db.pendingSync.toArray();
     const lastSyncAt = await getStateValue(LAST_SYNC_KEY);
@@ -991,9 +1068,15 @@ export async function syncWithServer() {
       }
     }
 
+    // Récupérer les tombstones de suppression locaux (T01 & T02)
+    const pendingDeletions = await db.pendingDeletions.toArray();
+    const de = pendingDeletions.filter(item => item.entity === 'event').map(item => item.id);
+    const dt = pendingDeletions.filter(item => item.entity === 'task').map(item => item.id);
+
     const response = await fetch('/api/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: options.signal,
       body: JSON.stringify({
         mode: 'sync-v2',
         l: lastSyncAt,
@@ -1004,6 +1087,8 @@ export async function syncWithServer() {
         e: compactEvents,
         t: compactTasks,
         dp,
+        de,
+        dt,
       }),
     });
 
@@ -1041,9 +1126,13 @@ export async function syncWithServer() {
 
     const pullResult = await applyServerDelta(data);
 
-    await db.transaction('rw', [db.syncState, db.pendingSync, db.children, db.parents, db.events, db.tasks], async () => {
+    await db.transaction('rw', [db.syncState, db.pendingSync, db.pendingDeletions, db.children, db.parents, db.events, db.tasks], async () => {
       await setStateValue(LAST_SYNC_KEY, data.serverSyncedAt ?? new Date().toISOString());
       await db.pendingSync.bulkDelete(effectivePendingItems.map((item) => item.key));
+      // Nettoyer les tombstones acquittés par le serveur
+      if (pendingDeletions.length > 0) {
+        await db.pendingDeletions.bulkDelete(pendingDeletions.map((item) => item.key));
+      }
 
       // Supprimer définitivement de Dexie les enfants marqués pour suppression (noms vides)
       const toDeleteIds = changedChildren

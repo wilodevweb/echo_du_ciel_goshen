@@ -1,10 +1,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Bell, CalendarCheck, Users, Images, ShieldCheck, Heart, CalendarDays } from "lucide-react";
-import { SyncPanel } from "@/components/system/SyncPanel";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./api/auth/[...nextauth]/route";
 import { redirect } from "next/navigation";
+import { LocalDataCleanup } from "@/components/system/LocalDataCleanup";
 
 export default async function Home() {
   const session = await getServerSession(authOptions);
@@ -16,6 +16,8 @@ export default async function Home() {
   const isAdmin = (session?.user as { role?: string } | undefined)?.role === "ADMIN";
 
   return (
+    <>
+    <LocalDataCleanup />
     <main className="flex h-[100dvh] flex-col items-center overflow-hidden bg-gray-50 px-5 py-6 relative">
       {/* Boutons flottants — Notifs, Famille, Événements, Admin */}
       <div className="fixed right-4 top-4 z-30 flex items-center gap-2">
@@ -100,8 +102,8 @@ export default async function Home() {
           </div>
         </div>
 
-        <SyncPanel />
       </div>
     </main>
+    </>
   );
 }

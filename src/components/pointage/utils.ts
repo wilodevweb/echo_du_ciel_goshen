@@ -114,28 +114,37 @@ export async function buildAttendanceHistoryMapAsync() {
 
   if (totalActiveChildren === 0) return map;
 
+  // Calculer une borne basse (6 semaines en arrière max pour couvrir 3 dimanches consécutifs avec marge)
+  const sixWeeksAgo = new Date();
+  sixWeeksAgo.setDate(sixWeeksAgo.getDate() - 42);
+  const minDateLimit = sixWeeksAgo.toISOString().split('T')[0];
+
   let allCompleted = false;
 
-  await db.attendances.orderBy('date').reverse().each((attendance) => {
-    // Court-circuiter si on a déjà collecté tout ce qu'on voulait
-    if (allCompleted) return;
+  await db.attendances
+    .where('date')
+    .aboveOrEqual(minDateLimit)
+    .reverse()
+    .each((attendance) => {
+      // Court-circuiter si tous les enfants actifs ont leurs 3 statuts
+      if (allCompleted) return;
 
-    if (!activeChildIds.has(attendance.childId)) return;
+      if (!activeChildIds.has(attendance.childId)) return;
 
-    const status = getAttendanceStatus(attendance);
-    if (!status) return;
+      const status = getAttendanceStatus(attendance);
+      if (!status) return;
 
-    const history = map.get(attendance.childId) ?? [];
-    if (history.length < 3) {
-      history.push(status);
-      map.set(attendance.childId, history);
-    }
+      const history = map.get(attendance.childId) ?? [];
+      if (history.length < 3) {
+        history.push(status);
+        map.set(attendance.childId, history);
+      }
 
-    // Vérifier si tous les enfants actifs ont 3 historiques
-    if (map.size === totalActiveChildren) {
-      allCompleted = Array.from(map.values()).every(h => h.length >= 3);
-    }
-  });
+      // Vérifier si tous les enfants actifs ont 3 historiques
+      if (map.size === totalActiveChildren) {
+        allCompleted = Array.from(map.values()).every(h => h.length >= 3);
+      }
+    });
 
   return map;
 }

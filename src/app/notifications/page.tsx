@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useSession } from 'next-auth/react';
@@ -107,6 +107,7 @@ export default function NotificationsPage() {
       session.user.role === "ADMIN"
   );
 
+  const [transferRequest, setTransferRequest] = useState<{ childId: string; childName: string; classLevel: ClassLevel } | null>(null);
   const allChildren = useLiveQuery(() => db.children.toArray());
   const historyMap = useLiveQuery(() => buildAttendanceHistoryMapAsync());
 
@@ -226,7 +227,7 @@ export default function NotificationsPage() {
                                     </>
                                   ) : (
                                     <button 
-                                      onClick={() => handleTransfer(child.id, expectedClass as ClassLevel)}
+                                      onClick={() => setTransferRequest({ childId: child.id, childName: `${child.firstName} ${child.lastName}`, classLevel: expectedClass as ClassLevel })}
                                       className="w-full flex items-center justify-center gap-1.5 bg-purple-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-purple-700 transition-colors shadow-sm"
                                     >
                                       <ArrowRightCircle className="w-4 h-4" /> Transférer en {getClassLabel(expectedClass)}
@@ -354,6 +355,18 @@ export default function NotificationsPage() {
           </>
         )}
       </div>
+      {transferRequest && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4" role="presentation" onClick={() => setTransferRequest(null)}>
+          <section role="dialog" aria-modal="true" aria-labelledby="transfer-title" className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <h2 id="transfer-title" className="mb-2 text-lg font-bold text-gray-900">Confirmer le transfert</h2>
+            <p className="mb-6 text-sm leading-relaxed text-gray-600">Transférer {transferRequest.childName} en {getClassLabel(transferRequest.classLevel)} ? Le changement sera enregistré sur cet appareil et synchronisé automatiquement.</p>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setTransferRequest(null)} className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700">Annuler</button>
+              <button type="button" onClick={() => { const request = transferRequest; if (request) void handleTransfer(request.childId, request.classLevel).then(() => setTransferRequest(null)); }} className="flex-1 rounded-xl bg-purple-600 py-3 text-sm font-bold text-white">Confirmer</button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

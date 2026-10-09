@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { CalendarDays, CheckCircle2, Circle, Plus, ChevronDown, ChevronRight, Loader2, X, Pencil } from "lucide-react";
-import db, { generateId, markEntityForSync, type ChildEvent, type ChildTask, type TaskType } from "@/lib/db";
+import db, { generateId, markEntityForSync, markEntityForDeletion, type ChildEvent, type ChildTask, type TaskType } from "@/lib/db";
 import { TASK_TYPES, getTaskTypeConfig } from "@/lib/taskTypes";
 import { ChildSelector } from "@/components/children/ChildSelector";
 
@@ -127,8 +127,8 @@ function EventCard({
   };
 
   const deleteTask = async (taskId: string) => {
-    await db.pendingSync.delete(`task:${taskId}`);
     await db.tasks.delete(taskId);
+    await markEntityForDeletion('task', taskId);
   };
 
   const saveTaskEdit = async (taskId: string) => {

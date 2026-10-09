@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f9fafb">
+  <title>Goshen · mode hors ligne</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; background: #f9fafb; color: #111827; }
+    body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 1.25rem; box-sizing: border-box; }
+    main { width: min(100%, 28rem); text-align: center; }
+    .mark { display: inline-grid; width: 3.5rem; height: 3.5rem; place-items: center; border-radius: 1.25rem; background: #dcfce7; color: #008f24; font-size: 1.75rem; font-weight: 800; }
+    h1 { margin: 1rem 0 .35rem; font-size: 1.7rem; }
+    p { color: #6b7280; line-height: 1.55; }
+    nav { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; margin-top: 1.5rem; }
+    a { padding: .9rem .65rem; border: 1px solid #e5e7eb; border-radius: .9rem; background: #fff; color: #111827; font-weight: 700; text-decoration: none; }
+    a:first-child { grid-column: 1 / -1; border-color: #00b22d; background: #00b22d; color: #fff; }
+    small { display: block; margin-top: 1.4rem; color: #9ca3af; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="mark" aria-hidden="true">G</div>
+    <h1>Goshen</h1>
+    <p>Le serveur est momentanément inaccessible. Vos données enregistrées sur cet appareil restent disponibles.</p>
+    <nav aria-label="Sections de Goshen">
+      <a href="/pointage">Faire l’appel</a>
+      <a href="/enfants">Annuaire</a>
+      <a href="/evenements">Événements</a>
+      <a href="/fichiers">Archives</a>
+      <a href="/famille">Familles</a>
+      <a href="/notifications">Notifications</a>
+    </nav>
+    <small>Les sections déjà ouvertes sur cet appareil peuvent fonctionner hors ligne. Une connexion reste nécessaire pour ouvrir une nouvelle session ou charger des données du serveur.</small>
+  </main>
+</body>
+</html>

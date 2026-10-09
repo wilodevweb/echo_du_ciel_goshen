@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useDeferredValue, useEffect } from 'react';
+import React, { useState, useDeferredValue, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -26,6 +26,8 @@ export default function ChildrenList() {
   const [detailsChild, setDetailsChild] = useState<Child | null>(null);
 
   const [scrollY, setScrollY] = useState(0);
+  const pendingChildItems = useLiveQuery(() => db.pendingSync.where("entity").equals("child").toArray(), []);
+  const pendingChildIds = useMemo(() => new Set((pendingChildItems ?? []).map((item) => item.id)), [pendingChildItems]);
 
   // Détecter un nouvel enfant ajouté pour afficher sa fiche de profil immédiatement
   useEffect(() => {
@@ -224,9 +226,10 @@ export default function ChildrenList() {
                       <h3 className="font-semibold text-gray-900 text-lg leading-tight truncate">
                         {child.lastName} {child.postName} {child.firstName}
                       </h3>
-                      <p className="text-xs font-semibold text-fiverr">
-                        {getClassLabel(child.classLevel)}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-semibold text-fiverr">{getClassLabel(child.classLevel)}</p>
+                        {pendingChildIds.has(child.id) && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">Local · à envoyer</span>}
+                      </div>
                       <p className="text-sm text-gray-500 mt-0.5 truncate">
                         {child.parentPhone}
                       </p>

@@ -43,6 +43,7 @@ export const metadata: Metadata = {
 import AuthProvider from "@/components/system/AuthProvider";
 import { RegisterPWA } from "@/components/system/RegisterPWA";
 import { PushNotifier } from "@/components/system/PushNotifier";
+import { GlobalSyncBar } from "@/components/system/GlobalSyncBar";
 
 export default function RootLayout({
   children,
@@ -58,6 +59,7 @@ export default function RootLayout({
         <RegisterPWA />
         <PushNotifier />
         <AuthProvider>
+          <GlobalSyncBar />
           {children}
         </AuthProvider>
       </body>

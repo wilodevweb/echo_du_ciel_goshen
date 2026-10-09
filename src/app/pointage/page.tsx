@@ -54,6 +54,12 @@ export default function PointagePage() {
     () => db.attendances.where("date").equals(selectedDate).toArray(),
     [selectedDate],
   );
+  const pendingAttendanceChildIds = useLiveQuery(async () => {
+    const dayAttendances = await db.attendances.where("date").equals(selectedDate).toArray();
+    const pendingItems = await db.pendingSync.bulkGet(dayAttendances.map((attendance) => `attendance:${attendance.id}`));
+    return dayAttendances.filter((_, index) => Boolean(pendingItems[index])).map((attendance) => attendance.childId);
+  }, [selectedDate]);
+  const pendingAttendanceChildren = useMemo(() => new Set(pendingAttendanceChildIds ?? []), [pendingAttendanceChildIds]);
 
   useEffect(() => {
     try {
@@ -355,7 +361,7 @@ export default function PointagePage() {
     const deltaX = positionX - touchStartX;
     setTouchStartX(null);
 
-    if (Math.abs(deltaX) < 48) return;
+    if (Math.abs(deltaX) < 80) return;
     moveCard(deltaX > 0 ? -1 : 1);
   };
 
@@ -420,6 +426,7 @@ export default function PointagePage() {
                     mode="attendance"
                     child={currentChild}
                     status={getAttendanceStatus(attendanceMap.get(currentChild.id))}
+                    isPendingSync={pendingAttendanceChildren.has(currentChild.id)}
                     recentStatuses={recentStatuses}
                     hasBirthdayThisWeek={isBirthdayInWeek(currentChild.birthDate, selectedDate)}
                     onNameClick={() => setDetailsChild(currentChild)}

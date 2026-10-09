@@ -1,156 +1,162 @@
-import React from 'react';
-import Link from 'next/link';
-import { Search, FileText, Play, Download, Plus } from 'lucide-react';
-import { prisma } from "@/lib/prisma";
-import { MobileHeader } from '@/components/ui/MobileHeader';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { SearchFilterHeader } from '@/components/ui/SearchFilterHeader';
-import { ActionGroup } from '@/components/ui/ActionGroup';
+"use client";
 
-interface PageProps {
-  searchParams: Promise<{ q?: string; type?: string }>;
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Download, FileText, ImageOff, Play, Plus, Search } from "lucide-react";
+import { useLiveQuery } from "dexie-react-hooks";
+import db, { type MediaResource } from "@/lib/db";
+import { MobileHeader } from "@/components/ui/MobileHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { SearchFilterHeader } from "@/components/ui/SearchFilterHeader";
+import { ActionGroup } from "@/components/ui/ActionGroup";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
-export default async function FichiersPage({ searchParams }: PageProps) {
-  const params = await searchParams;
-  const q = params.q || "";
-  const filterType = params.type || "all";
-
-  // Charger depuis la base de données
-  const dbFiles = await prisma.mediaResource.findMany({
-    where: {
-      AND: [
-        filterType !== "all" ? { type: filterType } : {},
-        q ? {
-          title: {
-            contains: q,
-          }
-        } : {},
-      ]
-    },
-    orderBy: { createdAt: "desc" }
+function parseResources(payload: unknown): MediaResource[] {
+  if (!isRecord(payload) || !Array.isArray(payload.resources)) return [];
+  return payload.resources.flatMap((value): MediaResource[] => {
+    if (!isRecord(value)) return [];
+    const { id, type, title, url, thumbnail, aspectRatio, createdAt } = value;
+    if (typeof id !== "string" || typeof title !== "string" || typeof url !== "string" || typeof createdAt !== "string") return [];
+    return [{
+      id,
+      title,
+      type: type === "video" || type === "pdf" ? type : "image",
+      url,
+      thumbnail: typeof thumbnail === "string" ? thumbnail : undefined,
+      aspectRatio: typeof aspectRatio === "string" ? aspectRatio : "square",
+      createdAt,
+    }];
   });
+}
 
-  const files = dbFiles.map(file => ({
-    id: file.id,
-    type: file.type,
-    title: file.title,
-    url: file.url,
-    thumbnail: file.thumbnail || '',
-    aspectRatio: file.aspectRatio
-  }));
+function isCacheableUrl(value?: string) {
+  return Boolean(value && (value.startsWith("https://") || value.startsWith("http://") || value.startsWith("/")));
+}
 
-  function getAspectRatioClass(ratio: string) {
-    if (ratio === 'tall') return 'aspect-[3/4]';
-    if (ratio === 'wide') return 'aspect-[4/3]';
-    return 'aspect-square';
-  }
+function getAspectRatioClass(ratio: string) {
+  if (ratio === "tall") return "aspect-[3/4]";
+  if (ratio === "wide") return "aspect-[4/3]";
+  return "aspect-square";
+}
+
+export default function FichiersPage() {
+  const cachedResources = useLiveQuery(() => db.mediaResources.orderBy("createdAt").reverse().toArray(), [], []);
+  const [onlineResources, setOnlineResources] = useState<MediaResource[] | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const refreshResources = useCallback(async () => {
+    if (!navigator.onLine) return;
+    setIsRefreshing(true);
+    try {
+      const response = await fetch("/api/mobile/resources", { method: "GET", cache: "no-store" });
+      if (!response.ok) throw new Error("Ressources indisponibles");
+      const resources = parseResources(await response.json());
+      const metadata = resources.map((resource) => ({
+        ...resource,
+        // Les data-URI de fichiers ne sont jamais dupliquées dans IndexedDB.
+        url: isCacheableUrl(resource.url) ? resource.url : "",
+        thumbnail: isCacheableUrl(resource.thumbnail) ? resource.thumbnail : undefined,
+      }));
+      await db.transaction("rw", db.mediaResources, async () => {
+        await db.mediaResources.clear();
+        if (metadata.length > 0) await db.mediaResources.bulkPut(metadata);
+      });
+      setOnlineResources(resources);
+    } catch {
+      // La liste Dexie reste utilisable si l'API ou la base distante est indisponible.
+      setOnlineResources(null);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshResources();
+    window.addEventListener("online", refreshResources);
+    return () => window.removeEventListener("online", refreshResources);
+  }, [refreshResources]);
+
+  const resources = useMemo(() => {
+    const byId = new Map((cachedResources ?? []).map((resource) => [resource.id, resource]));
+    for (const resource of onlineResources ?? []) byId.set(resource.id, resource);
+    return [...byId.values()]
+      .filter((resource) => activeFilter === "all" || resource.type === activeFilter)
+      .filter((resource) => resource.title.toLocaleLowerCase("fr").includes(searchQuery.trim().toLocaleLowerCase("fr")))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [activeFilter, cachedResources, onlineResources, searchQuery]);
 
   const rightAction = (
-    <ActionGroup
-      buttons={[
-        {
-          id: "search",
-          icon: Search,
-          href: "?search=toggle", // Placeholder, since we can't easily toggle state in SC
-        },
-        {
-          id: "new",
-          icon: Plus,
-          href: "/fichiers/nouveau"
-        }
-      ]}
-    />
+    <ActionGroup buttons={[
+      { id: "search", icon: Search, isActive: false, onClick: () => document.querySelector<HTMLInputElement>("#resource-search-container input")?.focus() },
+      { id: "new", icon: Plus, href: "/fichiers/nouveau" },
+    ]} />
   );
 
   return (
     <main className="flex min-h-screen flex-col bg-gray-50 pb-10">
       <MobileHeader title="Ressources" rightElement={rightAction} />
-      
-      <SearchFilterHeader 
-        serverMode={true}
-        placeholder="Rechercher des fichiers, leçons..."
-        filters={[
-          { label: "Tous", value: "all" },
-          { label: "Images", value: "image" },
-          { label: "Vidéos", value: "video" },
-          { label: "Documents", value: "pdf" },
-        ]}
-      />
-
-      {/* Grid */}
-      <div className="px-4 mt-2">
-        {files.length === 0 ? (
-          <EmptyState title="Aucun fichier trouvé" description="Essayez une autre recherche ou un autre filtre." />
+      <Suspense fallback={<div className="h-24 bg-fiverr" />}>
+        <div id="resource-search-container">
+        <SearchFilterHeader
+          serverMode={false}
+          placeholder="Rechercher des fichiers, leçons..."
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          activeFilter={activeFilter}
+          onFilterChange={setActiveFilter}
+          filters={[
+            { label: "Tous", value: "all" },
+            { label: "Images", value: "image" },
+            { label: "Vidéos", value: "video" },
+            { label: "Documents", value: "pdf" },
+          ]}
+        />
+        </div>
+      </Suspense>
+      <div className="px-4 pb-2 text-xs text-gray-500" aria-live="polite">
+        {isRefreshing ? "Mise à jour des ressources…" : onlineResources === null ? "Liste locale · les fichiers distants s’ouvrent avec internet" : "Liste actualisée"}
+      </div>
+      <div className="mt-2 px-4">
+        {resources.length === 0 ? (
+          <EmptyState title="Aucun fichier trouvé" description={cachedResources?.length ? "Essayez une autre recherche ou un autre filtre." : "Les ressources apparaîtront ici après leur premier chargement en ligne."} />
         ) : (
           <div className="columns-2 gap-4 space-y-4">
-            {files.map((file) => (
-              <div key={file.id} className="break-inside-avoid relative group cursor-pointer">
-                
-                {/* Type: IMAGE */}
-                {file.type === 'image' && (
-                  <div className={`w-full rounded-2xl overflow-hidden shadow-sm border border-gray-150 ${getAspectRatioClass(file.aspectRatio)} relative bg-gray-200`}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img 
-                      src={file.thumbnail || file.url} 
-                      alt={file.title} 
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-3">
-                      <div className="flex justify-end">
-                        <a href={file.url} download className="bg-white/90 p-1.5 rounded-full text-gray-800 hover:bg-white transition"><Download className="w-4 h-4" /></a>
-                      </div>
-                      <p className="text-white font-semibold text-sm line-clamp-2 drop-shadow">{file.title}</p>
+            {resources.map((file) => {
+              const mediaUrl = file.url || "";
+              const thumbnailUrl = file.thumbnail || (onlineResources?.find((resource) => resource.id === file.id)?.url ?? "");
+              return (
+                <article key={file.id} className="break-inside-avoid relative">
+                  {file.type === "image" && (
+                    <div className={`relative flex w-full items-center justify-center overflow-hidden rounded-2xl border border-gray-200 bg-gray-200 shadow-sm ${getAspectRatioClass(file.aspectRatio)}`}>
+                      {thumbnailUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={thumbnailUrl} alt={file.title} className="h-full w-full object-cover" />
+                      ) : <ImageOff className="h-8 w-8 text-gray-500" aria-label="Aperçu disponible en ligne" />}
+                      {mediaUrl && <a href={mediaUrl} download className="absolute right-2 top-2 rounded-full bg-white/90 p-2 text-gray-800" aria-label={`Télécharger ${file.title}`}><Download className="h-4 w-4" /></a>}
                     </div>
-                  </div>
-                )}
-
-                {/* Type: VIDEO */}
-                {file.type === 'video' && (
-                  <div className={`w-full rounded-2xl overflow-hidden shadow-sm ${file.thumbnail || 'bg-indigo-500'} ${getAspectRatioClass(file.aspectRatio)} relative flex items-center justify-center`}>
-                    <div className="absolute inset-0 bg-black/10" />
-                    <div className="w-10 h-10 bg-white/90 rounded-full flex items-center justify-center z-10 shadow-lg group-hover:scale-115 transition">
-                      <Play className="w-5 h-5 text-gray-900 ml-0.5" />
-                    </div>
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-black/45 flex flex-col justify-between p-3 z-20">
-                      <div className="flex justify-end">
-                        <a href={file.url} download className="bg-white/90 p-1.5 rounded-full text-gray-800 hover:bg-white transition"><Download className="w-4 h-4" /></a>
-                      </div>
-                      <p className="text-white font-semibold text-sm line-clamp-2 drop-shadow">{file.title}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Type: PDF */}
-                {file.type === 'pdf' && (
-                  <div className={`w-full rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-sm p-4 flex flex-col justify-between hover:shadow-md transition ${getAspectRatioClass(file.aspectRatio)}`}>
-                    <div className="flex justify-between items-start">
-                      <div className="w-10 h-10 bg-red-100 text-red-600 rounded-xl flex items-center justify-center">
-                        <FileText className="w-5 h-5" />
-                      </div>
-                      <a href={file.url} download className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200 transition">
-                        <Download className="w-4 h-4" />
-                      </a>
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-900 text-sm line-clamp-3 mb-1">{file.title}</h3>
-                      <p className="text-xs text-gray-400 font-medium">Document PDF</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Titre pour Image et Vidéo */}
-                {file.type !== 'pdf' && (
-                  <div className="mt-2 px-1 flex justify-between items-start">
-                    <h3 className="font-semibold text-gray-900 text-sm leading-tight line-clamp-2">{file.title}</h3>
-                    <a href={file.url} download className="text-gray-400 hover:text-gray-600 ml-2 flex-shrink-0 transition">
-                      <Download className="w-4 h-4" />
+                  )}
+                  {file.type === "video" && (
+                    <a href={mediaUrl || undefined} className={`relative flex items-center justify-center overflow-hidden rounded-2xl ${file.thumbnail || "bg-indigo-500"} ${getAspectRatioClass(file.aspectRatio)}`} aria-label={mediaUrl ? `Ouvrir ${file.title}` : `${file.title}, disponible en ligne`}>
+                      <Play className="z-10 h-10 w-10 rounded-full bg-white/90 p-2 text-gray-900" />
                     </a>
-                  </div>
-                )}
-
-              </div>
-            ))}
+                  )}
+                  {file.type === "pdf" && (
+                    <div className={`rounded-2xl border border-gray-200 bg-white p-4 shadow-sm ${getAspectRatioClass(file.aspectRatio)}`}>
+                      <div className="flex items-start justify-between">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 text-red-600"><FileText className="h-5 w-5" /></div>
+                        {mediaUrl && <a href={mediaUrl} download className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-600" aria-label={`Télécharger ${file.title}`}><Download className="h-4 w-4" /></a>}
+                      </div>
+                      <div className="mt-4"><h2 className="mb-1 line-clamp-3 text-sm font-bold text-gray-900">{file.title}</h2><p className="text-xs font-medium text-gray-400">Document PDF</p></div>
+                    </div>
+                  )}
+                  <div className="mt-2 px-1"><h2 className="line-clamp-2 text-sm font-semibold leading-tight text-gray-900">{file.title}</h2>{!mediaUrl && <p className="mt-1 text-[11px] text-gray-500">Fichier à récupérer en ligne</p>}</div>
+                </article>
+              );
+            })}
           </div>
         )}
       </div>

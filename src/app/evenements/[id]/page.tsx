@@ -8,7 +8,7 @@ import {
   Users, LayoutList, Info, Trash2, ArrowLeft, Pencil
 } from "lucide-react";
 import { MobileHeader } from "@/components/ui/MobileHeader";
-import db, { generateId, markEntityForSync, type Child, type ChildTask, type TaskType } from "@/lib/db";
+import db, { generateId, markEntityForSync, markEntityForDeletion, type Child, type ChildTask, type TaskType } from "@/lib/db";
 import { TASK_TYPES, getTaskTypeConfig } from "@/lib/taskTypes";
 import { ChildSelector } from "@/components/children/ChildSelector";
 import { ChildDetailsModal } from "@/components/children/ChildDetailsModal";
@@ -154,10 +154,9 @@ function ActivitesTab({
   };
 
   const deleteTask = async (taskId: string) => {
-    // On ne peut pas synchroniser la suppression d'une tâche (pas de mécanisme de tombstone),
-    // on la supprime juste localement et on retire de la queue de synchro
-    await db.pendingSync.delete(`task:${taskId}`);
+    // Supprimer localement et enregistrer le tombstone pour le serveur (T01)
     await db.tasks.delete(taskId);
+    await markEntityForDeletion('task', taskId);
   };
 
   const handleAdd = async () => {
@@ -469,15 +468,14 @@ export default function EventDetailPage() {
     // Récupérer les IDs des tâches avant suppression
     const eventTasks = await db.tasks.where("eventId").equals(eventId).toArray();
     const taskIds = eventTasks.map((t) => t.id);
-    // Supprimer les tâches et l'événement
+    // Supprimer les tâches et l'événement localement
     await db.tasks.where("eventId").equals(eventId).delete();
     await db.events.delete(eventId);
-    // Nettoyer la file de synchro
-    const keysToDelete = [
-      `event:${eventId}`,
-      ...taskIds.map((id) => `task:${id}`),
-    ];
-    await db.pendingSync.bulkDelete(keysToDelete);
+    // Enregistrer les tombstones pour la synchronisation serveur (T01)
+    await markEntityForDeletion('event', eventId);
+    for (const taskId of taskIds) {
+      await markEntityForDeletion('task', taskId);
+    }
     router.back();
   };
 

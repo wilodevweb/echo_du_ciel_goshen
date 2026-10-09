@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { SYNC_ATTENDANCE_MIN_DATE } from "@/lib/constants";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]/route";
+import { getToken } from "next-auth/jwt";
 
 type ChildPatch = [string, string, ...string[]];
 type AttendancePatch = [string, string, string];
@@ -241,12 +242,43 @@ function compactTask(task: {
   ];
 }
 
+// Endpoint de santé léger pour valider la connectivité réseau réelle (T05)
+export async function HEAD() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+    },
+  });
+}
+
+export async function GET() {
+  return NextResponse.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+  }, {
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+    },
+  });
+}
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    const userId = session ? (session.user as CustomUser).id : "anonymous";
-    const username = session ? (session.user as CustomUser)?.username || "anonymous" : "anonymous";
-    const userFullName = session ? session.user?.name || "Moniteur anonyme" : "Moniteur anonyme";
+    const nativeRequest = session ? null : new NextRequest(req.url, { headers: req.headers });
+    const nativeToken = nativeRequest ? await getToken({ req: nativeRequest, secret: authOptions.secret ?? process.env.NEXTAUTH_SECRET }) : null;
+    const authenticatedUser = session?.user
+      ? { id: (session.user as CustomUser).id, username: (session.user as CustomUser).username, name: session.user.name }
+      : nativeToken?.id && nativeToken.username
+        ? { id: String(nativeToken.id), username: String(nativeToken.username), name: typeof nativeToken.name === "string" ? nativeToken.name : null }
+        : null;
+    if (!authenticatedUser) {
+      return NextResponse.json({ success: false, error: "Authentification requise." }, { status: 401 });
+    }
+    const userId = authenticatedUser.id;
+    const username = authenticatedUser.username;
+    const userFullName = authenticatedUser.name || authenticatedUser.username;
 
     const data = await req.json();
     const { mode } = data;
@@ -272,6 +304,7 @@ export async function POST(req: Request) {
       
       const pushedChildIds = new Set(childPatches.map((patch) => patch[0]));
       const pushedAttendanceKeys = new Set(attendancePatches.map((patch) => `${patch[0]}:${patch[1]}`));
+      let acceptedAttendanceKeys: string[] = [];
       const pushedEventIds = new Set(eventPatches.map((patch) => patch[0]));
       const pushedTaskIds = new Set(taskPatches.map((patch) => patch[0]));
       
@@ -558,6 +591,10 @@ export async function POST(req: Request) {
               )
             );
           }
+
+          acceptedAttendanceKeys = validAttendancePatches
+            .filter((patch) => ["p", "a", "m"].includes(patch[2]))
+            .map((patch) => `${patch[0]}:${decodeDate(patch[1])}`);
         }
 
         // Supprimer les parents demandés par le client
@@ -565,6 +602,25 @@ export async function POST(req: Request) {
         if (deletedParentIds.length > 0) {
           await tx.parent.deleteMany({
             where: { id: { in: deletedParentIds } },
+          });
+        }
+
+        // Supprimer les tâches demandées par le client (T02 - Tombstones tâches)
+        const deletedTaskIds = Array.isArray(data.dt) ? (data.dt as string[]).filter(Boolean) : [];
+        if (deletedTaskIds.length > 0) {
+          await tx.task.deleteMany({
+            where: { id: { in: deletedTaskIds } },
+          });
+        }
+
+        // Supprimer les événements demandés par le client (T02 - Tombstones événements avec cascade sur tâches)
+        const deletedEventIds = Array.isArray(data.de) ? (data.de as string[]).filter(Boolean) : [];
+        if (deletedEventIds.length > 0) {
+          await tx.task.deleteMany({
+            where: { eventId: { in: deletedEventIds } },
+          });
+          await tx.event.deleteMany({
+            where: { id: { in: deletedEventIds } },
           });
         }
         
@@ -711,10 +767,20 @@ export async function POST(req: Request) {
         },
       });
 
-      const [allChildIds, allParentIds] = await Promise.all([
+      const [allChildIds, allParentIds, allEvents, allTasks] = await Promise.all([
         prisma.child.findMany({ select: { id: true } }),
         prisma.parent.findMany({ select: { id: true } }),
+        prisma.event.findMany({ select: { id: true } }),
+        prisma.task.findMany({ select: { id: true } }),
       ]);
+      const acceptedCanonicalAttendanceKeys = new Set(acceptedAttendanceKeys);
+      const clientAcceptedAttendanceKeys = attendancePatches
+        .filter((patch) => patch.length >= 3 && /^\d{8}$/.test(patch[1]) && ["p", "a", "m"].includes(patch[2]))
+        .filter((patch) => {
+          const serverChildId = canonicalChildIdByClientId.get(patch[0]) ?? patch[0];
+          return acceptedCanonicalAttendanceKeys.has(`${serverChildId}:${decodeDate(patch[1])}`);
+        })
+        .map((patch) => `${patch[0]}:${decodeDate(patch[1])}`);
 
       return NextResponse.json({
         success: true,
@@ -723,10 +789,13 @@ export async function POST(req: Request) {
         d: Array.from(deletedChildIds),
         p: serverParents.map(compactParent),
         a: deltaAttendances.map(compactAttendance),
+        acceptedAttendanceKeys: clientAcceptedAttendanceKeys,
         e: deltaEvents.map(compactEvent),
         t: deltaTasks.map(compactTask),
         activeChildIds: allChildIds.map((c) => c.id),
         activeParentIds: allParentIds.map((p) => p.id),
+        activeEventIds: allEvents.map((e) => e.id),
+        activeTaskIds: allTasks.map((t) => t.id),
       });
     }
 
