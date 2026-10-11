@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Users, Phone, ChevronRight, Search, UserCircle2, Baby } from "lucide-react";
+import { Users, Phone, ChevronRight, Search, UserCircle2, Baby, MessageCircle } from "lucide-react";
 import { MobileHeader } from "@/components/ui/MobileHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
 import db, { getClassLabel } from "@/lib/db";
@@ -154,17 +154,37 @@ export default function FamillePage() {
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-gray-900 truncate">{family.name}</p>
                     {family.phone ? (
-                      <a
-                        href={`tel:${family.phone}`}
-                        className="flex items-center gap-1 text-xs text-gray-500 hover:text-[#00b22d] transition-colors mt-0.5"
-                      >
-                        <Phone className="w-3 h-3" />
+                      <p className="text-xs text-gray-500 font-medium truncate mt-0.5">
                         {family.phone}
-                      </a>
+                      </p>
                     ) : (
                       <p className="text-xs text-gray-400 italic mt-0.5">Pas de téléphone</p>
                     )}
                   </div>
+
+                  {family.phone ? (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <a
+                        href={`tel:${family.phone.replace(/[^0-9+]/g, '')}`}
+                        className="p-2 rounded-xl bg-gray-100 hover:bg-[#00b22d]/10 text-gray-700 hover:text-[#00b22d] transition-colors"
+                        title="Appeler"
+                        aria-label="Appeler le parent"
+                      >
+                        <Phone className="w-4 h-4" />
+                      </a>
+                      <a
+                        href={`https://wa.me/${family.phone.replace(/[^0-9]/g, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 rounded-xl bg-[#00b22d]/10 hover:bg-[#00b22d]/20 text-[#00b22d] transition-colors"
+                        title="Envoyer un message WhatsApp"
+                        aria-label="Contacter sur WhatsApp"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                      </a>
+                    </div>
+                  ) : null}
+
                   <span className="shrink-0 text-xs font-semibold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
                     {family.children.length} enfant{family.children.length > 1 ? "s" : ""}
                   </span>

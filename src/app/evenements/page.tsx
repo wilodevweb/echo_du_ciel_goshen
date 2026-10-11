@@ -9,7 +9,7 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import db, { generateId, markEntityForSync, type ChildEvent, type ChildTask, type TaskType } from "@/lib/db";
 import { TASK_TYPES, getTaskTypeConfig } from "@/lib/taskTypes";
 import { ChildSelector } from "@/components/children/ChildSelector";
-import { useSession } from "next-auth/react";
+import { useAuthUser } from "@/hooks/useAuthUser";
 
 // ─── Formulaire création d'événement ────────────────────────────────────────
 function CreateEventForm({ onCreated }: { onCreated: (event: ChildEvent) => void }) {
@@ -291,8 +291,7 @@ function EventCard({ eventId, title, date, description }: {
 }
 
 export default function EvenementsPage() {
-  const { data: session } = useSession();
-  const isAdmin = (session?.user as any)?.role === "ADMIN";
+  const { isAdmin } = useAuthUser();
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   const events = useLiveQuery(

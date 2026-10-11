@@ -12,7 +12,7 @@ import db, { generateId, markEntityForSync, markEntityForDeletion, type Child, t
 import { TASK_TYPES, getTaskTypeConfig } from "@/lib/taskTypes";
 import { ChildSelector } from "@/components/children/ChildSelector";
 import { ChildDetailsModal } from "@/components/children/ChildDetailsModal";
-import { useSession } from "next-auth/react";
+import { useAuthUser } from "@/hooks/useAuthUser";
 
 type Tab = "infos" | "activites" | "participants";
 
@@ -448,8 +448,7 @@ export default function EventDetailPage() {
   const params = useParams();
   const router = useRouter();
   const eventId = params.id as string;
-  const { data: session } = useSession();
-  const isAdmin = (session?.user as any)?.role === "ADMIN";
+  const { isAdmin } = useAuthUser();
 
   const [activeTab, setActiveTab] = useState<Tab>("infos");
 

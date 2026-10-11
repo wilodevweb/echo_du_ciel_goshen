@@ -44,6 +44,7 @@ import AuthProvider from "@/components/system/AuthProvider";
 import { RegisterPWA } from "@/components/system/RegisterPWA";
 import { PushNotifier } from "@/components/system/PushNotifier";
 import { GlobalSyncBar } from "@/components/system/GlobalSyncBar";
+import { StoragePersister } from "@/components/system/StoragePersister";
 
 export default function RootLayout({
   children,
@@ -57,6 +58,7 @@ export default function RootLayout({
     >
       <body className={`min-h-full flex flex-col ${jost.variable} font-sans`}>
         <RegisterPWA />
+        <StoragePersister />
         <PushNotifier />
         <AuthProvider>
           <GlobalSyncBar />
