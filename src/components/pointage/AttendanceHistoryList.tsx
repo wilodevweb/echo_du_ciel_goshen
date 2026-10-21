@@ -11,20 +11,13 @@ interface AttendanceHistoryListProps {
 export function AttendanceHistoryList({ childId }: AttendanceHistoryListProps) {
   const [monthOffset, setMonthOffset] = useState(0);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  const attendances = useLiveQuery(async () => {
-    // Fetch attendances for this child, using the compound index [childId+date]
-    // The index allows us to get the records sorted by date descending naturally, without in-memory sorting
-    const records = await db.attendances
-      .where('[childId+date]')
-      .between([childId, ''], [childId, '\uffff'])
-      .reverse()
-      .toArray();
-      
-    return records;
-  }, [childId]);
+  const latestAttendance = useLiveQuery(
+    () => db.attendances.where('[childId+date]').between([childId, ''], [childId, '\uffff']).last(),
+    [childId],
+  );
 
   const visibleMonth = useMemo(() => {
-    const latestAttendanceDate = attendances?.[0]?.date;
+    const latestAttendanceDate = latestAttendance?.date;
     let year = new Date().getFullYear();
     let month = new Date().getMonth();
     if (latestAttendanceDate) {
@@ -38,16 +31,22 @@ export function AttendanceHistoryList({ childId }: AttendanceHistoryListProps) {
     const date = new Date(year, month, 1);
     date.setMonth(date.getMonth() + monthOffset);
     return date;
-  }, [attendances, monthOffset]);
+  }, [latestAttendance, monthOffset]);
 
   const visibleMonthKey = `${visibleMonth.getFullYear()}-${String(visibleMonth.getMonth() + 1).padStart(2, "0")}`;
   const monthLabel = visibleMonth.toLocaleDateString("fr-FR", {
     month: "long",
     year: "numeric",
   });
-  const visibleAttendances = (attendances ?? [])
-    .filter((attendance) => attendance.date.startsWith(visibleMonthKey))
-    .slice(0, 4);
+  const visibleAttendances = useLiveQuery(
+    () => db.attendances
+      .where('[childId+date]')
+      .between([childId, `${visibleMonthKey}-01`], [childId, `${visibleMonthKey}-31`])
+      .reverse()
+      .limit(4)
+      .toArray(),
+    [childId, visibleMonthKey],
+  );
 
   const handleTouchEnd = (endX: number) => {
     if (touchStartX === null) return;
@@ -62,7 +61,7 @@ export function AttendanceHistoryList({ childId }: AttendanceHistoryListProps) {
     setTouchStartX(null);
   };
 
-  if (attendances === undefined) {
+  if (latestAttendance === undefined || visibleAttendances === undefined) {
     return (
       <div className="flex justify-center p-6">
         <Loader2 className="w-6 h-6 animate-spin text-white/50" />
@@ -70,7 +69,7 @@ export function AttendanceHistoryList({ childId }: AttendanceHistoryListProps) {
     );
   }
 
-  if (attendances.length === 0) {
+  if (!latestAttendance) {
     return (
       <div className="text-center p-6 border border-white/10 rounded-2xl bg-white/5 mt-4">
         <p className="text-sm text-white/50 font-medium">

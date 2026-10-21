@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import db, { syncWithServer } from "@/lib/db";
 
 export type AutoSyncState = "idle" | "offline" | "pending" | "syncing" | "synced" | "error";
@@ -14,30 +15,48 @@ const MAX_BATCHES_PER_RUN = 12;
 const SYNC_LOCK_NAME = "goshen-auto-sync";
 let activeSync: Promise<void> | null = null;
 
-async function countPendingChanges() {
-  const [updates, deletions] = await Promise.all([db.pendingSync.count(), db.pendingDeletions.count()]);
-  return updates + deletions;
+interface PendingSnapshot { count: number; signature: string }
+
+async function readPendingSnapshot(): Promise<PendingSnapshot> {
+  const [updates, deletions, lastChange] = await Promise.all([
+    db.pendingSync.count(),
+    db.pendingDeletions.count(),
+    db.syncState.get("lastLocalChangeAt"),
+  ]);
+  return { count: updates + deletions, signature: lastChange?.value ?? "" };
 }
 
 export function useAutoSync(): AutoSyncSnapshot {
   const pathname = usePathname();
-  const pendingCount = useLiveQuery(countPendingChanges, [], 0);
-  const [state, setState] = useState<AutoSyncState>("idle");
+  const { data: session, status: sessionStatus } = useSession();
+  const pendingSnapshot = useLiveQuery(readPendingSnapshot, [], { count: 0, signature: "" });
+  const pendingCount = pendingSnapshot.count;
+  const [state, setState] = useState<AutoSyncState>(() =>
+    typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "idle"
+  );
   const retryAttempt = useRef(0);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onlineTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const visibilityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mounted = useRef(false);
+  const initialSyncSession = useRef<string | null>(null);
+  const runSyncRef = useRef<() => Promise<void>>(async () => undefined);
+
+  const sessionKey = session?.user
+    ? (session.user as { id?: string }).id ?? "authenticated"
+    : null;
 
   const runSync = useCallback(async () => {
-    if (!mounted.current || pathname === "/login") return;
+    if (!mounted.current || sessionStatus !== "authenticated" || pathname === "/login") return;
     if (retryAttempt.current > 0 && retryTimer.current) return;
     if (!navigator.onLine) { setState("offline"); return; }
     if (activeSync) { await activeSync; return; }
 
     const execute = async () => {
       if (!navigator.onLine) { setState("offline"); return; }
-      let previousPending = await countPendingChanges();
+      let previousSnapshot = await readPendingSnapshot();
       const runDeadline = Date.now() + 60_000;
       setState("syncing");
 
@@ -51,7 +70,8 @@ export function useAutoSync(): AutoSyncSnapshot {
         finally { clearTimeout(timeoutId); }
         if (!result.success) throw new Error(result.error ?? "Échec de synchronisation");
 
-        const currentPending = await countPendingChanges();
+        const currentSnapshot = await readPendingSnapshot();
+        const currentPending = currentSnapshot.count;
         if (currentPending === 0) {
           retryAttempt.current = 0;
           setState("synced");
@@ -61,14 +81,16 @@ export function useAutoSync(): AutoSyncSnapshot {
           }, 3_000);
           return;
         }
-        if (previousPending > 0 && currentPending >= previousPending) throw new Error("La file de synchronisation n'a pas avancé");
-        previousPending = currentPending;
+        if (currentPending >= previousSnapshot.count && currentSnapshot.signature === previousSnapshot.signature) {
+          throw new Error("La file de synchronisation n'a pas avancé");
+        }
+        previousSnapshot = currentSnapshot;
       }
 
       setState("pending");
       if (mounted.current) {
         if (retryTimer.current) clearTimeout(retryTimer.current);
-        retryTimer.current = setTimeout(() => { retryTimer.current = null; void runSync(); }, 750);
+        retryTimer.current = setTimeout(() => { retryTimer.current = null; void runSyncRef.current(); }, 750);
       }
     };
 
@@ -79,7 +101,7 @@ export function useAutoSync(): AutoSyncSnapshot {
           else {
             setState("pending");
             if (retryTimer.current) clearTimeout(retryTimer.current);
-            retryTimer.current = setTimeout(() => { retryTimer.current = null; void runSync(); }, 2_000);
+            retryTimer.current = setTimeout(() => { retryTimer.current = null; void runSyncRef.current(); }, 2_000);
           }
         });
       } else { await execute(); }
@@ -93,35 +115,51 @@ export function useAutoSync(): AutoSyncSnapshot {
         const delay = RETRY_DELAYS_MS[Math.min(retryAttempt.current, RETRY_DELAYS_MS.length - 1)];
         retryAttempt.current += 1;
         if (retryTimer.current) clearTimeout(retryTimer.current);
-        retryTimer.current = setTimeout(() => { retryTimer.current = null; void runSync(); }, delay);
+        retryTimer.current = setTimeout(() => { retryTimer.current = null; void runSyncRef.current(); }, delay);
         console.warn("[AutoSync] Nouvelle tentative différée.", error);
       })
       .finally(() => { activeSync = null; });
     await activeSync;
-  }, [pathname]);
+  }, [pathname, sessionStatus]);
+
+  useEffect(() => {
+    runSyncRef.current = runSync;
+  }, [runSync]);
 
   useEffect(() => {
     mounted.current = true;
-    if (!navigator.onLine) setState("offline");
     return () => {
       mounted.current = false;
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
       if (retryTimer.current) clearTimeout(retryTimer.current);
       if (successTimer.current) clearTimeout(successTimer.current);
+      if (onlineTimer.current) clearTimeout(onlineTimer.current);
+      if (visibilityTimer.current) clearTimeout(visibilityTimer.current);
     };
   }, []);
 
   useEffect(() => {
-    if (pendingCount === undefined) return;
-    if (pendingCount === 0) {
-      if (!navigator.onLine) setState("offline");
-      else setState((current) => current === "syncing" || current === "error" ? current : "idle");
+    if (sessionStatus === "unauthenticated") {
+      initialSyncSession.current = null;
       return;
     }
-    setState((current) => current === "syncing" || current === "error" ? current : "pending");
+    if (sessionStatus !== "authenticated" || pathname === "/login" || !sessionKey) return;
+    if (initialSyncSession.current === sessionKey) return;
+
+    initialSyncSession.current = sessionKey;
+    void runSync();
+  }, [pathname, runSync, sessionKey, sessionStatus]);
+
+  useEffect(() => {
+    if (pendingCount === undefined) return;
+    if (pendingCount === 0) {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      debounceTimer.current = null;
+      return;
+    }
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(() => void runSync(), 2_000);
-  }, [pendingCount, runSync]);
+  }, [pendingCount, pendingSnapshot.signature, runSync]);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -129,11 +167,20 @@ export function useAutoSync(): AutoSyncSnapshot {
       retryTimer.current = null;
       retryAttempt.current = 0;
       setState(pendingCount > 0 ? "pending" : "idle");
-      setTimeout(() => void runSync(), 1_500);
+      if (onlineTimer.current) clearTimeout(onlineTimer.current);
+      onlineTimer.current = setTimeout(() => {
+        onlineTimer.current = null;
+        void runSync();
+      }, 1_500);
     };
     const handleOffline = () => setState("offline");
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") setTimeout(() => void runSync(), 300);
+      if (document.visibilityState !== "visible") return;
+      if (visibilityTimer.current) clearTimeout(visibilityTimer.current);
+      visibilityTimer.current = setTimeout(() => {
+        visibilityTimer.current = null;
+        void runSync();
+      }, 300);
     };
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
@@ -142,8 +189,18 @@ export function useAutoSync(): AutoSyncSnapshot {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       document.removeEventListener("visibilitychange", handleVisibility);
+      if (onlineTimer.current) clearTimeout(onlineTimer.current);
+      if (visibilityTimer.current) clearTimeout(visibilityTimer.current);
     };
   }, [pendingCount, runSync]);
 
-  return { state, pendingChanges: pendingCount ?? 0 };
+  const visibleState = state === "syncing" || state === "error" || state === "synced"
+    ? state
+    : typeof navigator !== "undefined" && !navigator.onLine
+      ? "offline"
+      : (pendingCount ?? 0) > 0
+        ? "pending"
+        : "idle";
+
+  return { state: visibleState, pendingChanges: pendingCount ?? 0 };
 }

@@ -1,1 +1,2 @@
 export const SYNC_ATTENDANCE_MIN_DATE = "2026-06-28";
+export const LOCAL_DATA_CLEANUP_CUTOFF = "2026-06-27";

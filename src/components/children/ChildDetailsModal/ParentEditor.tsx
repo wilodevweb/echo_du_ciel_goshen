@@ -275,27 +275,38 @@ export function ParentEditor({
                     async () => {
                       // Ajouter à la liste des suppressions en attente
                       try {
-                        const pendingDeletes = JSON.parse(localStorage.getItem("pending-deleted-parents") || "[]");
+                        const storedDeletes: unknown = JSON.parse(localStorage.getItem("pending-deleted-parents") || "[]");
+                        const pendingDeletes = Array.isArray(storedDeletes)
+                          ? storedDeletes.filter((id: unknown): id is string => typeof id === "string")
+                          : [];
                         if (!pendingDeletes.includes(editingParentId)) {
                           pendingDeletes.push(editingParentId);
-                          localStorage.setItem("pending-deleted-parents", JSON.stringify(pendingDeletes));
                         }
+                        localStorage.setItem("pending-deleted-parents", JSON.stringify(pendingDeletes));
                       } catch (e) {
                         console.error("Erreur d'écriture dans localStorage:", e);
+                        return;
                       }
 
                       try {
-                        await fetch('/api/sync', {
+                        const response = await fetch('/api/sync', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ mode: 'delete-parent', parentId: editingParentId })
                         });
-                        // Si la requête immédiate réussit, on peut le retirer de la liste des suppressions en attente
+                        const result = await response.json().catch(() => null) as { success?: boolean; error?: string } | null;
+                        if (!response.ok || !result?.success) {
+                          throw new Error(result?.error ?? `Réponse serveur (${response.status})`);
+                        }
+                        // N’acquitter la suppression locale qu’après confirmation du serveur.
                         try {
-                          const pendingDeletes = JSON.parse(localStorage.getItem("pending-deleted-parents") || "[]");
+                          const storedDeletes: unknown = JSON.parse(localStorage.getItem("pending-deleted-parents") || "[]");
+                          const pendingDeletes = Array.isArray(storedDeletes)
+                            ? storedDeletes.filter((id: unknown): id is string => typeof id === "string")
+                            : [];
                           const filtered = pendingDeletes.filter((id: string) => id !== editingParentId);
                           localStorage.setItem("pending-deleted-parents", JSON.stringify(filtered));
-                        } catch (e) {}
+                        } catch {}
                       } catch (err) {
                         console.error("Erreur serveur lors de la suppression du parent (sera synchronisé plus tard):", err);
                       }

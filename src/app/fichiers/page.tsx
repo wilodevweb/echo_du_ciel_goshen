@@ -62,7 +62,6 @@ export default function FichiersPage() {
         thumbnail: isCacheableUrl(resource.thumbnail) ? resource.thumbnail : undefined,
       }));
       await db.transaction("rw", db.mediaResources, async () => {
-        await db.mediaResources.clear();
         if (metadata.length > 0) await db.mediaResources.bulkPut(metadata);
       });
       setOnlineResources(resources);
@@ -75,9 +74,12 @@ export default function FichiersPage() {
   }, []);
 
   useEffect(() => {
-    void refreshResources();
+    const initialRefresh = window.setTimeout(() => void refreshResources(), 0);
     window.addEventListener("online", refreshResources);
-    return () => window.removeEventListener("online", refreshResources);
+    return () => {
+      window.clearTimeout(initialRefresh);
+      window.removeEventListener("online", refreshResources);
+    };
   }, [refreshResources]);
 
   const resources = useMemo(() => {

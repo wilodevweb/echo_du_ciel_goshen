@@ -127,8 +127,12 @@ interface SyncDeltaResponse {
   events?: ChildEvent[];
   tasks?: ChildTask[];
   d?: string[];
+  deletedParentIds?: string[];
+  deletedEventIds?: string[];
+  deletedTaskIds?: string[];
   serverSyncedAt?: string;
   error?: string;
+  /** Full inventories are accepted only for older server versions. */
   activeChildIds?: string[];
   activeParentIds?: string[];
   activeEventIds?: string[];
@@ -136,7 +140,7 @@ interface SyncDeltaResponse {
 }
 
 type CompactChildPatch = [string, string, ...string[]];
-type CompactAttendancePatch = [string, string, string];
+type CompactAttendancePatch = [string, string, string, string?];
 type CompactServerChild = [
   string, // id
   string, // firstName
@@ -446,7 +450,7 @@ db.version(11)
 
     // Lire tous les enfants sans parentId mais avec un nom de parent
     const legacyChildren = await childrenTable
-      .filter((c: any) => !c.parentId && !!c.parentName?.trim())
+      .filter((c: Child) => !c.parentId && !!c.parentName?.trim())
       .toArray();
 
     if (legacyChildren.length === 0) return;
@@ -472,7 +476,7 @@ db.version(11)
     for (const [, grp] of groups) {
       // Vérifie si un parent avec ce nom existe déjà dans db.parents
       const existing = await parentsTable
-        .filter((p: any) =>
+        .filter((p: Parent) =>
           (p.name ?? '').toLowerCase().replace(/\s+/g, ' ').trim() ===
           grp.name.toLowerCase().replace(/\s+/g, ' ').trim()
         )
@@ -537,11 +541,14 @@ export async function markEntityForSync(entity: SyncEntity, id: string, fields?:
     ? Array.from(new Set([...(existingItem?.fields ?? []), ...fields]))
     : existingItem?.fields;
 
+  const now = Date.now();
+  const previousUpdatedAt = existingItem ? Date.parse(existingItem.updatedAt) : 0;
+  const updatedAt = new Date(Math.max(now, previousUpdatedAt + 1)).toISOString();
   await db.pendingSync.put({
     key: `${entity}:${id}`,
     entity,
     id,
-    updatedAt: new Date().toISOString(),
+    updatedAt,
     fields: nextFields,
   });
   await markPendingChange();
@@ -553,30 +560,56 @@ export async function markEntityForSync(entity: SyncEntity, id: string, fields?:
  */
 export async function markEntityForDeletion(entity: 'event' | 'task', id: string) {
   const key = `${entity}:${id}`;
-  // Retirer de pendingSync si une modification locale était en attente
-  await db.pendingSync.delete(key);
-  // Ajouter au store de tombstones
-  await db.pendingDeletions.put({
-    key,
-    entity,
-    id,
-    deletedAt: new Date().toISOString(),
+  const deletedAt = new Date().toISOString();
+  await db.transaction('rw', [db.pendingSync, db.pendingDeletions, db.syncState], async () => {
+    await db.pendingSync.delete(key);
+    await db.pendingDeletions.put({ key, entity, id, deletedAt });
+    await setStateValue(LAST_LOCAL_CHANGE_KEY, deletedAt);
   });
-  await markPendingChange();
 }
 
-function isInlineDataUrl(value?: string | null) {
-  return Boolean(value?.startsWith('data:'));
+/** Supprime une tâche localement et conserve son tombstone dans la même transaction. */
+export async function deleteTaskForSync(id: string) {
+  const entity = 'task' as const;
+  const key = `${entity}:${id}`;
+  const deletedAt = new Date().toISOString();
+  await db.transaction('rw', [db.tasks, db.pendingSync, db.pendingDeletions, db.syncState], async () => {
+    await db.tasks.delete(id);
+    await db.pendingSync.delete(key);
+    await db.pendingDeletions.put({ key, entity, id, deletedAt });
+    await setStateValue(LAST_LOCAL_CHANGE_KEY, deletedAt);
+  });
+}
+
+/** Supprime un événement et ses tâches avec leurs tombstones, sans fenêtre de perte locale. */
+export async function deleteEventForSync(id: string) {
+  const deletedAt = new Date().toISOString();
+  await db.transaction('rw', [db.events, db.tasks, db.pendingSync, db.pendingDeletions, db.syncState], async () => {
+    const tasks = await db.tasks.where('eventId').equals(id).toArray();
+    const taskIds = tasks.map((task) => task.id);
+    await db.tasks.bulkDelete(taskIds);
+    await db.events.delete(id);
+
+    const tombstones: PendingDeletion[] = [
+      { key: `event:${id}`, entity: 'event', id, deletedAt },
+      ...taskIds.map((taskId): PendingDeletion => ({
+        key: `task:${taskId}`,
+        entity: 'task',
+        id: taskId,
+        deletedAt,
+      })),
+    ];
+    await db.pendingSync.bulkDelete(tombstones.map((item) => item.key));
+    await db.pendingDeletions.bulkPut(tombstones);
+    await setStateValue(LAST_LOCAL_CHANGE_KEY, deletedAt);
+  });
 }
 
 function getSyncStringValue(field: ChildSyncField, value: unknown) {
-  // Les photos Base64 sont maintenant autorisées car on les upload sur Vercel Blob côté serveur
-
-
   const stringValue = String(value ?? '');
 
   if (stringValue.length > MAX_SYNC_STRING_VALUE_LENGTH) {
-    return stringValue.slice(0, MAX_SYNC_STRING_VALUE_LENGTH);
+    throw new Error(`Le champ ${field} dépasse la taille maximale et ne peut pas être synchronisé sans perte.`);
   }
 
   return stringValue;
@@ -713,7 +746,7 @@ function encodeChildPatch(child: Child, pendingItem?: PendingSyncItem): CompactC
 
 function encodeAttendancePatch(attendance: Attendance): CompactAttendancePatch {
   const status = getAttendanceStatus(attendance) ?? 'ABSENT';
-  return [attendance.childId, encodeDate(attendance.date), encodeStatus(status)];
+  return [attendance.childId, encodeDate(attendance.date), encodeStatus(status), attendance.markedAt];
 }
 
 function encodeEventPatch(event: ChildEvent): CompactEventPatch {
@@ -735,6 +768,11 @@ function buildSyncBatch(
   changedAttendances: Attendance[],
   changedEvents: ChildEvent[],
   changedTasks: ChildTask[],
+  knownChildIds: string[],
+  knownParentIds: string[],
+  knownEventIds: string[],
+  knownTaskIds: string[],
+  knownAttendanceKeys: Array<[string, string[]]>,
   lastSyncAt: string | null,
   batchSize = 10,
   maxBytes = MAX_SYNC_BATCH_BYTES,
@@ -752,9 +790,13 @@ function buildSyncBatch(
 
   const baseRequest = {
     mode: 'sync-v2',
+    compactDeletes: true,
     l: lastSyncAt,
-    kc: [] as string[],
-    ka: [] as string[],
+    kc: knownChildIds,
+    kp: knownParentIds,
+    ke: knownEventIds,
+    kt: knownTaskIds,
+    ka2: knownAttendanceKeys,
     c: compactChildren,
     a: compactAttendances,
     e: compactEvents,
@@ -886,11 +928,24 @@ async function applyServerDelta(data: SyncDeltaResponse) {
     : (data.tasks ?? []);
 
   await db.transaction('rw', [db.children, db.parents, db.attendances, db.events, db.tasks, db.pendingSync], async () => {
+    const pendingEntityKeys = new Set(
+      (await db.pendingSync.toArray()).map((item) => `${item.entity}:${item.id}`),
+    );
+
     if (deltaChildren.length > 0) {
       await db.children.bulkPut(deltaChildren);
     }
 
-    const deletedChildIds = data.d?.filter(Boolean) ?? [];
+    const deletedChildIdSet = new Set(data.d?.filter(Boolean) ?? []);
+    if (data.activeChildIds) {
+      const activeIds = new Set(data.activeChildIds);
+      const localIds = await db.children.toCollection().primaryKeys();
+      for (const childId of localIds as string[]) {
+        if (!activeIds.has(childId)) deletedChildIdSet.add(childId);
+      }
+    }
+    const deletedChildIds = Array.from(deletedChildIdSet)
+      .filter((childId) => !pendingEntityKeys.has(`child:${childId}`));
     if (deletedChildIds.length > 0) {
       await db.children.bulkDelete(deletedChildIds);
       for (const childId of deletedChildIds) {
@@ -916,75 +971,64 @@ async function applyServerDelta(data: SyncDeltaResponse) {
       await db.parents.bulkPut(deltaParents);
     }
 
-    // Purger les enfants supprimés sur le serveur
-    if (data.activeChildIds) {
-      const localChildIds = await db.children.toCollection().primaryKeys();
-      const serverChildIdsSet = new Set(data.activeChildIds);
-      const childIdsToDeleteLocally = (localChildIds as string[]).filter(id => !serverChildIdsSet.has(id));
-      if (childIdsToDeleteLocally.length > 0) {
-        await db.children.bulkDelete(childIdsToDeleteLocally);
-        for (const childId of childIdsToDeleteLocally) {
-          const attendancesToDelete = await db.attendances.where('childId').equals(childId).toArray();
-          const attendanceKeysToDelete = attendancesToDelete.map(a => `attendance:${a.id}`);
-          if (attendanceKeysToDelete.length > 0) {
-            await db.pendingSync.bulkDelete(attendanceKeysToDelete);
-          }
-          await db.attendances.where('childId').equals(childId).delete();
-
-          const tasksToDelete = await db.tasks.where('childId').equals(childId).toArray();
-          const taskKeysToDelete = tasksToDelete.map(t => `task:${t.id}`);
-          if (taskKeysToDelete.length > 0) {
-            await db.pendingSync.bulkDelete(taskKeysToDelete);
-          }
-          await db.tasks.where('childId').equals(childId).delete();
-
-          await db.pendingSync.delete(`child:${childId}`);
-        }
-        console.log(`[SYNCHRO] ${childIdsToDeleteLocally.length} enfants supprimés localement (absents du serveur).`);
-      }
-    }
-
-    // Purger les parents supprimés sur le serveur
+    const deletedParentIdSet = new Set(data.deletedParentIds?.filter(Boolean) ?? []);
     if (data.activeParentIds) {
-      const localParentIds = await db.parents.toCollection().primaryKeys();
-      const serverParentIdsSet = new Set(data.activeParentIds);
-      const parentIdsToDeleteLocally = (localParentIds as string[]).filter(id => !serverParentIdsSet.has(id));
-      if (parentIdsToDeleteLocally.length > 0) {
-        await db.parents.bulkDelete(parentIdsToDeleteLocally);
-        console.log(`[SYNCHRO] ${parentIdsToDeleteLocally.length} parents supprimés localement (absents du serveur).`);
+      const activeIds = new Set(data.activeParentIds);
+      const localIds = await db.parents.toCollection().primaryKeys();
+      for (const parentId of localIds as string[]) {
+        if (!activeIds.has(parentId)) deletedParentIdSet.add(parentId);
       }
     }
+    const deletedParentIds = Array.from(deletedParentIdSet);
+    if (deletedParentIds.length > 0) await db.parents.bulkDelete(deletedParentIds);
 
-    // Purger les événements supprimés sur le serveur (T02)
+    const deletedEventIdSet = new Set(data.deletedEventIds?.filter(Boolean) ?? []);
     if (data.activeEventIds) {
-      const localEventIds = await db.events.toCollection().primaryKeys();
-      const serverEventIdsSet = new Set(data.activeEventIds);
-      const eventIdsToDeleteLocally = (localEventIds as string[]).filter(id => !serverEventIdsSet.has(id));
-      if (eventIdsToDeleteLocally.length > 0) {
-        await db.events.bulkDelete(eventIdsToDeleteLocally);
-        // Supprimer en cascade les tâches de ces événements
-        await db.tasks.where('eventId').anyOf(eventIdsToDeleteLocally).delete();
-        console.log(`[SYNCHRO] ${eventIdsToDeleteLocally.length} événements supprimés localement.`);
+      const activeIds = new Set(data.activeEventIds);
+      const localIds = await db.events.toCollection().primaryKeys();
+      for (const eventId of localIds as string[]) {
+        if (!activeIds.has(eventId)) deletedEventIdSet.add(eventId);
       }
+    }
+    const deletedEventIds = Array.from(deletedEventIdSet)
+      .filter(id => !pendingEntityKeys.has(`event:${id}`));
+    if (deletedEventIds.length > 0) {
+      await db.events.bulkDelete(deletedEventIds);
+      await db.tasks.where('eventId').anyOf(deletedEventIds).delete();
     }
 
-    // Purger les tâches supprimées sur le serveur (T02)
+    const deletedTaskIdSet = new Set(data.deletedTaskIds?.filter(Boolean) ?? []);
     if (data.activeTaskIds) {
-      const localTaskIds = await db.tasks.toCollection().primaryKeys();
-      const serverTaskIdsSet = new Set(data.activeTaskIds);
-      const taskIdsToDeleteLocally = (localTaskIds as string[]).filter(id => !serverTaskIdsSet.has(id));
-      if (taskIdsToDeleteLocally.length > 0) {
-        await db.tasks.bulkDelete(taskIdsToDeleteLocally);
-        console.log(`[SYNCHRO] ${taskIdsToDeleteLocally.length} tâches supprimées localement.`);
+      const activeIds = new Set(data.activeTaskIds);
+      const localIds = await db.tasks.toCollection().primaryKeys();
+      for (const taskId of localIds as string[]) {
+        if (!activeIds.has(taskId)) deletedTaskIdSet.add(taskId);
       }
     }
+    const deletedTaskIds = Array.from(deletedTaskIdSet)
+      .filter(id => !pendingEntityKeys.has(`task:${id}`));
+    if (deletedTaskIds.length > 0) await db.tasks.bulkDelete(deletedTaskIds);
 
     if (deltaAttendances.length > 0) {
       // Éviter la duplication des présences (IDs locaux vs IDs serveur)
       // Rechercher les présences locales ayant le même [childId+date] et les supprimer
       const attendanceKeys = deltaAttendances.map(a => [a.childId, a.date]);
       const existingLocals = await db.attendances.where('[childId+date]').anyOf(attendanceKeys).toArray();
-      const localIdsToDelete = existingLocals.filter(local => !deltaAttendances.some(server => server.id === local.id)).map(a => a.id);
+      const pendingAttendanceItems = await db.pendingSync.where('entity').equals('attendance').toArray();
+      const pendingAttendanceIds = new Set(pendingAttendanceItems.map(item => item.id));
+      const serverAttendancesToApply = deltaAttendances.filter((serverAttendance) => {
+        const localRecord = existingLocals.find(local =>
+          local.childId === serverAttendance.childId && local.date === serverAttendance.date
+        );
+        if (!localRecord || !pendingAttendanceIds.has(localRecord.id)) return true;
+        // Une correction faite pendant la requête reste locale pour le prochain passage.
+        return Date.parse(localRecord.markedAt) <= Date.parse(serverAttendance.markedAt);
+      });
+      const appliedKeys = new Set(serverAttendancesToApply.map(item => `${item.childId}:${item.date}`));
+      const localIdsToDelete = existingLocals
+        .filter(local => appliedKeys.has(`${local.childId}:${local.date}`)
+          && !serverAttendancesToApply.some(server => server.id === local.id))
+        .map(local => local.id);
       
       if (localIdsToDelete.length > 0) {
         await db.attendances.bulkDelete(localIdsToDelete);
@@ -993,7 +1037,9 @@ async function applyServerDelta(data: SyncDeltaResponse) {
         await db.pendingSync.bulkDelete(pendingKeysToClean);
       }
       
-      await db.attendances.bulkPut(deltaAttendances);
+      if (serverAttendancesToApply.length > 0) {
+        await db.attendances.bulkPut(serverAttendancesToApply);
+      }
     }
     if (deltaEvents.length > 0) {
       await db.events.bulkPut(deltaEvents);
@@ -1014,10 +1060,28 @@ async function applyServerDelta(data: SyncDeltaResponse) {
 // Fonction de synchronisation avec le serveur
 export async function syncWithServer(options: { signal?: AbortSignal } = {}) {
   try {
-    const pendingItems = await db.pendingSync.toArray();
-    const lastSyncAt = await getStateValue(LAST_SYNC_KEY);
-    const kc: string[] = [];
-    const ka: string[] = [];
+    const [pendingItems, lastSyncAt, knownChildKeys, knownParentKeys, knownEventKeys, knownTaskKeys, attendanceIndexKeys] = await Promise.all([
+      db.pendingSync.toArray(),
+      getStateValue(LAST_SYNC_KEY),
+      db.children.toCollection().primaryKeys(),
+      db.parents.toCollection().primaryKeys(),
+      db.events.toCollection().primaryKeys(),
+      db.tasks.toCollection().primaryKeys(),
+      db.attendances.orderBy('[childId+date]').keys(),
+    ]);
+    const kc = knownChildKeys.map(String);
+    const kp = knownParentKeys.map(String);
+    const ke = knownEventKeys.map(String);
+    const kt = knownTaskKeys.map(String);
+    const knownAttendanceByChild = new Map<string, string[]>();
+    for (const key of attendanceIndexKeys) {
+      if (!Array.isArray(key) || key.length !== 2) continue;
+      const childId = String(key[0]);
+      const dates = knownAttendanceByChild.get(childId) ?? [];
+      dates.push(encodeDate(String(key[1])));
+      knownAttendanceByChild.set(childId, dates);
+    }
+    const ka2 = Array.from(knownAttendanceByChild, ([childId, dates]): [string, string[]] => [childId, dates]);
     const pendingItemByKey = new Map(pendingItems.map((item) => [item.key, item]));
     const childIds = pendingItems.filter((item) => item.entity === 'child').map((item) => item.id);
     const attendanceIds = pendingItems.filter((item) => item.entity === 'attendance').map((item) => item.id);
@@ -1047,15 +1111,26 @@ export async function syncWithServer(options: { signal?: AbortSignal } = {}) {
       compactAttendances,
       compactEvents,
       compactTasks,
-    } = buildSyncBatch(pendingItems, pendingItemByKey, changedChildren, changedAttendances, changedEvents, changedTasks, lastSyncAt ?? null, SYNC_BATCH_SIZE);
+    } = buildSyncBatch(
+      pendingItems,
+      pendingItemByKey,
+      changedChildren,
+      changedAttendances,
+      changedEvents,
+      changedTasks,
+      kc,
+      kp,
+      ke,
+      kt,
+      ka2,
+      lastSyncAt ?? null,
+      SYNC_BATCH_SIZE,
+    );
 
     if (effectivePendingItems.length === 0 && pendingItems.length > 0) {
-      await db.pendingSync.delete(pendingItems[0].key);
-      await markPendingChange();
-
       return {
         success: false,
-        error: 'Une modification locale trop volumineuse a été ignorée. Relancez la synchronisation.',
+        error: 'Une modification locale dépasse la taille autorisée. Elle reste enregistrée sur cet appareil.',
       };
     }
 
@@ -1079,9 +1154,13 @@ export async function syncWithServer(options: { signal?: AbortSignal } = {}) {
       signal: options.signal,
       body: JSON.stringify({
         mode: 'sync-v2',
+        compactDeletes: true,
         l: lastSyncAt,
         kc,
-        ka,
+        kp,
+        ke,
+        kt,
+        ka2,
         c: compactChildren,
         a: compactAttendances,
         e: compactEvents,
@@ -1121,17 +1200,27 @@ export async function syncWithServer(options: { signal?: AbortSignal } = {}) {
     if (typeof window !== "undefined") {
       try {
         localStorage.removeItem("pending-deleted-parents");
-      } catch (e) {}
+      } catch {}
     }
 
     const pullResult = await applyServerDelta(data);
 
     await db.transaction('rw', [db.syncState, db.pendingSync, db.pendingDeletions, db.children, db.parents, db.events, db.tasks], async () => {
       await setStateValue(LAST_SYNC_KEY, data.serverSyncedAt ?? new Date().toISOString());
-      await db.pendingSync.bulkDelete(effectivePendingItems.map((item) => item.key));
-      // Nettoyer les tombstones acquittés par le serveur
+      // Acquitter uniquement les lignes qui n'ont pas été modifiées pendant la requête.
+      const sentPending = await db.pendingSync.bulkGet(effectivePendingItems.map((item) => item.key));
+      const acknowledgedPendingKeys = effectivePendingItems.filter((item, index) =>
+        sentPending[index]?.updatedAt === item.updatedAt
+      ).map((item) => item.key);
+      await db.pendingSync.bulkDelete(acknowledgedPendingKeys);
+
+      // Conserver un tombstone plus récent créé pendant le transfert.
       if (pendingDeletions.length > 0) {
-        await db.pendingDeletions.bulkDelete(pendingDeletions.map((item) => item.key));
+        const currentDeletions = await db.pendingDeletions.bulkGet(pendingDeletions.map((item) => item.key));
+        const acknowledgedDeletionKeys = pendingDeletions.filter((item, index) =>
+          currentDeletions[index]?.deletedAt === item.deletedAt
+        ).map((item) => item.key);
+        await db.pendingDeletions.bulkDelete(acknowledgedDeletionKeys);
       }
 
       // Supprimer définitivement de Dexie les enfants marqués pour suppression (noms vides)

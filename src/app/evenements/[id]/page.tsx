@@ -3,29 +3,29 @@
 import React, { useState, useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   CalendarDays, CheckCircle2, Circle, Loader2, Plus, X,
-  Users, LayoutList, Info, Trash2, ArrowLeft, Pencil
+  Users, LayoutList, Info, Trash2, ArrowLeft
 } from "lucide-react";
 import { MobileHeader } from "@/components/ui/MobileHeader";
-import db, { generateId, markEntityForSync, markEntityForDeletion, type Child, type ChildTask, type TaskType } from "@/lib/db";
+import db, { generateId, markEntityForSync, deleteTaskForSync, deleteEventForSync, type Child, type ChildTask, type ClassLevel, type TaskType } from "@/lib/db";
 import { TASK_TYPES, getTaskTypeConfig } from "@/lib/taskTypes";
 import { ChildSelector } from "@/components/children/ChildSelector";
 import { ChildDetailsModal } from "@/components/children/ChildDetailsModal";
 import { useAuthUser } from "@/hooks/useAuthUser";
 
 type Tab = "infos" | "activites" | "participants";
+const EMPTY_CHILDREN: Child[] = [];
 
 // ─── Onglet Infos ─────────────────────────────────────────────────────────────
 function InfosTab({
-  title, date, description, tasks, isAdmin, eventId, onDelete,
+  date, description, tasks, isAdmin, onDelete,
 }: {
-  title: string;
   date: string;
   description?: string;
   tasks: ChildTask[];
   isAdmin: boolean;
-  eventId: string;
   onDelete: () => void;
 }) {
   const formatDate = (d: string) => {
@@ -129,7 +129,7 @@ function ActivitesTab({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const allChildren = useLiveQuery(() => db.children.orderBy("firstName").toArray(), []) ?? [];
+  const allChildren = useLiveQuery(() => db.children.orderBy("firstName").toArray(), []) ?? EMPTY_CHILDREN;
 
   const displayedChildren = useMemo(() => {
     if (audienceType === "SINGLE") return allChildren;
@@ -154,9 +154,7 @@ function ActivitesTab({
   };
 
   const deleteTask = async (taskId: string) => {
-    // Supprimer localement et enregistrer le tombstone pour le serveur (T01)
-    await db.tasks.delete(taskId);
-    await markEntityForDeletion('task', taskId);
+    await deleteTaskForSync(taskId);
   };
 
   const handleAdd = async () => {
@@ -242,17 +240,17 @@ function ActivitesTab({
           {audienceType === "GROUP" && (
             <select
               value={targetClass}
-              onChange={(e) => { setTargetClass(e.target.value as any); setSelectedIds([]); }}
+              onChange={(e) => { setTargetClass(e.target.value as ClassLevel | "ALL"); setSelectedIds([]); }}
               className="w-full h-9 px-3 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:border-[#00b22d]"
             >
-              <option value="ALL">Toute l'école du dimanche</option>
+              <option value="ALL">Toute l&apos;école du dimanche</option>
               <option value="FIRST">Classe 1</option>
               <option value="SECOND">Classe 2</option>
               <option value="THIRD">Classe 3</option>
             </select>
           )}
           <ChildSelector
-            children={displayedChildren}
+            childRecords={displayedChildren}
             selectedIds={selectedIds}
             onChange={setSelectedIds}
             variant="light"
@@ -361,7 +359,7 @@ function ParticipantsTab({
     return (
       <div className="text-center py-12 text-gray-400 pt-6">
         <Users className="w-10 h-10 mx-auto mb-2 opacity-30" strokeWidth={1.5} />
-        <p className="text-sm">Aucun participant pour l'instant.</p>
+        <p className="text-sm">Aucun participant pour l&apos;instant.</p>
       </div>
     );
   }
@@ -385,9 +383,12 @@ function ParticipantsTab({
             >
               {/* Avatar (photo ou initiale) */}
               {child?.photoUrl ? (
-                <img
+                <Image
                   src={child.photoUrl}
                   alt={childName}
+                  width={40}
+                  height={40}
+                  unoptimized
                   className="w-10 h-10 rounded-full object-cover shrink-0 border-2 border-white shadow-sm"
                 />
               ) : (
@@ -464,17 +465,8 @@ export default function EventDetailPage() {
 
   const handleDelete = async () => {
     if (!confirm("Supprimer cet événement et toutes ses tâches ?")) return;
-    // Récupérer les IDs des tâches avant suppression
-    const eventTasks = await db.tasks.where("eventId").equals(eventId).toArray();
-    const taskIds = eventTasks.map((t) => t.id);
-    // Supprimer les tâches et l'événement localement
-    await db.tasks.where("eventId").equals(eventId).delete();
-    await db.events.delete(eventId);
-    // Enregistrer les tombstones pour la synchronisation serveur (T01)
-    await markEntityForDeletion('event', eventId);
-    for (const taskId of taskIds) {
-      await markEntityForDeletion('task', taskId);
-    }
+    // Suppression locale et tombstones sont validés atomiquement dans Dexie.
+    await deleteEventForSync(eventId);
     router.back();
   };
 
@@ -495,7 +487,7 @@ export default function EventDetailPage() {
         <MobileHeader title="Introuvable" />
         <div className="flex flex-col justify-center items-center flex-1 gap-4 text-gray-400">
           <CalendarDays className="w-12 h-12 opacity-30" strokeWidth={1.5} />
-          <p className="text-sm">Cet événement n'existe pas.</p>
+          <p className="text-sm">Cet événement n&apos;existe pas.</p>
           <button onClick={() => router.back()} className="text-[#00b22d] text-sm font-bold">← Retour</button>
         </div>
       </main>
@@ -548,12 +540,10 @@ export default function EventDetailPage() {
       <div className="p-4 max-w-md mx-auto w-full">
         {activeTab === "infos" && (
           <InfosTab
-            title={event.title}
             date={event.date}
             description={event.description}
             tasks={tasks}
             isAdmin={isAdmin}
-            eventId={eventId}
             onDelete={handleDelete}
           />
         )}

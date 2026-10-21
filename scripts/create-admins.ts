@@ -1,74 +1,79 @@
-import { PrismaClient } from '../src/generated/prisma/client';
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
-import { PrismaLibSql } from '@prisma/adapter-libsql';
+import { createClient } from '@libsql/client';
 import bcrypt from 'bcryptjs';
 import 'dotenv/config';
+import { randomUUID } from 'node:crypto';
 
-const url = process.env.DATABASE_URL || 'file:./dev.db';
-const adapter =
-  url.startsWith('libsql://') || url.startsWith('https://')
-    ? new PrismaLibSql({ url, authToken: process.env.DATABASE_AUTH_TOKEN })
-    : new PrismaBetterSqlite3({ url });
+type Admin = {
+  username: string;
+  name: string;
+  title: string;
+  password: string;
+  role: 'ADMIN';
+};
 
-const prisma = new PrismaClient({ adapter });
+const url = process.env.DATABASE_URL;
+const authToken = process.env.DATABASE_AUTH_TOKEN;
+const resetExisting = process.argv.includes('--reset-passwords');
 
-async function main() {
-  console.log('Création des comptes administrateurs (moniteur-admin)...');
+if (!url) throw new Error('DATABASE_URL is not set.');
 
-  const admins = [
-    {
-      username: 'joseph.monga',
-      name: 'Monga Mpoyo Joseph',
-      title: "Directeur de l'écodim",
-      password: 'JosephEcodim2026!',
-      role: 'ADMIN',
-    },
-    {
-      username: 'serge.kasongo',
-      name: 'Kasongo Lubangi Serge',
-      title: 'Second',
-      password: 'SergeEcodim2026!',
-      role: 'ADMIN',
-    },
-  ];
+const admins: Admin[] = [
+  {
+    username: 'joseph.monga',
+    name: 'Monga Mpoyo Joseph',
+    title: "Directeur de l'écodim",
+    password: process.env.ADMIN_JOSEPH_PASSWORD ?? '',
+    role: 'ADMIN',
+  },
+  {
+    username: 'serge.kasongo',
+    name: 'Kasongo Lubangi Serge',
+    title: 'Second',
+    password: process.env.ADMIN_SERGE_PASSWORD ?? '',
+    role: 'ADMIN',
+  },
+];
 
-  for (const admin of admins) {
-    const hashedPassword = await bcrypt.hash(admin.password, 10);
-    const user = await prisma.user.upsert({
-      where: { username: admin.username },
-      update: {
-        name: admin.name,
-        title: admin.title,
-        password: hashedPassword,
-        role: admin.role,
-        isBlocked: false,
-      },
-      create: {
-        username: admin.username,
-        name: admin.name,
-        title: admin.title,
-        password: hashedPassword,
-        role: admin.role,
-        isBlocked: false,
-      },
-    });
-
-    console.log(`----------------------------------------`);
-    console.log(`Compte Admin créé/mis à jour avec succès :`);
-    console.log(`Nom: ${user.name}`);
-    console.log(`Statut/Titre: ${user.title}`);
-    console.log(`Nom d'utilisateur (Login): ${user.username}`);
-    console.log(`Mot de passe: ${admin.password}`);
-  }
-  console.log(`----------------------------------------`);
-  console.log('Opération terminée.');
+if (admins.some((admin) => admin.password.length < 12)) {
+  throw new Error('Définis ADMIN_JOSEPH_PASSWORD et ADMIN_SERGE_PASSWORD avec au moins 12 caractères.');
 }
 
-main()
-  .catch((error) => {
-    console.error('Erreur lors de la création des admins:', error);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+const client = createClient({ url, authToken });
+
+try {
+  for (const admin of admins) {
+    const existing = await client.execute({
+      sql: 'SELECT id FROM User WHERE username = ? LIMIT 1',
+      args: [admin.username],
+    });
+
+    if (existing.rows.length > 0 && !resetExisting) {
+      console.log(`Compte ${admin.username} déjà présent ; mot de passe conservé (utilise --reset-passwords pour le changer).`);
+      continue;
+    }
+
+    const passwordHash = await bcrypt.hash(admin.password, 10);
+    const now = new Date().toISOString();
+
+    if (existing.rows.length > 0) {
+      await client.execute({
+        sql: `UPDATE User SET password = ?, name = ?, role = ?, title = ?, isBlocked = 0, updatedAt = ?
+              WHERE username = ?`,
+        args: [passwordHash, admin.name, admin.role, admin.title, now, admin.username],
+      });
+    } else {
+      await client.execute({
+        sql: `INSERT INTO User (id, username, password, name, role, title, isBlocked, createdAt, updatedAt)
+              VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+        args: [randomUUID(), admin.username, passwordHash, admin.name, admin.role, admin.title, now, now],
+      });
+    }
+
+    console.log(`Compte administrateur ${admin.username} ${existing.rows.length ? 'actualisé' : 'créé'}.`);
+  }
+} catch (error) {
+  console.error('Échec de la création des comptes administrateurs :', error);
+  process.exitCode = 1;
+} finally {
+  client.close();
+}

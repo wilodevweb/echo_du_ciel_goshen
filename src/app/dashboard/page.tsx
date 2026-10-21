@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
+import { clearCachedUser } from "@/hooks/useAuthUser";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Users, History, Upload, ArrowLeft, Loader2, LogOut } from "lucide-react";
@@ -82,7 +83,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <button 
-            onClick={() => signOut({ callbackUrl: "/login" })} 
+            onClick={() => { clearCachedUser(); void signOut({ callbackUrl: "/login" }); }}
             className="flex items-center gap-2 text-sm font-semibold bg-red-950/40 border border-red-900/30 hover:bg-red-900/30 text-red-400 px-4 py-2 rounded-xl transition flex-shrink-0"
           >
             <LogOut className="w-4 h-4" />

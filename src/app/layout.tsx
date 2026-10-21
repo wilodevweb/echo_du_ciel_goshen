@@ -1,12 +1,5 @@
 import type { Metadata } from "next";
-import { Jost } from "next/font/google";
 import "./globals.css";
-
-const jost = Jost({
-  subsets: ["latin"],
-  variable: "--font-sans",
-  display: "swap",
-});
 
 export const viewport = {
   themeColor: "#ffffff",
@@ -56,7 +49,7 @@ export default function RootLayout({
       lang="fr"
       className="h-full antialiased"
     >
-      <body className={`min-h-full flex flex-col ${jost.variable} font-sans`}>
+      <body className="min-h-full flex flex-col font-sans">
         <RegisterPWA />
         <StoragePersister />
         <PushNotifier />

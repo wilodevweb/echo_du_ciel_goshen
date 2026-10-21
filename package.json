@@ -3,11 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev-demo.mjs",
+    "dev:full": "node scripts/dev-demo-full.mjs",
+    "dev:real": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "seed": "prisma db seed",
+    "create-admins": "node scripts/create-admins.mjs",
     "postinstall": "prisma generate"
   },
   "dependencies": {

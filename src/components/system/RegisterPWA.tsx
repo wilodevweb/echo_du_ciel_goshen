@@ -44,14 +44,14 @@ export function RegisterPWA() {
         });
 
       // 3. Forcer la recherche de mises à jour régulièrement à chaque changement de focus ou retour en ligne
+      let lastUpdateCheckAt = 0;
       const checkForUpdates = () => {
+        const now = Date.now();
+        if (now - lastUpdateCheckAt < 60_000) return;
+        lastUpdateCheckAt = now;
         navigator.serviceWorker.ready.then((registration) => {
           if (navigator.onLine) {
             registration.update().catch((e) => console.warn("Échec de la recherche de mise à jour du SW", e));
-            // Envoyer un message au Service Worker actif pour qu'il mette à jour silencieusement les fichiers en cache
-            if (navigator.serviceWorker.controller) {
-              navigator.serviceWorker.controller.postMessage({ type: "REFRESH_PRECACHE" });
-            }
           }
         });
       };

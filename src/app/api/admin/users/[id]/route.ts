@@ -1,5 +1,4 @@
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../../auth/[...nextauth]/route";
+import { getActiveAdminSessionUser } from "@/lib/serverAuth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -7,18 +6,22 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as { role?: string }).role !== "ADMIN") {
+  const admin = await getActiveAdminSessionUser();
+  if (!admin) {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   }
 
   const { id } = await params;
-  if ((session.user as { id?: string }).id === id) {
+  if (admin.id === id) {
     return NextResponse.json({ error: "Vous ne pouvez pas bloquer votre propre compte" }, { status: 400 });
   }
 
   try {
-    const { isBlocked } = await req.json();
+    const body: unknown = await req.json();
+    if (!body || typeof body !== "object" || !("isBlocked" in body) || typeof body.isBlocked !== "boolean") {
+      return NextResponse.json({ error: "Statut de blocage invalide." }, { status: 400 });
+    }
+    const { isBlocked } = body;
 
     const targetUser = await prisma.user.findUnique({
       where: { id },
@@ -26,6 +29,9 @@ export async function PATCH(
 
     if (!targetUser) {
       return NextResponse.json({ error: "Utilisateur introuvable" }, { status: 404 });
+    }
+    if (targetUser.role === "ADMIN") {
+      return NextResponse.json({ error: "Les comptes administrateurs sont protégés." }, { status: 403 });
     }
 
     const updatedUser = await prisma.user.update({
@@ -41,9 +47,9 @@ export async function PATCH(
 
     await prisma.activityLog.create({
       data: {
-        userId: (session.user as { id?: string }).id || "",
-        username: (session.user as { username?: string }).username || "",
-        userFullName: session.user?.name || "",
+        userId: admin.id,
+        username: admin.username,
+        userFullName: admin.name || admin.username,
         action,
         details,
       },
@@ -60,13 +66,13 @@ export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as { role?: string }).role !== "ADMIN") {
+  const admin = await getActiveAdminSessionUser();
+  if (!admin) {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   }
 
   const { id } = await params;
-  if ((session.user as { id?: string }).id === id) {
+  if (admin.id === id) {
     return NextResponse.json({ error: "Vous ne pouvez pas supprimer votre propre compte" }, { status: 400 });
   }
 
@@ -78,6 +84,9 @@ export async function DELETE(
     if (!targetUser) {
       return NextResponse.json({ error: "Utilisateur introuvable" }, { status: 404 });
     }
+    if (targetUser.role === "ADMIN") {
+      return NextResponse.json({ error: "Les comptes administrateurs sont protégés." }, { status: 403 });
+    }
 
     await prisma.user.delete({
       where: { id },
@@ -86,9 +95,9 @@ export async function DELETE(
     // Enregistrer le log
     await prisma.activityLog.create({
       data: {
-        userId: (session.user as { id?: string }).id || "",
-        username: (session.user as { username?: string }).username || "",
-        userFullName: session.user?.name || "",
+        userId: admin.id,
+        username: admin.username,
+        userFullName: admin.name || admin.username,
         action: "DELETE_USER",
         details: `Suppression définitive du compte de ${targetUser.name} (${targetUser.username})`,
       },

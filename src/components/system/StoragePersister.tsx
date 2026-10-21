@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, HardDrive } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 
 export function StoragePersister() {
-  const [isPersisted, setIsPersisted] = useState<boolean | null>(null);
   const [quotaWarning, setQuotaWarning] = useState<string | null>(null);
 
   useEffect(() => {
@@ -14,11 +13,7 @@ export function StoragePersister() {
       try {
         // 1. Demander la persistance du stockage pour empêcher l'éviction par le navigateur
         if (navigator.storage.persist) {
-          const persisted = await navigator.storage.persist();
-          setIsPersisted(persisted);
-        } else if (navigator.storage.persisted) {
-          const persisted = await navigator.storage.persisted();
-          setIsPersisted(persisted);
+          await navigator.storage.persist();
         }
 
         // 2. Estimer l'espace disque disponible

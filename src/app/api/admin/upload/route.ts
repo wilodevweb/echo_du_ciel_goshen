@@ -1,16 +1,15 @@
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../auth/[...nextauth]/route";
+import { getActiveAdminSessionUser } from "@/lib/serverAuth";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user as { role?: string }).role !== "ADMIN") {
+  const admin = await getActiveAdminSessionUser();
+  if (!admin) {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   }
 
   try {
-    const formData = await req.formData();
+    const formData = await req.formData() as unknown as { get(name: string): FormDataEntryValue | null };
     const file = formData.get("file") as File | null;
     const title = formData.get("title") as string | null;
     const type = formData.get("type") as string | null; // "image" | "video" | "pdf"
@@ -50,15 +49,15 @@ export async function POST(req: Request) {
     // Enregistrer le log d'activité
     await prisma.activityLog.create({
       data: {
-        userId: (session.user as { id?: string }).id || "",
-        username: (session.user as { username?: string }).username || "",
-        userFullName: session.user?.name || "",
+        userId: admin.id,
+        username: admin.username,
+        userFullName: admin.name || admin.username,
         action: "UPLOAD_FILE",
         details: `Téléchargement du fichier : "${title}" (${type})`,
       },
     });
 
-    return NextResponse.json({ success: true, media });
+    return NextResponse.json({ success: true, media: { id: media.id, title: media.title, type: media.type, createdAt: media.createdAt } });
   } catch (error) {
     console.error("Erreur POST /api/admin/upload:", error);
     return NextResponse.json({ error: "Erreur serveur lors du téléversement" }, { status: 500 });

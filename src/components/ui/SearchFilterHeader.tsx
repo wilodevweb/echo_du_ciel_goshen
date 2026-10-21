@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useSearchParams, usePathname } from "next/navigation";
 
 export interface FilterOption {
   label: string;
@@ -42,7 +42,6 @@ export function SearchFilterHeader({
   filterParamName = "type",
   showSearchBar = true,
 }: SearchFilterHeaderProps) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
 

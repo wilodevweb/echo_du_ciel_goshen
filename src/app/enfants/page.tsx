@@ -33,9 +33,9 @@ export default function ChildrenList() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const searchParams = new URL(window.location.href).searchParams;
-      const newChildId = searchParams.get("newChildId");
-      if (newChildId) {
-        db.children.get(newChildId).then((child) => {
+      const selectedChildId = searchParams.get("selectedChildId") ?? searchParams.get("newChildId");
+      if (selectedChildId) {
+        db.children.get(selectedChildId).then((child) => {
           if (child) {
             setSelectedChild(child);
             // Nettoyer l'URL

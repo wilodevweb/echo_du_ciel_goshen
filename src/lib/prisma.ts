@@ -19,8 +19,12 @@ if (proxyUrl) {
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
 const url = process.env.DATABASE_URL || 'file:./dev.db';
+const useLibSqlAdapter =
+  url.startsWith('libsql://') ||
+  url.startsWith('https://') ||
+  process.env.GOSHEN_DEMO_MODE === '1';
 
-const adapter = url.startsWith('libsql://') || url.startsWith('https://')
+const adapter = useLibSqlAdapter
   ? new PrismaLibSql({ url, authToken: process.env.DATABASE_AUTH_TOKEN })
   : new PrismaBetterSqlite3({ url });
 

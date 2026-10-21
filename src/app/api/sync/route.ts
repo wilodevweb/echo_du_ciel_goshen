@@ -1,20 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { SYNC_ATTENDANCE_MIN_DATE } from "@/lib/constants";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../auth/[...nextauth]/route";
-import { getToken } from "next-auth/jwt";
+import { getActiveRequestUser } from "@/lib/serverAuth";
 
 type ChildPatch = [string, string, ...string[]];
-type AttendancePatch = [string, string, string];
+type AttendancePatch = [string, string, string, string?];
 type EventPatch = [string, string, string, string];
 type TaskPatch = [string, string, string, string, string, string];
-
-interface CustomUser {
-  id: string;
-  username: string;
-}
 
 interface SyncAttendance {
   id: string;
@@ -42,8 +35,17 @@ const childFieldByCode: Record<string, string> = {
   p: "parentId",
 };
 
+const MAX_ATTENDANCE_CLOCK_SKEW_MS = 2 * 60 * 1000;
+
 function normalizeName(value?: string | null) {
   return (value ?? "").trim().toLowerCase();
+}
+
+function getStringIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.filter(
+    (id): id is string => typeof id === "string" && id.length > 0 && id.length <= 128,
+  )));
 }
 
 
@@ -87,7 +89,13 @@ function deduplicateAttendancePatches(patches: AttendancePatch[]) {
 
   for (const patch of patches) {
     const [childId, compactDate] = patch;
-    patchByKey.set(`${childId}:${compactDate}`, patch);
+    const key = `${childId}:${compactDate}`;
+    const existing = patchByKey.get(key);
+    const patchTime = patch[3] ? Date.parse(patch[3]) : Number.NaN;
+    const existingTime = existing?.[3] ? Date.parse(existing[3]) : Number.NaN;
+    if (!existing || (Number.isFinite(patchTime) && (!Number.isFinite(existingTime) || patchTime >= existingTime))) {
+      patchByKey.set(key, patch);
+    }
   }
 
   return Array.from(patchByKey.values());
@@ -265,20 +273,14 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    const nativeRequest = session ? null : new NextRequest(req.url, { headers: req.headers });
-    const nativeToken = nativeRequest ? await getToken({ req: nativeRequest, secret: authOptions.secret ?? process.env.NEXTAUTH_SECRET }) : null;
-    const authenticatedUser = session?.user
-      ? { id: (session.user as CustomUser).id, username: (session.user as CustomUser).username, name: session.user.name }
-      : nativeToken?.id && nativeToken.username
-        ? { id: String(nativeToken.id), username: String(nativeToken.username), name: typeof nativeToken.name === "string" ? nativeToken.name : null }
-        : null;
+    const authenticatedUser = await getActiveRequestUser(req);
     if (!authenticatedUser) {
-      return NextResponse.json({ success: false, error: "Authentification requise." }, { status: 401 });
+      return NextResponse.json({ success: false, error: "Session invalide ou compte bloqué. Reconnectez-vous." }, { status: 401 });
     }
     const userId = authenticatedUser.id;
     const username = authenticatedUser.username;
     const userFullName = authenticatedUser.name || authenticatedUser.username;
+    const isAdmin = authenticatedUser.role === "ADMIN";
 
     const data = await req.json();
     const { mode } = data;
@@ -297,13 +299,34 @@ export async function POST(req: Request) {
     if (mode === "sync-v2") {
       const childPatches = Array.isArray(data.c) ? data.c as ChildPatch[] : [];
       const attendancePatches = Array.isArray(data.a) ? data.a as AttendancePatch[] : [];
-      const knownChildIds = Array.isArray(data.kc) ? data.kc : [];
-      const knownAttendanceKeys = new Set(Array.isArray(data.ka) ? data.ka : []);
+      const compactDeleteProtocol = data.compactDeletes === true;
+      const knownChildIds = getStringIds(data.kc);
+      const knownParentIds = getStringIds(data.kp);
+      const knownEventIds = getStringIds(data.ke);
+      const knownTaskIds = getStringIds(data.kt);
+      const compactKnownAttendanceKeys = Array.isArray(data.ka2)
+        ? data.ka2.flatMap((entry: unknown) => {
+            if (!Array.isArray(entry) || typeof entry[0] !== "string" || !Array.isArray(entry[1])) return [];
+            return entry[1]
+              .filter((date: unknown): date is string => typeof date === "string")
+              .map((date: string) => `${entry[0]}:${date}`);
+          })
+        : [];
+      const knownAttendanceKeys = new Set([
+        ...(Array.isArray(data.ka) ? data.ka.filter((key: unknown): key is string => typeof key === "string") : []),
+        ...compactKnownAttendanceKeys,
+      ]);
       const eventPatches = Array.isArray(data.e) ? data.e as EventPatch[] : [];
       const taskPatches = Array.isArray(data.t) ? data.t as TaskPatch[] : [];
+      const deletedTaskIds = getStringIds(data.dt);
+      const deletedEventIds = getStringIds(data.de);
+
+      if (!isAdmin && (eventPatches.length > 0 || deletedTaskIds.length > 0 || deletedEventIds.length > 0)) {
+        return NextResponse.json({ success: false, error: "Ces modifications sont réservées aux administrateurs." }, { status: 403 });
+      }
       
       const pushedChildIds = new Set(childPatches.map((patch) => patch[0]));
-      const pushedAttendanceKeys = new Set(attendancePatches.map((patch) => `${patch[0]}:${patch[1]}`));
+      const pushedAttendanceKeys = new Set(attendancePatches.map((patch) => `${patch[0]}:${encodeDate(decodeDate(patch[1]))}`));
       let acceptedAttendanceKeys: string[] = [];
       const pushedEventIds = new Set(eventPatches.map((patch) => patch[0]));
       const pushedTaskIds = new Set(taskPatches.map((patch) => patch[0]));
@@ -462,7 +485,7 @@ export async function POST(req: Request) {
 
             const targetChildId = id;
 
-            let createPhotoUrl = childData.photoUrl !== undefined ? (typeof childData.photoUrl === "string" ? childData.photoUrl : null) : null;
+            const createPhotoUrl = childData.photoUrl !== undefined ? (typeof childData.photoUrl === "string" ? childData.photoUrl : null) : null;
 
             // Pour la création (nouveau child), on doit fournir toutes les valeurs obligatoires
               const childCreateFields = {
@@ -501,11 +524,12 @@ export async function POST(req: Request) {
             const date = decodeDate(patch[1]);
             return date >= SYNC_ATTENDANCE_MIN_DATE;
           }).map((patch) => {
-            const [childId, compactDate, statusCode] = patch;
+            const [childId, compactDate, statusCode, clientMarkedAt] = patch;
             return [
               canonicalChildIdByClientId.get(childId) ?? childId,
               compactDate,
               statusCode,
+              clientMarkedAt,
             ] as AttendancePatch;
           }),
         );
@@ -530,39 +554,52 @@ export async function POST(req: Request) {
              // On laisse la suite s'exécuter, elle ne fera rien car les tableaux seront vides
           }
 
-          let existingAttendances: { childId: string; date: string }[] = [];
+          let existingAttendances: Array<{ childId: string; date: string; status: string; markedAt: Date }> = [];
           if (attendanceKeys.length > 0) {
             existingAttendances = await tx.attendance.findMany({
               where: {
                 OR: attendanceKeys,
               },
-              select: { childId: true, date: true },
+              select: { childId: true, date: true, status: true, markedAt: true },
             });
           }
 
-          const existingKeys = new Set(
-            existingAttendances.map((a) => `${a.childId}:${a.date}`)
+          const existingByKey = new Map<string, (typeof existingAttendances)[number]>(
+            existingAttendances.map((attendance): [string, (typeof existingAttendances)[number]] => [
+              `${attendance.childId}:${attendance.date}`,
+              attendance,
+            ])
           );
 
           const attendanceCreates: Array<{ childId: string; date: string; present: boolean; status: string; markedAt: Date }> = [];
-          const attendanceUpdates: Array<{ childId: string; date: string; status: string }> = [];
+          const attendanceUpdates: Array<{ childId: string; date: string; status: string; markedAt: Date }> = [];
 
           for (const patch of validAttendancePatches) {
-            const [childId, compactDate, statusCode] = patch;
+            const [childId, compactDate, statusCode, clientMarkedAt] = patch;
             const date = decodeDate(compactDate);
             const status = decodeStatus(statusCode);
             const key = `${childId}:${date}`;
+            const parsedClientTime = clientMarkedAt ? Date.parse(clientMarkedAt) : Number.NaN;
+            const actionAt = Number.isFinite(parsedClientTime)
+              && parsedClientTime <= serverSyncedAt.getTime() + MAX_ATTENDANCE_CLOCK_SKEW_MS
+              ? new Date(parsedClientTime)
+              : serverSyncedAt;
+            const existing = existingByKey.get(key);
 
-            if (existingKeys.has(key)) {
-              attendanceUpdates.push({ childId, date, status });
+            if (existing) {
+              // L’horodatage de l’action locale gagne; en cas d’égalité, le pointage serveur actuel reste canonique.
+              if (actionAt > existing.markedAt) {
+                attendanceUpdates.push({ childId, date, status, markedAt: actionAt });
+              }
             } else {
               attendanceCreates.push({
                 childId,
                 date,
                 present: status === "PRESENT",
                 status,
-                markedAt: serverSyncedAt,
+                markedAt: actionAt,
               });
+              existingByKey.set(key, { childId, date, status, markedAt: actionAt });
             }
           }
 
@@ -585,7 +622,7 @@ export async function POST(req: Request) {
                   data: {
                     present: up.status === "PRESENT",
                     status: up.status,
-                    markedAt: serverSyncedAt,
+                    markedAt: up.markedAt,
                   },
                 })
               )
@@ -606,7 +643,6 @@ export async function POST(req: Request) {
         }
 
         // Supprimer les tâches demandées par le client (T02 - Tombstones tâches)
-        const deletedTaskIds = Array.isArray(data.dt) ? (data.dt as string[]).filter(Boolean) : [];
         if (deletedTaskIds.length > 0) {
           await tx.task.deleteMany({
             where: { id: { in: deletedTaskIds } },
@@ -614,7 +650,6 @@ export async function POST(req: Request) {
         }
 
         // Supprimer les événements demandés par le client (T02 - Tombstones événements avec cascade sur tâches)
-        const deletedEventIds = Array.isArray(data.de) ? (data.de as string[]).filter(Boolean) : [];
         if (deletedEventIds.length > 0) {
           await tx.task.deleteMany({
             where: { eventId: { in: deletedEventIds } },
@@ -647,36 +682,50 @@ export async function POST(req: Request) {
         
         // 5. Gérer les Tâches
         if (taskPatches.length > 0) {
-          // Pré-charger les IDs valides en 2 requêtes au lieu de N*2
-          const taskChildIds = [...new Set(taskPatches.map((p) => p[2]))];
-          const taskEventIds = [...new Set(taskPatches.map((p) => p[1]))];
-          const [validTaskChildren, validTaskEvents] = await Promise.all([
-            tx.child.findMany({ where: { id: { in: taskChildIds } }, select: { id: true } }),
-            tx.event.findMany({ where: { id: { in: taskEventIds } }, select: { id: true } }),
-          ]);
-          const validChildIdSet = new Set(validTaskChildren.map((c) => c.id));
-          const validEventIdSet = new Set(validTaskEvents.map((e) => e.id));
-
-          for (const patch of taskPatches) {
-            const taskData = decodeTaskPatch(patch);
-            if (!validChildIdSet.has(taskData.childId) || !validEventIdSet.has(taskData.eventId)) continue;
-
-            await tx.task.upsert({
-              where: { id: taskData.id },
-              update: {
-                title: taskData.title,
-                type: taskData.type,
-                done: taskData.done,
-              },
-              create: {
-                id: taskData.id,
-                eventId: taskData.eventId,
-                childId: taskData.childId,
-                title: taskData.title,
-                type: taskData.type,
-                done: taskData.done,
-              },
+          if (!isAdmin) {
+            // Les moniteurs peuvent cocher les tâches existantes, mais pas en créer ni en modifier le contenu.
+            const existingTasks = await tx.task.findMany({
+              where: { id: { in: [...new Set(taskPatches.map((patch) => patch[0]))] } },
+              select: { id: true },
             });
+            const existingTaskIds = new Set(existingTasks.map((task) => task.id));
+            for (const patch of taskPatches) {
+              const taskData = decodeTaskPatch(patch);
+              if (!existingTaskIds.has(taskData.id)) continue;
+              await tx.task.update({ where: { id: taskData.id }, data: { done: taskData.done } });
+            }
+          } else {
+            // Pré-charger les IDs valides en 2 requêtes au lieu de N*2
+            const taskChildIds = [...new Set(taskPatches.map((p) => p[2]))];
+            const taskEventIds = [...new Set(taskPatches.map((p) => p[1]))];
+            const [validTaskChildren, validTaskEvents] = await Promise.all([
+              tx.child.findMany({ where: { id: { in: taskChildIds } }, select: { id: true } }),
+              tx.event.findMany({ where: { id: { in: taskEventIds } }, select: { id: true } }),
+            ]);
+            const validChildIdSet = new Set(validTaskChildren.map((c) => c.id));
+            const validEventIdSet = new Set(validTaskEvents.map((e) => e.id));
+
+            for (const patch of taskPatches) {
+              const taskData = decodeTaskPatch(patch);
+              if (!validChildIdSet.has(taskData.childId) || !validEventIdSet.has(taskData.eventId)) continue;
+
+              await tx.task.upsert({
+                where: { id: taskData.id },
+                update: {
+                  title: taskData.title,
+                  type: taskData.type,
+                  done: taskData.done,
+                },
+                create: {
+                  id: taskData.id,
+                  eventId: taskData.eventId,
+                  childId: taskData.childId,
+                  title: taskData.title,
+                  type: taskData.type,
+                  done: taskData.done,
+                },
+              });
+            }
           }
         }
       }, {
@@ -716,6 +765,21 @@ export async function POST(req: Request) {
         ? { updatedAt: { gt: lastSyncDate } }
         : undefined;
 
+      const canonicalPushedAttendanceKeys = new Set(attendancePatches.map((patch) =>
+        `${canonicalChildIdByClientId.get(patch[0]) ?? patch[0]}:${encodeDate(decodeDate(patch[1]))}`
+      ));
+      const attendanceWhere: Prisma.AttendanceWhereInput = {
+        date: { gte: SYNC_ATTENDANCE_MIN_DATE },
+        ...(hasValidLastSyncDate ? {
+          OR: [
+            { updatedAt: { gt: lastSyncDate } },
+            ...Array.from(canonicalPushedAttendanceKeys, (key) => {
+              const separator = key.lastIndexOf(":");
+              return { childId: key.slice(0, separator), date: decodeDate(key.slice(separator + 1)) };
+            }),
+          ],
+        } : {}),
+      };
       const [serverChildren, serverParents, serverAttendances, serverEvents, serverTasks] = await Promise.all([
         prisma.child.findMany({
           where: childWhere,
@@ -729,9 +793,7 @@ export async function POST(req: Request) {
           where: parentWhere,
         }),
         prisma.attendance.findMany({
-          where: hasValidLastSyncDate
-            ? { markedAt: { gt: lastSyncDate }, date: { gte: SYNC_ATTENDANCE_MIN_DATE } }
-            : { date: { gte: SYNC_ATTENDANCE_MIN_DATE } },
+          where: attendanceWhere,
           orderBy: [
             { date: "asc" },
             { childId: "asc" },
@@ -751,28 +813,62 @@ export async function POST(req: Request) {
       const deltaAttendances = serverAttendances.filter((attendance) => {
         const key = `${attendance.childId}:${encodeDate(attendance.date)}`;
         const isMissing = !knownAttendanceKeys.has(key);
-        const isUpdatedSinceLastSync = hasValidLastSyncDate && attendance.markedAt > lastSyncDate;
+        const isUpdatedSinceLastSync = hasValidLastSyncDate && attendance.updatedAt > lastSyncDate;
 
-        return !pushedAttendanceKeys.has(key) && (isMissing || isUpdatedSinceLastSync);
+        // Renvoyer aussi le pointage canonique pour toute mutation envoyée, y compris un conflit perdu.
+        return pushedAttendanceKeys.has(key) || canonicalPushedAttendanceKeys.has(key) || isMissing || isUpdatedSinceLastSync;
       });
 
-      // Enregistrer l'activité de synchronisation v2
-      await prisma.activityLog.create({
-        data: {
-          userId,
-          username,
-          userFullName,
-          action: "SYNC_DATA",
-          details: `Synchronisation (v2) : ${childPatches.length} modifications d'enfants et ${attendancePatches.length} pointages de présence envoyés.`,
-        },
-      });
+      const hasRequestedChanges = childPatches.length > 0 || attendancePatches.length > 0
+        || eventPatches.length > 0 || taskPatches.length > 0 || deletedTaskIds.length > 0
+        || deletedEventIds.length > 0 || (Array.isArray(data.dp) && data.dp.length > 0);
+      if (hasRequestedChanges) {
+        await prisma.activityLog.create({
+          data: {
+            userId,
+            username,
+            userFullName,
+            action: "SYNC_DATA",
+            details: `Synchronisation (v2) : ${childPatches.length} modifications d'enfants et ${attendancePatches.length} pointages envoyés.`,
+          },
+        });
+      }
 
-      const [allChildIds, allParentIds, allEvents, allTasks] = await Promise.all([
-        prisma.child.findMany({ select: { id: true } }),
-        prisma.parent.findMany({ select: { id: true } }),
-        prisma.event.findMany({ select: { id: true } }),
-        prisma.task.findMany({ select: { id: true } }),
-      ]);
+      let activeChildIds: string[] | undefined;
+      let activeParentIds: string[] | undefined;
+      let activeEventIds: string[] | undefined;
+      let activeTaskIds: string[] | undefined;
+      let missingChildIds: string[] = [];
+      let missingParentIds: string[] = [];
+      let missingEventIds: string[] = [];
+      let missingTaskIds: string[] = [];
+      if (compactDeleteProtocol) {
+        const [knownChildren, knownParents, knownEvents, knownTasks] = await Promise.all([
+          knownChildIds.length ? prisma.child.findMany({ where: { id: { in: knownChildIds } }, select: { id: true } }) : [],
+          knownParentIds.length ? prisma.parent.findMany({ where: { id: { in: knownParentIds } }, select: { id: true } }) : [],
+          knownEventIds.length ? prisma.event.findMany({ where: { id: { in: knownEventIds } }, select: { id: true } }) : [],
+          knownTaskIds.length ? prisma.task.findMany({ where: { id: { in: knownTaskIds } }, select: { id: true } }) : [],
+        ]);
+        const knownChildSet = new Set(knownChildren.map((row) => row.id));
+        const knownParentSet = new Set(knownParents.map((row) => row.id));
+        const knownEventSet = new Set(knownEvents.map((row) => row.id));
+        const knownTaskSet = new Set(knownTasks.map((row) => row.id));
+        missingChildIds = knownChildIds.filter((id) => !knownChildSet.has(id));
+        missingParentIds = knownParentIds.filter((id) => !knownParentSet.has(id));
+        missingEventIds = knownEventIds.filter((id) => !knownEventSet.has(id));
+        missingTaskIds = knownTaskIds.filter((id) => !knownTaskSet.has(id));
+      } else {
+        const [allChildIds, allParentIds, allEvents, allTasks] = await Promise.all([
+          prisma.child.findMany({ select: { id: true } }),
+          prisma.parent.findMany({ select: { id: true } }),
+          prisma.event.findMany({ select: { id: true } }),
+          prisma.task.findMany({ select: { id: true } }),
+        ]);
+        activeChildIds = allChildIds.map((row) => row.id);
+        activeParentIds = allParentIds.map((row) => row.id);
+        activeEventIds = allEvents.map((row) => row.id);
+        activeTaskIds = allTasks.map((row) => row.id);
+      }
       const acceptedCanonicalAttendanceKeys = new Set(acceptedAttendanceKeys);
       const clientAcceptedAttendanceKeys = attendancePatches
         .filter((patch) => patch.length >= 3 && /^\d{8}$/.test(patch[1]) && ["p", "a", "m"].includes(patch[2]))
@@ -786,16 +882,19 @@ export async function POST(req: Request) {
         success: true,
         serverSyncedAt: serverSyncedAt.toISOString(),
         c: deltaChildren.map(compactChild),
-        d: Array.from(deletedChildIds),
+        d: Array.from(new Set([...deletedChildIds, ...missingChildIds])),
+        deletedParentIds: missingParentIds,
+        deletedEventIds: missingEventIds,
+        deletedTaskIds: missingTaskIds,
         p: serverParents.map(compactParent),
         a: deltaAttendances.map(compactAttendance),
         acceptedAttendanceKeys: clientAcceptedAttendanceKeys,
         e: deltaEvents.map(compactEvent),
         t: deltaTasks.map(compactTask),
-        activeChildIds: allChildIds.map((c) => c.id),
-        activeParentIds: allParentIds.map((p) => p.id),
-        activeEventIds: allEvents.map((e) => e.id),
-        activeTaskIds: allTasks.map((t) => t.id),
+        ...(activeChildIds ? { activeChildIds } : {}),
+        ...(activeParentIds ? { activeParentIds } : {}),
+        ...(activeEventIds ? { activeEventIds } : {}),
+        ...(activeTaskIds ? { activeTaskIds } : {}),
       });
     }
 
@@ -1025,7 +1124,7 @@ export async function POST(req: Request) {
         }),
         prisma.attendance.findMany({
           where: hasValidLastSyncDate
-            ? { markedAt: { gt: lastSyncDate }, date: { gte: SYNC_ATTENDANCE_MIN_DATE } }
+            ? { updatedAt: { gt: lastSyncDate }, date: { gte: SYNC_ATTENDANCE_MIN_DATE } }
             : { date: { gte: SYNC_ATTENDANCE_MIN_DATE } },
           orderBy: [
             { date: "asc" },
@@ -1037,20 +1136,9 @@ export async function POST(req: Request) {
       const deltaAttendances = serverAttendances.filter((attendance) => {
         const key = `${attendance.childId}:${attendance.date}`;
         const isMissing = !knownAttendanceKeys.has(key);
-        const isUpdatedSinceLastSync = hasValidLastSyncDate && attendance.markedAt > lastSyncDate;
+        const isUpdatedSinceLastSync = hasValidLastSyncDate && attendance.updatedAt > lastSyncDate;
 
         return !pushedAttendanceKeys.has(key) && (isMissing || isUpdatedSinceLastSync);
-      });
-
-      // Enregistrer l'activité de synchronisation delta
-      await prisma.activityLog.create({
-        data: {
-          userId,
-          username,
-          userFullName,
-          action: "SYNC_DATA",
-          details: `Synchronisation (delta) : ${children.length} enfants et ${attendances.length} présences envoyés`,
-        },
       });
 
       return NextResponse.json({
@@ -1075,17 +1163,6 @@ export async function POST(req: Request) {
       });
     }
 
-    // Enregistrer l'activité de synchronisation simple
-    await prisma.activityLog.create({
-      data: {
-        userId,
-        username,
-        userFullName,
-        action: "SYNC_DATA",
-        details: `Synchronisation réussie sans envoi de modifications`,
-      },
-    });
-
     return NextResponse.json({
       success: true,
       message: "Synchronisation réussie",
@@ -1093,12 +1170,9 @@ export async function POST(req: Request) {
     });
   } catch (error: unknown) {
     console.error("Erreur de synchronisation détaillée:", error);
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack : undefined;
     return NextResponse.json({
       success: false,
-      error: errorMessage || "Erreur serveur",
-      stack: errorStack,
+      error: "Erreur serveur lors de la synchronisation.",
     }, { status: 500 });
   }
 }

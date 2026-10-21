@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Echo du Ciel Goshen",
+    "slug": "echo-du-ciel-goshen",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "../public/icon-512x512.png",
+    "splash": {
+      "image": "../public/icon-512x512.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "android": {
+      "package": "org.echoduciel.goshen",
+      "adaptiveIcon": {
+        "foregroundImage": "../public/icon-512x512-maskable.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": []
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
+  }
+}

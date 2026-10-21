@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { CalendarDays, CheckCircle2, Circle, Plus, ChevronDown, ChevronRight, Loader2, X, Pencil } from "lucide-react";
-import db, { generateId, markEntityForSync, markEntityForDeletion, type ChildEvent, type ChildTask, type TaskType } from "@/lib/db";
+import db, { generateId, markEntityForSync, deleteTaskForSync, type ChildEvent, type ChildTask, type TaskType } from "@/lib/db";
 import { TASK_TYPES, getTaskTypeConfig } from "@/lib/taskTypes";
 import { ChildSelector } from "@/components/children/ChildSelector";
 
@@ -78,7 +78,7 @@ function AddTaskForm({
         />
       </div>
       <ChildSelector
-        children={allChildren}
+        childRecords={allChildren}
         selectedIds={selectedIds}
         onChange={setSelectedIds}
         variant="dark"
@@ -127,8 +127,7 @@ function EventCard({
   };
 
   const deleteTask = async (taskId: string) => {
-    await db.tasks.delete(taskId);
-    await markEntityForDeletion('task', taskId);
+    await deleteTaskForSync(taskId);
   };
 
   const saveTaskEdit = async (taskId: string) => {
@@ -339,7 +338,7 @@ export function EventsTab({ childId, isEditMode }: EventsTabProps) {
           <CalendarDays className="w-10 h-10 text-white/20 mx-auto mb-3" strokeWidth={1.5} />
           <p className="text-sm text-white/40 font-medium">Aucun événement créé.</p>
           {isEditMode && (
-            <p className="text-xs text-white/25 mt-1">Les événements se créent depuis l'onglet Événements (Admin).</p>
+            <p className="text-xs text-white/25 mt-1">Les événements se créent depuis l&apos;onglet Événements (Admin).</p>
           )}
         </div>
       ) : (

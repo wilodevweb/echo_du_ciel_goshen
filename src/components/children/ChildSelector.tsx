@@ -13,7 +13,7 @@ export interface ChildRecord {
 }
 
 interface ChildSelectorProps {
-  children: ChildRecord[];
+  childRecords: ChildRecord[];
   selectedIds: string[];
   onChange: (ids: string[]) => void;
   /** Fond sombre (modale enfant) ou clair (page événements) */
@@ -22,7 +22,7 @@ interface ChildSelectorProps {
 }
 
 export function ChildSelector({
-  children: allChildren,
+  childRecords: allChildren,
   selectedIds,
   onChange,
   variant = "light",
@@ -41,9 +41,10 @@ export function ChildSelector({
         getClassLabel(c.classLevel).toLowerCase().includes(q)
     );
   }, [allChildren, search]);
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   const toggle = (id: string) => {
-    if (selectedIds.includes(id)) {
+    if (selectedIdSet.has(id)) {
       onChange(selectedIds.filter((s) => s !== id));
     } else {
       onChange([...selectedIds, id]);
@@ -128,7 +129,7 @@ export function ChildSelector({
           </p>
         ) : (
           filtered.map((child) => {
-            const isChecked = selectedIds.includes(child.id);
+            const isChecked = selectedIdSet.has(child.id);
             return (
               <label key={child.id} className={itemCls}>
                 {/* Case à cocher custom */}

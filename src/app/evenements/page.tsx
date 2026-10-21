@@ -2,13 +2,11 @@
 
 import React, { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { CalendarDays, CheckCircle2, Loader2, Plus, X, ChevronRight } from "lucide-react";
+import { CalendarDays, Loader2, Plus, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { MobileHeader } from "@/components/ui/MobileHeader";
 import { LoadingState } from "@/components/ui/LoadingState";
-import db, { generateId, markEntityForSync, type ChildEvent, type ChildTask, type TaskType } from "@/lib/db";
-import { TASK_TYPES, getTaskTypeConfig } from "@/lib/taskTypes";
-import { ChildSelector } from "@/components/children/ChildSelector";
+import db, { generateId, markEntityForSync, type ChildEvent } from "@/lib/db";
 import { useAuthUser } from "@/hooks/useAuthUser";
 
 // ─── Formulaire création d'événement ────────────────────────────────────────
@@ -71,168 +69,24 @@ function CreateEventForm({ onCreated }: { onCreated: (event: ChildEvent) => void
         className="w-full h-10 flex items-center justify-center gap-2 rounded-xl bg-[#00b22d] text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#008f24] transition-all"
       >
         {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-        Créer l'événement
+        Créer l&apos;événement
       </button>
     </div>
   );
 }
 
-// ─── Formulaire ajout de tâche (Groupe ou Sélection libre) ──────────────────
-function AddTaskForm({
-  eventId,
-  onDone,
-}: {
-  eventId: string;
-  onDone: () => void;
-}) {
-  const [taskTitle, setTaskTitle] = useState("");
-  const [taskType, setTaskType] = useState<TaskType>("autre");
-  const [audienceType, setAudienceType] = useState<"GROUP" | "SINGLE">("GROUP");
-  const [targetClass, setTargetClass] = useState<"ALL" | "FIRST" | "SECOND" | "THIRD">("ALL");
-  const [targetChildIds, setTargetChildIds] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const allChildren = useLiveQuery(() => db.children.orderBy("firstName").toArray(), []) ?? [];
-
-  // Enfants filtrés par classe (mode Groupe), tous (mode Libre)
-  const displayedChildren = React.useMemo(() => {
-    if (audienceType === "SINGLE") return allChildren;
-    if (targetClass === "ALL") return allChildren;
-    return allChildren.filter((c) => c.classLevel === targetClass);
-  }, [allChildren, audienceType, targetClass]);
-
-  const handleAdd = async () => {
-    if (!taskTitle.trim() || targetChildIds.length === 0) return;
-    setIsLoading(true);
-    try {
-      const targetChildren = allChildren.filter((c) => targetChildIds.includes(c.id));
-      if (targetChildren.length === 0) return;
-
-      const newTasks: ChildTask[] = targetChildren.map((child) => ({
-        id: generateId(),
-        eventId,
-        childId: child.id,
-        title: taskTitle.trim(),
-        type: taskType,
-        done: false,
-        createdAt: new Date().toISOString(),
-      }));
-
-      await db.tasks.bulkAdd(newTasks);
-      // Marquer chaque tâche pour synchronisation
-      for (const task of newTasks) {
-        await markEntityForSync('task', task.id);
-      }
-      setTaskTitle("");
-      setTaskType("autre");
-      setTargetChildIds([]);
-      onDone();
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <div className="mt-4 p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-3">
-      <div className="flex justify-between items-center">
-        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Assigner une tâche</p>
-        <button type="button" onClick={onDone} className="text-gray-400 hover:text-gray-600">
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Type + Intitulé */}
-      <div className="flex gap-2">
-        <select
-          value={taskType}
-          onChange={(e) => setTaskType(e.target.value as TaskType)}
-          className="w-1/3 h-9 px-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:border-[#00b22d]"
-        >
-          {TASK_TYPES.map((t) => (
-            <option key={t.value} value={t.value}>{t.label}</option>
-          ))}
-        </select>
-        <input
-          type="text"
-          value={taskTitle}
-          onChange={(e) => setTaskTitle(e.target.value)}
-          placeholder="Intitulé de la tâche…"
-          autoFocus
-          className="flex-1 h-9 px-3 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:border-[#00b22d]"
-        />
-      </div>
-
-      {/* Mode */}
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => { setAudienceType("GROUP"); setTargetChildIds([]); }}
-          className={`flex-1 h-8 rounded-lg text-xs font-bold transition-all ${
-            audienceType === "GROUP" ? "bg-[#00b22d] text-white" : "bg-gray-200 text-gray-600 hover:bg-gray-300"
-          }`}
-        >
-          Par classe
-        </button>
-        <button
-          type="button"
-          onClick={() => { setAudienceType("SINGLE"); setTargetChildIds([]); }}
-          className={`flex-1 h-8 rounded-lg text-xs font-bold transition-all ${
-            audienceType === "SINGLE" ? "bg-[#00b22d] text-white" : "bg-gray-200 text-gray-600 hover:bg-gray-300"
-          }`}
-        >
-          Sélection libre
-        </button>
-      </div>
-
-      {/* Filtre de classe (mode Groupe seulement) */}
-      {audienceType === "GROUP" && (
-        <select
-          value={targetClass}
-          onChange={(e) => { setTargetClass(e.target.value as any); setTargetChildIds([]); }}
-          className="w-full h-9 px-3 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:border-[#00b22d]"
-        >
-          <option value="ALL">Toute l'école du dimanche</option>
-          <option value="FIRST">Classe 1</option>
-          <option value="SECOND">Classe 2</option>
-          <option value="THIRD">Classe 3</option>
-        </select>
-      )}
-
-      {/* Sélecteur enfants */}
-      <ChildSelector
-        children={displayedChildren}
-        selectedIds={targetChildIds}
-        onChange={setTargetChildIds}
-        variant="light"
-        maxHeight="max-h-44"
-      />
-
-      <button
-        type="button"
-        disabled={!taskTitle.trim() || isLoading || targetChildIds.length === 0}
-        onClick={handleAdd}
-        className="w-full h-9 rounded-lg bg-gray-900 text-white text-sm font-bold disabled:opacity-40 transition-all flex items-center justify-center gap-2 hover:bg-gray-800"
-      >
-        {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-        Assigner{targetChildIds.length > 0 ? ` (${targetChildIds.length})` : ""}
-      </button>
-    </div>
-  );
+interface EventTaskSummary {
+  doneCount: number;
+  totalCount: number;
+  uniqueChildren: number;
 }
 
-
-
-function EventCard({ eventId, title, date, description }: {
+function EventCard({ eventId, title, date, summary }: {
   eventId: string;
   title: string;
   date: string;
-  description?: string;
+  summary: EventTaskSummary;
 }) {
-  const allTasks = useLiveQuery(
-    () => db.tasks.where("eventId").equals(eventId).toArray(),
-    [eventId]
-  );
-
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "";
     const parts = dateStr.split("-").map(Number);
@@ -241,13 +95,7 @@ function EventCard({ eventId, title, date, description }: {
     return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
   };
 
-  const doneCount = allTasks?.filter((t) => t.done).length ?? 0;
-  const totalCount = allTasks?.length ?? 0;
-  const uniqueChildren = React.useMemo(() => {
-    const set = new Set<string>();
-    if (allTasks) for (const t of allTasks) set.add(t.childId);
-    return set.size;
-  }, [allTasks]);
+  const { doneCount, totalCount, uniqueChildren } = summary;
 
   const pct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 
@@ -298,6 +146,28 @@ export default function EvenementsPage() {
     () => db.events.orderBy("date").reverse().toArray(),
     []
   );
+  const eventIdsKey = (events ?? []).map((event) => event.id).join("\u0000");
+  const eventTasks = useLiveQuery(() => {
+    const eventIds = eventIdsKey ? eventIdsKey.split("\u0000") : [];
+    return eventIds.length ? db.tasks.where("eventId").anyOf(eventIds).toArray() : [];
+  }, [eventIdsKey]);
+  const taskSummaryByEvent = React.useMemo(() => {
+    const summaries = new Map<string, EventTaskSummary>();
+    const childrenByEvent = new Map<string, Set<string>>();
+    for (const task of eventTasks ?? []) {
+      const summary = summaries.get(task.eventId) ?? { doneCount: 0, totalCount: 0, uniqueChildren: 0 };
+      summary.totalCount += 1;
+      if (task.done) summary.doneCount += 1;
+      summaries.set(task.eventId, summary);
+      const children = childrenByEvent.get(task.eventId) ?? new Set<string>();
+      children.add(task.childId);
+      childrenByEvent.set(task.eventId, children);
+    }
+    for (const [eventId, summary] of summaries) {
+      summary.uniqueChildren = childrenByEvent.get(eventId)?.size ?? 0;
+    }
+    return summaries;
+  }, [eventTasks]);
 
   return (
     <main className="flex min-h-screen flex-col bg-gray-50 pb-10">
@@ -347,7 +217,7 @@ export default function EvenementsPage() {
                   eventId={event.id}
                   title={event.title}
                   date={event.date}
-                  description={event.description}
+                  summary={taskSummaryByEvent.get(event.id) ?? { doneCount: 0, totalCount: 0, uniqueChildren: 0 }}
                 />
               ))}
             </div>

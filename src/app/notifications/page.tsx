@@ -4,11 +4,9 @@ import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useAuthUser } from '@/hooks/useAuthUser';
-import { Bell, Gift, UserX, Phone, AlertCircle, Stethoscope, ArrowRightCircle, Archive, Clock } from 'lucide-react';
+import { Archive, ArrowLeft, ArrowRightCircle, AlertCircle, CheckCheck, Gift, Phone, Stethoscope, UserX } from 'lucide-react';
 import db, { getClassLabel, isDeletedChildRecord, type Child, type ClassLevel, markEntityForSync } from '@/lib/db';
 import { buildAttendanceHistoryMapAsync } from '@/components/pointage/utils';
-import { Card, CardContent } from '@/components/ui/Card';
-import { MobileHeader } from '@/components/ui/MobileHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
 
 function isBirthdaySoon(birthDate: string | undefined | null) {
@@ -101,6 +99,7 @@ export default function NotificationsPage() {
   const { isAdmin } = useAuthUser();
 
   const [transferRequest, setTransferRequest] = useState<{ childId: string; childName: string; classLevel: ClassLevel } | null>(null);
+  const [readAll, setReadAll] = useState(false);
   const allChildren = useLiveQuery(() => db.children.toArray());
   const historyMap = useLiveQuery(() => buildAttendanceHistoryMapAsync());
 
@@ -154,208 +153,75 @@ export default function NotificationsPage() {
     return { birthdays, absences, sick, incomplete };
   }, [allChildren, historyMap]);
 
+  const groups = notifications ? [
+    { id: 'birthdays', title: 'Anniversaires (7 jours)', icon: Gift, tone: 'gold', items: notifications.birthdays },
+    { id: 'absences', title: 'Absences prolongées', icon: UserX, tone: 'blue', items: notifications.absences },
+    { id: 'sick', title: 'Enfants malades', icon: Stethoscope, tone: 'green', items: notifications.sick },
+    { id: 'incomplete', title: 'Profils sans téléphone', icon: AlertCircle, tone: 'muted', items: notifications.incomplete },
+  ] as const : [];
+  const unreadCount = readAll ? 0 : new Set(groups.flatMap(group => group.items.map(child => child.id))).size;
+
   return (
-    <main className="flex min-h-screen flex-col bg-gray-50 pb-10">
-      <MobileHeader 
-        title="Notifications" 
-        rightElement={<Bell className="w-6 h-6 ml-2" />} 
-      />
+    <main className="min-h-dvh bg-[#0d1410] px-5 pb-10 text-[#e7ece8]">
+      <div className="mx-auto w-full max-w-3xl pt-14">
+        <div className="flex items-center justify-between">
+          <Link href="/" aria-label="Retour à l’accueil" className="flex h-11 w-11 items-center justify-center rounded-full border border-[#39463e] bg-[#19231d]"><ArrowLeft className="h-6 w-6" /></Link>
+          <button type="button" aria-label="Tout marquer comme lu" onClick={() => setReadAll(true)} className="flex h-11 w-11 items-center justify-center rounded-full border border-[#39463e] bg-[#19231d]"><CheckCheck className="h-6 w-6" /></button>
+        </div>
+        <header className="mt-2 flex flex-col items-center text-center">
+          <p className="text-[11px] font-bold tracking-[0.17em] text-[#8d9f93]">ÉCHO DU CIEL · GOSHEN</p>
+          <h1 className="mt-2 text-[40px] font-bold leading-[49px]">Notifications</h1>
+          <p className="mt-1 text-sm text-[#a7b2aa]">{unreadCount} {unreadCount === 1 ? "non lue" : "non lues"}</p>
+        </header>
 
-      <div className="p-4 flex-1 space-y-6 max-w-md mx-auto w-full">
-        {!notifications ? (
-          <LoadingState message="Chargement des notifications..." />
-        ) : (
-          <>
-            {/* Anniversaires */}
-            <section>
-              <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-                <Gift className="w-5 h-5 text-purple-500" />
-                Anniversaires (7 jours)
-                <span className="bg-purple-100 text-purple-700 text-xs py-0.5 px-2 rounded-full font-semibold">
-                  {notifications.birthdays.length}
-                </span>
-              </h2>
-              {notifications.birthdays.length === 0 ? (
-                <p className="text-sm text-gray-500 italic">Aucun anniversaire à venir.</p>
-              ) : (
-                <div className="space-y-3">
-                  {notifications.birthdays.map(child => {
-                    const targetAge = getTargetAge(child.birthDate);
-                    const expectedClass = getExpectedClass(targetAge);
-                    const needsChange = expectedClass !== null && expectedClass !== child.classLevel && !child.notes?.includes('[ARCHIVE]');
-                    
-                    return (
-                      <Card key={`bday-${child.id}`} padding="sm" className="border-l-4 border-l-purple-500 overflow-hidden">
-                        <CardContent className="flex flex-col gap-3">
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <p className="font-semibold text-gray-900">{getBirthdayMessage(child.birthDate, child.firstName)}</p>
-                              <p className="text-xs text-gray-500">{getClassLabel(child.classLevel)} • {child.lastName} {child.postName}</p>
-                            </div>
-                          </div>
-                          
-                          {needsChange && (
-                            <div className="bg-purple-50 p-3 -mx-4 -mb-4 mt-1 border-t border-purple-100">
-                              <p className="text-sm font-semibold text-purple-900 mb-2">
-                                {expectedClass === 'ARCHIVED' 
-                                  ? `Âge limite atteint (${targetAge} ans). L'enfant doit quitter l'écodim.`
-                                  : `Doit passer en ${getClassLabel(expectedClass)} (${targetAge} ans).`}
-                              </p>
-                              
-                              {isAdmin ? (
-                                <div className="flex gap-2">
-                                  {expectedClass === 'ARCHIVED' ? (
-                                    <>
-                                      <button 
-                                        onClick={() => handleArchive(child)}
-                                        className="flex-1 flex items-center justify-center gap-1.5 bg-red-100 text-red-700 py-2 rounded-xl text-xs font-bold hover:bg-red-200 transition-colors"
-                                      >
-                                        <Archive className="w-3.5 h-3.5" /> Archiver
-                                      </button>
-                                      <button 
-                                        className="flex-1 flex items-center justify-center gap-1.5 bg-gray-200 text-gray-700 py-2 rounded-xl text-xs font-bold hover:bg-gray-300 transition-colors"
-                                      >
-                                        <Clock className="w-3.5 h-3.5" /> Plus tard
-                                      </button>
-                                    </>
-                                  ) : (
-                                    <button 
-                                      onClick={() => setTransferRequest({ childId: child.id, childName: `${child.firstName} ${child.lastName}`, classLevel: expectedClass as ClassLevel })}
-                                      className="w-full flex items-center justify-center gap-1.5 bg-purple-600 text-white py-2 rounded-xl text-xs font-bold hover:bg-purple-700 transition-colors shadow-sm"
-                                    >
-                                      <ArrowRightCircle className="w-4 h-4" /> Transférer en {getClassLabel(expectedClass)}
-                                    </button>
-                                  )}
-                                </div>
-                              ) : (
-                                <p className="text-xs text-purple-700/70 italic flex items-center gap-1">
-                                  <AlertCircle className="w-3 h-3" />
-                                  En attente de confirmation par un Administrateur
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-
-            {/* Absences prolongées */}
-            <section>
-              <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-                <UserX className="w-5 h-5 text-red-500" />
-                Absences prolongées (3+ sem.)
-                <span className="bg-red-100 text-red-700 text-xs py-0.5 px-2 rounded-full font-semibold">
-                  {notifications.absences.length}
-                </span>
-              </h2>
-              {notifications.absences.length === 0 ? (
-                <p className="text-sm text-gray-500 italic">Aucune absence prolongée.</p>
-              ) : (
-                <div className="space-y-3">
-                  {notifications.absences.map(child => (
-                    <Card key={`abs-${child.id}`} padding="sm" className="border-l-4 border-l-red-500">
-                      <CardContent className="flex justify-between items-center">
-                        <div>
-                          <p className="font-semibold text-gray-900">{child.firstName} {child.lastName}</p>
-                          <p className="text-xs text-gray-500">{getClassLabel(child.classLevel)}</p>
-                        </div>
-                        {child.parentPhone && (
-                          <a 
-                            href={`tel:${child.parentPhone}`}
-                            className="bg-red-100 p-2 rounded-full text-red-600 hover:bg-red-200"
-                          >
-                            <Phone className="w-4 h-4" />
-                          </a>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* Enfants malades */}
-            <section>
-              <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-                <Stethoscope className="w-5 h-5 text-blue-500" />
-                Enfants malades (Dernier appel)
-                <span className="bg-blue-100 text-blue-700 text-xs py-0.5 px-2 rounded-full font-semibold">
-                  {notifications.sick.length}
-                </span>
-              </h2>
-              {notifications.sick.length === 0 ? (
-                <p className="text-sm text-gray-500 italic">Aucun enfant signalé malade.</p>
-              ) : (
-                <div className="space-y-3">
-                  {notifications.sick.map(child => (
-                    <Card key={`sick-${child.id}`} padding="sm" className="border-l-4 border-l-blue-500">
-                      <CardContent className="flex justify-between items-center">
-                        <div>
-                          <p className="font-semibold text-gray-900">{child.firstName} {child.lastName}</p>
-                          <p className="text-xs text-gray-500">{getClassLabel(child.classLevel)}</p>
-                        </div>
-                        {child.parentPhone && (
-                          <a 
-                            href={`tel:${child.parentPhone}`}
-                            className="bg-blue-100 p-2 rounded-full text-blue-600 hover:bg-blue-200"
-                          >
-                            <Phone className="w-4 h-4" />
-                          </a>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* Profils incomplets */}
-            <section>
-              <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-orange-500" />
-                Profils sans téléphone
-                <span className="bg-orange-100 text-orange-700 text-xs py-0.5 px-2 rounded-full font-semibold">
-                  {notifications.incomplete.length}
-                </span>
-              </h2>
-              {notifications.incomplete.length === 0 ? (
-                <p className="text-sm text-gray-500 italic">Tous les profils ont un numéro.</p>
-              ) : (
-                <div className="space-y-3">
-                  {notifications.incomplete.map(child => (
-                    <Card key={`inc-${child.id}`} padding="sm" className="border-l-4 border-l-orange-500">
-                      <CardContent className="flex justify-between items-center">
-                        <div>
-                          <p className="font-semibold text-gray-900">{child.firstName} {child.lastName}</p>
-                          <p className="text-xs text-gray-500">{getClassLabel(child.classLevel)}</p>
-                        </div>
-                        <Link 
-                          href="/enfants"
-                          className="text-xs font-semibold text-orange-600 hover:underline"
-                        >
-                          Compléter
-                        </Link>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </section>
-          </>
-        )}
+        {!notifications ? <LoadingState message="Chargement des notifications..." /> : groups.length === 0 ? (
+          <p className="py-10 text-center text-sm text-[#a7b2aa]">Aucune notification à afficher.</p>
+        ) : <div className="mt-6 space-y-5">
+          {groups.filter(group => group.items.length > 0).map(group => {
+            const Icon = group.icon;
+            return <section key={group.id}>
+              <h2 className="mb-2.5 mt-5 text-[13px] font-bold tracking-[0.09em] text-[#8d9f93]">{group.title.toLocaleUpperCase("fr-FR")}</h2>
+              {group.items.map(child => {
+                const targetAge = group.id === "birthdays" ? getTargetAge(child.birthDate) : null;
+                const expectedClass = group.id === "birthdays" ? getExpectedClass(targetAge) : null;
+                const needsChange = group.id === "birthdays" && expectedClass !== null && expectedClass !== child.classLevel && !child.notes?.includes("[ARCHIVE]");
+                const title = group.id === "birthdays" ? getBirthdayMessage(child.birthDate, child.firstName) : `${child.firstName} ${child.lastName}`.trim();
+                const detail = group.id === "birthdays"
+                  ? `${getClassLabel(child.classLevel)} · ${child.lastName} ${child.postName}`.trim()
+                  : group.id === "absences" ? `Absences répétées · ${getClassLabel(child.classLevel)}`
+                  : group.id === "sick" ? `Signalé malade récemment · ${getClassLabel(child.classLevel)}`
+                  : `Téléphone du responsable manquant · ${getClassLabel(child.classLevel)}`;
+                return <article key={`${group.id}-${child.id}`} className="flex min-h-[76px] items-center gap-3 border-b border-[#26332b] py-3">
+                  <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border ${group.tone === "gold" ? "border-[#5b5030] bg-[#332d16] text-[#f2cc65]" : group.tone === "blue" ? "border-[#3b4d66] bg-[#202e43] text-[#94bafa]" : group.tone === "green" ? "border-[#3f5a49] bg-[#1d3829] text-[#9cd9b1]" : "border-[#39463e] bg-[#222d27] text-[#c3ccc6]"}`}>
+                    <Icon className="h-6 w-6" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-base font-bold text-[#e7ece8]">{title}</p>
+                    <p className="text-[13px] leading-[18px] text-[#a7b2aa]">{detail}</p>
+                    {needsChange && <div className="mt-2 rounded-xl bg-[#19231d] p-3">
+                      <p className="text-xs font-semibold text-[#f2cc65]">{expectedClass === "ARCHIVED" ? `Âge limite atteint (${targetAge} ans). L'enfant doit quitter l'écodim.` : `Doit passer en ${getClassLabel(expectedClass as ClassLevel)} (${targetAge} ans).`}</p>
+                      {isAdmin ? expectedClass === "ARCHIVED" ? <button onClick={() => void handleArchive(child)} className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#2e814b] px-3 py-2 text-xs font-bold text-white"><Archive className="h-3.5 w-3.5" />Archiver</button> : <button onClick={() => setTransferRequest({ childId: child.id, childName: `${child.firstName} ${child.lastName}`, classLevel: expectedClass as ClassLevel })} className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#2e814b] px-3 py-2 text-xs font-bold text-white"><ArrowRightCircle className="h-4 w-4" />Transférer en {getClassLabel(expectedClass as ClassLevel)}</button> : <p className="mt-2 text-xs text-[#a7b2aa]">En attente de confirmation par un administrateur.</p>}
+                    </div>}
+                  </div>
+                  <div className="ml-1 flex shrink-0 flex-col items-center gap-2">
+                    {child.parentPhone && <a href={`tel:${child.parentPhone}`} aria-label={`Appeler ${child.parentName || "le parent"}`} className="flex h-8 w-8 items-center justify-center rounded-full bg-[#222d27] text-[#a7b2aa]"><Phone className="h-4 w-4" /></a>}
+                    {!readAll && <span aria-label="Non lue" className="h-2.5 w-2.5 rounded-full bg-[#2e814b]" />}
+                    {group.id === "incomplete" && <Link href="/enfants" className="text-xs font-semibold text-[#95d2a8]">Compléter</Link>}
+                  </div>
+                </article>;
+              })}
+            </section>;
+          })}
+        </div>}
       </div>
       {transferRequest && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4" role="presentation" onClick={() => setTransferRequest(null)}>
-          <section role="dialog" aria-modal="true" aria-labelledby="transfer-title" className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <h2 id="transfer-title" className="mb-2 text-lg font-bold text-gray-900">Confirmer le transfert</h2>
-            <p className="mb-6 text-sm leading-relaxed text-gray-600">Transférer {transferRequest.childName} en {getClassLabel(transferRequest.classLevel)} ? Le changement sera enregistré sur cet appareil et synchronisé automatiquement.</p>
+          <section role="dialog" aria-modal="true" aria-labelledby="transfer-title" className="w-full max-w-sm rounded-3xl border border-[#39463e] bg-[#151e18] p-6 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <h2 id="transfer-title" className="mb-2 text-lg font-bold text-[#e7ece8]">Confirmer le transfert</h2>
+            <p className="mb-6 text-sm leading-relaxed text-[#a7b2aa]">Transférer {transferRequest.childName} en {getClassLabel(transferRequest.classLevel)} ? Le changement sera enregistré sur cet appareil et synchronisé automatiquement.</p>
             <div className="flex gap-3">
-              <button type="button" onClick={() => setTransferRequest(null)} className="flex-1 rounded-xl border border-gray-200 py-3 text-sm font-semibold text-gray-700">Annuler</button>
-              <button type="button" onClick={() => { const request = transferRequest; if (request) void handleTransfer(request.childId, request.classLevel).then(() => setTransferRequest(null)); }} className="flex-1 rounded-xl bg-purple-600 py-3 text-sm font-bold text-white">Confirmer</button>
+              <button type="button" onClick={() => setTransferRequest(null)} className="flex-1 rounded-xl border border-[#39463e] py-3 text-sm font-semibold text-[#e7ece8]">Annuler</button>
+              <button type="button" onClick={() => { const request = transferRequest; if (request) void handleTransfer(request.childId, request.classLevel).then(() => setTransferRequest(null)); }} className="flex-1 rounded-xl bg-[#2e814b] py-3 text-sm font-bold text-white">Confirmer</button>
             </div>
           </section>
         </div>

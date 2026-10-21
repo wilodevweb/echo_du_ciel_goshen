@@ -151,9 +151,10 @@ export default function MoniteursTab() {
                 label="Mot de passe initial"
                 type="password"
                 required
+                minLength={12}
                 value={newUser.password}
                 onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                placeholder="Min. 6 caractères"
+                placeholder="Min. 12 caractères"
                 className="bg-gray-900 border-gray-800 text-white placeholder-gray-500 focus:border-fiverr"
               />
 
